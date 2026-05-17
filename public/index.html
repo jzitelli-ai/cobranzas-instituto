@@ -936,7 +936,13 @@ function filtrarReporte(){
       else if(e==='pagada'){h+='<td style="text-align:center;background:var(--sl)"><span style="color:var(--s);font-size:13px">✓</span></td>';}
       else if(e==='compensada'){h+='<td style="text-align:center;background:#FFF3E0;border:1px solid #FFB74D" title="Compensada por saldo"><div style="font-size:9px;color:#E65100;font-weight:700">↔<br>COMP</div></td>';}
       else if(e==='gratis'){h+='<td style="text-align:center;background:#c8f7c5;border:1px solid #5cb85c" title="Cuota 10 gratis por bonificacion completa"><div style="font-size:9px;color:#1a7a1a;font-weight:700">★<br>GRATIS</div></td>';}
-      else{h+='<td style="text-align:center;background:var(--dl)"><span style="font-size:10px;font-weight:700;color:var(--d)">'+pesos(a.deudaReal)+'</span></td>';}
+      else{
+        // Calcular precio de esa cuota específica
+        var numCuota=c.num;
+        var dia=new Date().getDate();
+        var precioCuota=(MESES_TODO_EL_MES.indexOf(numCuota)>=0||dia<=10)?parseFloat(a.precio_bonificado)||0:parseFloat(a.precio_normal)||0;
+        h+='<td style="text-align:center;background:var(--dl)"><span style="font-size:10px;font-weight:700;color:var(--d)">'+pesos(precioCuota)+'</span></td>';
+      }
     });
     h+='<td style="font-weight:700;color:'+(a.deudaReal>0?'var(--d)':'var(--s)')+'">'+( a.deudaReal>0?pesos(a.deudaReal):'Al dia')+'</td></tr>';
   });
