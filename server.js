@@ -59,6 +59,21 @@ db.exec(`
     clave TEXT PRIMARY KEY,
     valor TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS aranceles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    desde TEXT NOT NULL,
+    descripcion TEXT DEFAULT '',
+    creado TEXT DEFAULT ''
+  );
+
+  CREATE TABLE IF NOT EXISTS aranceles_precios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    arancel_id INTEGER NOT NULL,
+    alumno_id INTEGER NOT NULL,
+    precio_normal REAL DEFAULT 0,
+    precio_bonificado REAL DEFAULT 0
+  );
 `);
 
 // Verificar si ya se cargaron los datos iniciales
@@ -537,6 +552,63 @@ function extraerCuit(texto) {
   }
   return null;
 }
+
+// Aranceles
+app.get('/api/aranceles', (req, res) => {
+  const aranceles = db.prepare('SELECT * FROM aranceles ORDER BY desde DESC').all();
+  res.json(aranceles);
+});
+
+app.post('/api/aranceles', (req, res) => {
+  const { desde, descripcion } = req.body;
+  const creado = new Date().toISOString();
+  const r = db.prepare('INSERT INTO aranceles (desde, descripcion, creado) VALUES (?, ?, ?)').run(desde, descripcion || '', creado);
+  const id = r.lastInsertRowid;
+  // Copiar precios actuales de todos los alumnos
+  const alumnos = db.prepare('SELECT * FROM alumnos').all();
+  const ins = db.prepare('INSERT INTO aranceles_precios (arancel_id, alumno_id, precio_normal, precio_bonificado) VALUES (?, ?, ?, ?)');
+  alumnos.forEach(a => ins.run(id, a.id, a.precio_normal, a.precio_bonificado));
+  res.json({ ok: true, id });
+});
+
+app.get('/api/aranceles/:id/precios', (req, res) => {
+  const precios = db.prepare(`
+    SELECT ap.*, a.nombre, a.curso 
+    FROM aranceles_precios ap
+    JOIN alumnos a ON ap.alumno_id = a.id
+    WHERE ap.arancel_id = ?
+    ORDER BY a.nombre
+  `).all(req.params.id);
+  res.json(precios);
+});
+
+app.put('/api/aranceles/:id/precios', (req, res) => {
+  const { precios } = req.body; // [{alumno_id, precio_normal, precio_bonificado}]
+  const hoy = new Date().toISOString().slice(0,10);
+  const arancel = db.prepare('SELECT * FROM aranceles WHERE id = ?').get(req.params.id);
+  const upd = db.prepare('UPDATE aranceles_precios SET precio_normal=?, precio_bonificado=? WHERE arancel_id=? AND alumno_id=?');
+  const updAlumno = db.prepare('UPDATE alumnos SET precio_normal=?, precio_bonificado=? WHERE id=?');
+  precios.forEach(p => {
+    upd.run(p.precio_normal, p.precio_bonificado, req.params.id, p.alumno_id);
+    // Si la vigencia es activa (desde <= hoy), actualizar precio del alumno
+    if (arancel && arancel.desde <= hoy) {
+      updAlumno.run(p.precio_normal, p.precio_bonificado, p.alumno_id);
+    }
+  });
+  res.json({ ok: true });
+});
+
+app.delete('/api/aranceles/:id', (req, res) => {
+  db.prepare('DELETE FROM aranceles_precios WHERE arancel_id = ?').run(req.params.id);
+  db.prepare('DELETE FROM aranceles WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// Exportar pagos como JSON (el Excel lo genera el frontend)
+app.get('/api/exportar/pagos', (req, res) => {
+  const pagos = db.prepare('SELECT * FROM pagos ORDER BY id').all();
+  res.json(pagos);
+});
 
 // Servir frontend
 app.get('*', (req, res) => {
