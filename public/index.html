@@ -444,6 +444,55 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
   </div>
 </div>
 
+<!-- MODAL ELIMINAR PAGO -->
+<div class="modal-bg" id="m-del-pago">
+  <div class="modal" style="width:420px">
+    <div class="modal-title">Eliminar pago</div>
+    <input type="hidden" id="del-pago-id">
+    <input type="hidden" id="del-alumno-id">
+    <div class="alert ae" style="font-size:12px">Esta accion no se puede deshacer. ¿Que queres hacer con las cuotas que este pago cubria?</div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
+      <button class="btn bpb" onclick="confirmarEliminarPago(true)" style="justify-content:center;padding:10px">
+        Eliminar pago y revertir cuotas a pendiente
+      </button>
+      <button class="btn bob" onclick="confirmarEliminarPago(false)" style="justify-content:center;padding:10px">
+        Solo eliminar el registro (dejar cuotas como estan)
+      </button>
+      <button class="btn bob" onclick="cerrarM('m-del-pago')" style="justify-content:center">
+        Cancelar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR PAGO -->
+<div class="modal-bg" id="m-edit-pago">
+  <div class="modal">
+    <div class="modal-title">Editar pago</div>
+    <div class="alert ai" style="font-size:11px" id="ep-alumno"></div>
+    <input type="hidden" id="ep-id">
+    <div class="r2">
+      <div class="fg"><label>Monto ($)</label><input type="number" id="ep-monto" min="0" step="100"></div>
+      <div class="fg"><label>Fecha</label><input type="date" id="ep-fecha"></div>
+    </div>
+    <div class="r2">
+      <div class="fg"><label>Medio de pago</label>
+        <select id="ep-medio">
+          <option>Efectivo</option><option>Debito</option><option>Credito</option><option>Cheque</option><option>Transferencia</option>
+        </select>
+      </div>
+      <div class="fg"><label>Concepto</label><input type="text" id="ep-concepto"></div>
+    </div>
+    <div class="alert aw" style="font-size:11px">
+      Nota: editar el monto o concepto no modifica automaticamente el estado de las cuotas. Para cambiar que cuotas cubre, elimina el pago y volvelo a registrar.
+    </div>
+    <div class="modal-btns">
+      <button class="btn bob" onclick="cerrarM('m-edit-pago')">Cancelar</button>
+      <button class="btn bpb" onclick="guardarEditPago()">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL NUEVA VIGENCIA -->
 <div class="modal-bg" id="m-vig">
   <div class="modal">
@@ -889,10 +938,66 @@ async function cargarHistorial(){
     return '<div class="hist-entry"><div class="hist-icon '+(esM?'hi-m':'hi-b')+'">'+
       (esM?'<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>':
            '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>')+
-      '</div><div class="hist-info"><div class="hn">'+p.alumno_nombre+' <span class="badge bp" style="margin-left:4px;font-size:9px">'+p.curso+'</span></div>'+
+      '</div>'+
+      '<div class="hist-info"><div class="hn">'+p.alumno_nombre+' <span class="badge bp" style="margin-left:4px;font-size:9px">'+p.curso+'</span></div>'+
       '<div class="hd">'+p.fecha+' · '+p.concepto+' · Recibo #'+p.id+'</div></div>'+
-      '<div class="hm">+'+pesos(p.monto)+'</div></div>';
+      '<div class="hm">+'+pesos(p.monto)+'</div>'+
+      '<div style="display:flex;gap:5px;margin-left:10px;flex-shrink:0">'+
+        '<button class="btn bob" style="padding:2px 8px;font-size:10.5px" onclick=\'abrirEditPago('+JSON.stringify(p)+')\'>Editar</button>'+
+        '<button class="btn bob" style="padding:2px 8px;font-size:10.5px;color:var(--d)" onclick="abrirEliminarPago('+p.id+','+p.alumno_id+')">Eliminar</button>'+
+      '</div>'+
+      '</div>';
   }).join('');
+}
+
+// EDITAR / ELIMINAR PAGOS
+var _pagoEdit = null;
+
+function abrirEditPago(p) {
+  _pagoEdit = p;
+  document.getElementById('ep-id').value = p.id;
+  document.getElementById('ep-alumno').textContent = p.alumno_nombre + ' — Recibo #' + p.id;
+  document.getElementById('ep-monto').value = p.monto;
+  document.getElementById('ep-concepto').value = p.concepto || '';
+  document.getElementById('ep-medio').value = p.medio || 'Efectivo';
+  document.getElementById('ep-fecha').value = (p.fecha || '').slice(0,10);
+  abrirM('m-edit-pago');
+}
+
+async function guardarEditPago() {
+  var id = document.getElementById('ep-id').value;
+  var monto = parseFloat(document.getElementById('ep-monto').value) || 0;
+  var concepto = document.getElementById('ep-concepto').value;
+  var medio = document.getElementById('ep-medio').value;
+  var fecha = document.getElementById('ep-fecha').value;
+  if (!monto) { toast('El monto no puede ser 0', 'e'); return; }
+  var r = await api('PUT', '/api/pagos/' + id, { monto, concepto, medio, fecha });
+  if (!r || !r.ok) { toast('Error al guardar', 'e'); return; }
+  cerrarM('m-edit-pago');
+  cargarHistorial();
+  toast('Pago actualizado', 's');
+}
+
+function abrirEliminarPago(pagoId, alumnoId) {
+  document.getElementById('del-pago-id').value = pagoId;
+  document.getElementById('del-alumno-id').value = alumnoId;
+  abrirM('m-del-pago');
+}
+
+async function confirmarEliminarPago(revertir) {
+  var pagoId = document.getElementById('del-pago-id').value;
+  var r = await api('DELETE', '/api/pagos/' + pagoId + '?revertir=' + (revertir ? '1' : '0'));
+  if (!r || !r.ok) { toast('Error al eliminar', 'e'); return; }
+  cerrarM('m-del-pago');
+  cargarHistorial();
+  toast('Pago eliminado' + (revertir ? ' — cuotas revertidas a pendiente' : ''), 'i');
+}
+
+async function eliminarPago(pagoId, alumnoId, revertirCuotas) {
+  var r = await api('DELETE', '/api/pagos/' + pagoId + '?revertir=' + (revertirCuotas ? '1' : '0'));
+  if (!r || !r.ok) { toast('Error al eliminar', 'e'); return; }
+  cargarHistorial();
+  toast('Pago eliminado' + (revertirCuotas ? ' — cuotas revertidas a pendiente' : ''), 'i');
 }
 
 // REPORTE
