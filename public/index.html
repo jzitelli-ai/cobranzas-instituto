@@ -332,9 +332,14 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
     <!-- HISTORIAL -->
     <div id="s-historial" class="section">
       <div class="card" style="padding:0">
-        <div style="padding:10px 16px;border-bottom:1px solid var(--b);display:flex;justify-content:space-between;align-items:center">
+        <div style="padding:10px 16px;border-bottom:1px solid var(--b);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
           <div class="ctitle" style="margin:0">Historial de pagos</div>
-          <span id="hist-cnt" style="font-size:11px;color:var(--m)"></span>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span id="hist-cnt" style="font-size:11px;color:var(--m)"></span>
+            <button class="btn bob" onclick="backfillPagos()" style="font-size:11px;padding:4px 10px" title="Genera registros en el historial para las cuotas importadas que no aparecen">
+              Sincronizar pagos importados
+            </button>
+          </div>
         </div>
         <div id="hist-list"></div>
         <div id="hist-empty" style="display:none;text-align:center;padding:40px;color:var(--m)">Sin pagos registrados.</div>
@@ -998,6 +1003,15 @@ async function eliminarPago(pagoId, alumnoId, revertirCuotas) {
   if (!r || !r.ok) { toast('Error al eliminar', 'e'); return; }
   cargarHistorial();
   toast('Pago eliminado' + (revertirCuotas ? ' — cuotas revertidas a pendiente' : ''), 'i');
+}
+
+async function backfillPagos() {
+  showSpinner('Sincronizando pagos importados...');
+  var r = await api('POST', '/api/backfill-pagos', {});
+  hideSpinner();
+  if (!r || !r.ok) { toast('Error al sincronizar', 'e'); return; }
+  cargarHistorial();
+  toast('Sincronizacion completa — ' + r.insertados + ' registros generados', 's');
 }
 
 // REPORTE
