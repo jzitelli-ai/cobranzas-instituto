@@ -493,7 +493,7 @@ app.post('/api/banco', (req, res) => {
       if (c.numero_cuota === 10) {
         const ant = db.prepare('SELECT * FROM cuotas WHERE alumno_id = ? AND numero_cuota <= 9').all(alumno.id);
         const todasPagBonif = ant.length === 9 && ant.every(q => q.estado === 'pagada' && (MESES_TODO_EL_MES.includes(q.numero_cuota) || q.monto_pagado <= alumno.precio_bonificado));
-        precio = todasPagBonif ? 0 : (esBonif ? alumno.precio_bonificado : alumno.precio_normal);
+        precio = todasPagBonif ? 0 : (dia <= 10 ? alumno.precio_bonificado : alumno.precio_normal);
       } else {
         const esBonifC = MESES_TODO_EL_MES.includes(c.numero_cuota) || dia <= 10;
         precio = esBonifC ? alumno.precio_bonificado : alumno.precio_normal;
@@ -546,21 +546,18 @@ app.get('/api/reporte', (req, res) => {
       cuotas19.every(c => c.estado === 'pagada' &&
         (MESES_TODO_EL_MES.includes(c.numero_cuota) || c.monto_pagado <= a.precio_bonificado));
 
-    function getPrecioReporte(numC) {
+    const getPrecioRep = (numC) => {
       if (numC === 10 && cuota10Gratis) return 0;
       const eb = MESES_TODO_EL_MES.includes(numC) || dia <= 10;
       return eb ? a.precio_bonificado : a.precio_normal;
-    }
+    };
 
     // Marcar cuota 10 como 'gratis' si corresponde y está pendiente
     if (cuota10Gratis && estadoCuotas[10] === 'pendiente') {
       estadoCuotas[10] = 'gratis';
     }
 
-    const totalDebido = cuotasGen.reduce((s, [k]) => {
-      const numC = parseInt(k);
-      return s + getPrecioReporte(numC);
-    }, 0);
+    const totalDebido = cuotasGen.reduce((s, [k]) => s + getPrecioRep(parseInt(k)), 0);
     let saldoNeto = totalPagado - totalDebido;
 
     if (saldoNeto > 0) {
@@ -568,16 +565,18 @@ app.get('/api/reporte', (req, res) => {
       for (let i = 0; i < 10; i++) {
         const numC = i + 1;
         if (estadoCuotas[numC] === 'pendiente' && disponible > 0) {
-          const esBonif = MESES_TODO_EL_MES.includes(numC) || dia <= 10;
-          const precio = esBonif ? a.precio_bonificado : a.precio_normal;
-          if (disponible >= precio) { estadoCuotas[numC] = 'compensada'; disponible -= precio; }
+          const precio = getPrecioRep(numC);
+          if (precio > 0 && disponible >= precio) {
+            estadoCuotas[numC] = 'compensada';
+            disponible -= precio;
+          }
         }
       }
     }
 
     const deudaReal = Object.entries(estadoCuotas).reduce((s, [k, v]) => {
       if (v !== 'pendiente') return s;
-      return s + getPrecioReporte(parseInt(k));
+      return s + getPrecioRep(parseInt(k));
     }, 0);
 
     return { id: a.id, nombre: a.nombre, curso: a.curso, precio_normal: a.precio_normal, precio_bonificado: a.precio_bonificado, cuits: a.cuits, activo: a.activo, estadoCuotas, deudaReal, totalPagado, cuota10Gratis };
