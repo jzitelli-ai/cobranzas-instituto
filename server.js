@@ -406,7 +406,26 @@ app.post('/api/cobro', (req, res) => {
   const fecha = hoy.toLocaleDateString('es-AR') + ' ' + hoy.toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit'});
   const MESES_TODO_EL_MES = [1, 5];
 
+  // Verificar si cuota 10 es gratis: cuotas 1-9 todas pagadas con precio bonificado
+  function cuota10Gratis() {
+    const cuotasAlumno = db.prepare('SELECT * FROM cuotas WHERE alumno_id = ? AND numero_cuota <= 9').all(alumnoId);
+    if (cuotasAlumno.length < 9) return false;
+    // Todas las cuotas 1-9 deben estar pagadas
+    const todasPagadas = cuotasAlumno.every(c => c.estado === 'pagada');
+    if (!todasPagadas) return false;
+    // Verificar que cada cuota fue pagada con precio bonificado
+    // (monto_pagado <= precio_bonificado del alumno, o fue pagada en mes con bonificación)
+    return cuotasAlumno.every(c => {
+      const num = c.numero_cuota;
+      // Cuotas 1 y 5 siempre son bonificadas (todo el mes)
+      if (MESES_TODO_EL_MES.includes(num)) return true;
+      // Las demás: el monto pagado debe ser <= precio_bonificado
+      return c.monto_pagado <= alumno.precio_bonificado || c.monto_pagado === 0;
+    });
+  }
+
   function getPrecio(numCuota) {
+    if (numCuota === 10 && cuota10Gratis()) return 0;
     const esBonif = MESES_TODO_EL_MES.includes(numCuota) || dia <= 10;
     return esBonif ? alumno.precio_bonificado : alumno.precio_normal;
   }
@@ -419,7 +438,8 @@ app.post('/api/cobro', (req, res) => {
     cuotasSeleccionadas.forEach(numC => {
       const precio = getPrecio(numC);
       cuotasCubiertas.push({ num: numC, monto: precio });
-      conceptos.push(`Cuota ${numC} (${MESES_NOMBRE[numC-1]} 2026)`);
+      const etiqueta = precio === 0 ? ` (GRATIS - bonificacion cumplida)` : '';
+      conceptos.push(`Cuota ${numC} (${MESES_NOMBRE[numC-1]} 2026)${etiqueta}`);
       db.prepare('UPDATE cuotas SET estado=?, fecha_pago=?, monto_pagado=? WHERE alumno_id=? AND numero_cuota=?').run('pagada', fecha, precio, alumnoId, numC);
     });
   }
@@ -468,8 +488,16 @@ app.post('/api/banco', (req, res) => {
 
     for (const c of pendientes) {
       if (restante <= 0) break;
-      const esBonif = MESES_TODO_EL_MES.includes(c.numero_cuota) || dia <= 10;
-      const precio = esBonif ? alumno.precio_bonificado : alumno.precio_normal;
+      // Cuota 10 gratis si cuotas 1-9 todas pagadas con bonificado
+      let precio = 0;
+      if (c.numero_cuota === 10) {
+        const ant = db.prepare('SELECT * FROM cuotas WHERE alumno_id = ? AND numero_cuota <= 9').all(alumno.id);
+        const todasPagBonif = ant.length === 9 && ant.every(q => q.estado === 'pagada' && (MESES_TODO_EL_MES.includes(q.numero_cuota) || q.monto_pagado <= alumno.precio_bonificado));
+        precio = todasPagBonif ? 0 : (esBonif ? alumno.precio_bonificado : alumno.precio_normal);
+      } else {
+        const esBonifC = MESES_TODO_EL_MES.includes(c.numero_cuota) || dia <= 10;
+        precio = esBonifC ? alumno.precio_bonificado : alumno.precio_normal;
+      }
       if (restante >= precio) {
         db.prepare('UPDATE cuotas SET estado=?, fecha_pago=?, monto_pagado=? WHERE id=?').run('pagada', fecha, precio, c.id);
         conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE[c.numero_cuota-1]} 2026)`);
@@ -511,10 +539,27 @@ app.get('/api/reporte', (req, res) => {
 
     // Calcular saldo neto y compensar visualmente
     const cuotasGen = Object.entries(estadoCuotas).filter(([,v]) => v !== 'futura');
+
+    // Verificar si cuota 10 es gratis
+    const cuotas19 = cuotas.filter(c => c.numero_cuota <= 9);
+    const cuota10Gratis = cuotas19.length === 9 &&
+      cuotas19.every(c => c.estado === 'pagada' &&
+        (MESES_TODO_EL_MES.includes(c.numero_cuota) || c.monto_pagado <= a.precio_bonificado));
+
+    function getPrecioReporte(numC) {
+      if (numC === 10 && cuota10Gratis) return 0;
+      const eb = MESES_TODO_EL_MES.includes(numC) || dia <= 10;
+      return eb ? a.precio_bonificado : a.precio_normal;
+    }
+
+    // Marcar cuota 10 como 'gratis' si corresponde y está pendiente
+    if (cuota10Gratis && estadoCuotas[10] === 'pendiente') {
+      estadoCuotas[10] = 'gratis';
+    }
+
     const totalDebido = cuotasGen.reduce((s, [k]) => {
       const numC = parseInt(k);
-      const esBonif = MESES_TODO_EL_MES.includes(numC) || dia <= 10;
-      return s + (esBonif ? a.precio_bonificado : a.precio_normal);
+      return s + getPrecioReporte(numC);
     }, 0);
     let saldoNeto = totalPagado - totalDebido;
 
@@ -532,12 +577,10 @@ app.get('/api/reporte', (req, res) => {
 
     const deudaReal = Object.entries(estadoCuotas).reduce((s, [k, v]) => {
       if (v !== 'pendiente') return s;
-      const numC = parseInt(k);
-      const esBonif = MESES_TODO_EL_MES.includes(numC) || dia <= 10;
-      return s + (esBonif ? a.precio_bonificado : a.precio_normal);
+      return s + getPrecioReporte(parseInt(k));
     }, 0);
 
-    return { id: a.id, nombre: a.nombre, curso: a.curso, precio_normal: a.precio_normal, precio_bonificado: a.precio_bonificado, cuits: a.cuits, activo: a.activo, estadoCuotas, deudaReal, totalPagado };
+    return { id: a.id, nombre: a.nombre, curso: a.curso, precio_normal: a.precio_normal, precio_bonificado: a.precio_bonificado, cuits: a.cuits, activo: a.activo, estadoCuotas, deudaReal, totalPagado, cuota10Gratis };
   });
 
   res.json(resultado);
