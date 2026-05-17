@@ -319,6 +319,26 @@ function cargarDatosIniciales() {
         insertCuota.run(p.id, n, estado);
       }
     }
+    // Registrar pagos históricos en tabla pagos
+    const alumno = db.prepare('SELECT * FROM alumnos WHERE id = ?').get(p.id);
+    if (!alumno) return;
+    const MESES_NOMBRE = ['Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const MESES_TODO_EL_MES = [1, 5];
+    [0,1,2].forEach(i => {
+      if (p.c[i]) {
+        const numC = i + 1;
+        const mesIdx2 = mesesIdx[i];
+        if (mesIdx2 <= mesActual) {
+          const esBonif = MESES_TODO_EL_MES.includes(numC);
+          const monto = esBonif ? alumno.precio_bonificado : alumno.precio_bonificado; // histórico = bonificado
+          const fechaHist = '2026-0' + (mesIdx2+1) + '-01';
+          db.prepare('INSERT INTO pagos (fecha, alumno_id, alumno_nombre, curso, monto, concepto, medio, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+            .run(fechaHist, alumno.id, alumno.nombre, alumno.curso, monto,
+              'Cuota ' + numC + ' (' + MESES_NOMBRE[numC-1] + ' 2026)',
+              'Importado', 'Importado desde planilla');
+        }
+      }
+    });
   });
 
   db.prepare("INSERT INTO config (clave, valor) VALUES ('iniciado', '1')").run();
@@ -679,6 +699,59 @@ app.delete('/api/pagos/:id', (req, res) => {
 
   db.prepare('DELETE FROM pagos WHERE id = ?').run(pagoId);
   res.json({ ok: true });
+});
+
+// Generar pagos históricos faltantes (para bases ya inicializadas)
+app.post('/api/backfill-pagos', (req, res) => {
+  const MESES_NOMBRE = ['Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const MESES_IDX = [2,3,4,5,6,7,8,9,10,11];
+  const hoy = new Date();
+  const mesActual = hoy.getMonth();
+
+  // Buscar cuotas pagadas que NO tienen un pago registrado
+  const cuotasPagadas = db.prepare(`
+    SELECT c.*, a.nombre, a.curso, a.precio_bonificado, a.precio_normal
+    FROM cuotas c
+    JOIN alumnos a ON c.alumno_id = a.id
+    WHERE c.estado = 'pagada'
+    ORDER BY c.alumno_id, c.numero_cuota
+  `).all();
+
+  const MESES_TODO_EL_MES = [1, 5];
+  let insertados = 0;
+
+  // Agrupar cuotas por alumno
+  const porAlumno = {};
+  cuotasPagadas.forEach(c => {
+    if (!porAlumno[c.alumno_id]) porAlumno[c.alumno_id] = [];
+    porAlumno[c.alumno_id].push(c);
+  });
+
+  Object.keys(porAlumno).forEach(alumnoId => {
+    const cuotas = porAlumno[alumnoId];
+    cuotas.forEach(c => {
+      const numC = c.numero_cuota;
+      const mesIdx = MESES_IDX[numC - 1];
+      // Verificar si ya existe un pago para este alumno y cuota
+      const existe = db.prepare(`
+        SELECT id FROM pagos
+        WHERE alumno_id = ? AND concepto LIKE ?
+      `).get(parseInt(alumnoId), '%Cuota ' + numC + '%');
+      if (!existe) {
+        const esBonif = MESES_TODO_EL_MES.includes(numC);
+        const monto = c.precio_bonificado;
+        const mes = mesIdx + 1;
+        const fechaStr = '2026-' + String(mes).padStart(2,'0') + '-01';
+        db.prepare('INSERT INTO pagos (fecha, alumno_id, alumno_nombre, curso, monto, concepto, medio, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+          .run(fechaStr, parseInt(alumnoId), c.nombre, c.curso, monto,
+            'Cuota ' + numC + ' (' + MESES_NOMBRE[numC-1] + ' 2026)',
+            'Importado', 'Importado desde planilla');
+        insertados++;
+      }
+    });
+  });
+
+  res.json({ ok: true, insertados });
 });
 
 // Exportar pagos como JSON (el Excel lo genera el frontend)
