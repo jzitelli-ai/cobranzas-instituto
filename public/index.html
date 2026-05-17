@@ -119,6 +119,16 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
 .comp-cell{text-align:center;background:#FFF3E0;border:1px solid #FFB74D}
 .comp-tag{font-size:9px;color:#E65100;font-weight:700;line-height:1.2}
 .tag-inactivo{background:#eee;color:#999;font-size:10px;padding:1px 5px;border-radius:8px;margin-left:4px}
+@media print{
+  .sidebar,.topbar,.cobro-busq,#cobro-busq,#paso3,.tbar-r,.ni,.ssep,.slogo,
+  #s-dashboard,#s-alumnos,#s-banco,#s-historial,#s-reporte,#s-cursos,#s-aranceles,
+  .spinner,.toast,.modal-bg,#rec-btns,#rec-ph,#cob-cuotas,#cobro-alumno,
+  button:not(.print-ok){display:none!important}
+  .main{margin-left:0!important}
+  .content{padding:0!important}
+  #s-cobro{display:block!important}
+  .recibo{border:1px solid #ccc!important;display:block!important;max-width:400px;margin:0 auto}
+}
 </style>
 </head>
 <body>
@@ -253,7 +263,12 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
           <div class="ctitle">Comprobante</div>
           <div id="rec-ph" style="color:var(--m);font-size:12.5px;padding:10px 0">El recibo aparecera aqui despues de confirmar.</div>
           <div class="recibo" id="recibo">
-            <div class="rec-h"><h3>RECIBO DE PAGO</h3><p style="color:var(--m);font-size:10px;margin-top:2px">Instituto 2026</p></div>
+            <div class="rec-h">
+              <img src="data:image/png;base64,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" 
+                style="width:90px;height:90px;object-fit:contain;display:block;margin:0 auto 8px;">
+              <h3>RECIBO DE PAGO</h3>
+              <p style="color:var(--m);font-size:10px;margin-top:2px">Cultural Cerrillos — Teaching English with Love</p>
+            </div>
             <div class="rec-row"><span>N Recibo</span><span id="r-num"></span></div>
             <div class="rec-row"><span>Fecha</span><span id="r-fecha"></span></div>
             <div class="rec-row"><span>Alumno</span><span id="r-alumno"></span></div>
@@ -700,23 +715,38 @@ function renderCuotas(a,cuotas){
     var esBon=precio===(parseFloat(a.precio_bonificado)||0);
     var todoElMes=MESES_TODO_EL_MES.indexOf(numC)>=0;
     var vencida=mesesIdx[numC-1]<hoyMesIdx;
-    return '<label class="cuota-row sel" onclick="toggleCuotaRow(this)">'+
-      '<input type="checkbox" data-num="'+numC+'" data-precio="'+precio+'" checked onchange="actualizarTotal()">'+
+    return '<div class="cuota-row sel" id="crow-'+numC+'">' +
+      '<input type="checkbox" data-num="'+numC+'" checked onchange="toggleCuotaCheck(this)">' +
       '<div class="cuota-mes">Cuota '+numC+' — '+CUOTAS[numC-1].mes+' 2026</div>'+
       '<span class="ctag '+(vencida?'ctag-v':'ctag-b')+'">'+(vencida?'Vencida':'Vigente')+'</span>'+
       '<span class="ctag '+(esBon?'ctag-b':'ctag-n')+'">'+(todoElMes?'Todo el mes':(esBon?'Bonificada':'Normal'))+'</span>'+
-      '<div class="cuota-precio '+(esBon?'cpb':'cpn')+'">'+pesos(precio)+'</div></label>';
+      '<input type="number" class="cuota-monto-input" data-num="'+numC+'" data-precio-base="'+precio+'" value="'+precio+'" min="0" step="100" '+
+        'style="width:110px;padding:4px 7px;border:1px solid var(--b);border-radius:var(--rs);font-size:12.5px;font-weight:700;color:'+(esBon?'var(--s)':'var(--w)')+';" '+
+        'oninput="actualizarTotal()" title="Podés modificar el monto manualmente">'+
+    '</div>';
   }).join('');
 }
 
-function toggleCuotaRow(label){var cb=label.querySelector('input');label.classList.toggle('sel',cb.checked);actualizarTotal();}
-function toggleExtra(){var el=document.getElementById('cob-extra');el.style.display=el.style.display==='none'?'block':'none';}
+function toggleCuotaCheck(cb){
+  var row=document.getElementById('crow-'+cb.dataset.num);
+  row.classList.toggle('sel',cb.checked);
+  var inp=row.querySelector('.cuota-monto-input');
+  inp.disabled=!cb.checked;
+  inp.style.opacity=cb.checked?'1':'0.4';
+  actualizarTotal();
+}
 
 function actualizarTotal(){
   if(!alumnoActual)return;
-  var checks=document.querySelectorAll('#cob-cuotas input:checked');
+  var checks=document.querySelectorAll('#cob-cuotas input[type=checkbox]:checked');
   var total=0,meses=[];
-  checks.forEach(function(c){total+=parseFloat(c.dataset.precio)||0;meses.push('Cuota '+c.dataset.num+' ('+CUOTAS[parseInt(c.dataset.num)-1].mes+')');});
+  checks.forEach(function(cb){
+    var numC=cb.dataset.num;
+    var inp=document.querySelector('#cob-cuotas .cuota-monto-input[data-num="'+numC+'"]');
+    var monto=inp?parseFloat(inp.value)||0:0;
+    total+=monto;
+    meses.push('Cuota '+numC+' ('+CUOTAS[parseInt(numC)-1].mes+')');
+  });
   var extra=parseFloat(document.getElementById('extra-monto').value)||0;
   total+=extra;
   document.getElementById('cob-total').textContent=pesos(total);
@@ -736,11 +766,20 @@ function cambiarAlumno(){
 
 async function confirmarCobro(){
   if(!alumnoActual){toast('Selecciona un alumno','e');return;}
-  var checks=[...document.querySelectorAll('#cob-cuotas input:checked')];
-  var cuotasSel=checks.map(function(c){return parseInt(c.dataset.num);});
+  var checks=[...document.querySelectorAll('#cob-cuotas input[type=checkbox]:checked')];
+  // Leer montos editables por cuota
+  var cuotasSel=[];
+  var totalCuotas=0;
+  checks.forEach(function(cb){
+    var numC=parseInt(cb.dataset.num);
+    var inp=document.querySelector('#cob-cuotas .cuota-monto-input[data-num="'+numC+'"]');
+    var monto=inp?parseFloat(inp.value)||0:0;
+    cuotasSel.push(numC);
+    totalCuotas+=monto;
+  });
   var extra=parseFloat(document.getElementById('extra-monto').value)||0;
   var extraConc=document.getElementById('extra-conc').value||'';
-  var total=checks.reduce(function(s,c){return s+(parseFloat(c.dataset.precio)||0);},0)+extra;
+  var total=totalCuotas+extra;
   if(total===0){toast('Selecciona al menos una cuota','e');return;}
   var medio=document.getElementById('cob-medio').value;
   var obs=document.getElementById('cob-obs').value;
@@ -759,6 +798,8 @@ async function confirmarCobro(){
   cambiarAlumno();
   _pagos=await api('GET','/api/pagos');
   toast('Cobro '+pesos(total)+' registrado · Recibo #'+r.pagoId,'s');
+  // Imprimir automáticamente
+  setTimeout(function(){ window.print(); }, 400);
 }
 
 function nuevoCobro(){
