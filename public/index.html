@@ -150,6 +150,9 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
     <button class="ni" onclick="nav('cursos')">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>Cursos
     </button>
+    <button class="ni" onclick="nav('aranceles')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>Tabla de aranceles
+    </button>
   </nav>
 </aside>
 <main class="main">
@@ -366,6 +369,18 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
       </div>
     </div>
 
+    <!-- ARANCELES -->
+    <div id="s-aranceles" class="section">
+      <div class="card">
+        <div class="ctitle">Tabla de aranceles por vigencia</div>
+        <div class="alert ai">El precio bonificado se aplica si el pago es antes del dia 10, excepto en Marzo (cuota 1) y Julio (cuota 5) donde rige todo el mes. Si todas las cuotas 1-9 fueron pagadas con descuento, la cuota 10 (Diciembre) tambien es bonificada.</div>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+          <button class="btn bpb" onclick="nuevaVigencia()">+ Nueva vigencia</button>
+        </div>
+        <div id="tabla-vig"></div>
+      </div>
+    </div>
+
   </div>
 </main>
 </div>
@@ -410,6 +425,37 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
     <div class="modal-btns">
       <button class="btn bob" onclick="cerrarM('m-edit-alum')">Cancelar</button>
       <button class="btn bpb" onclick="guardarEdicionAlumno()">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NUEVA VIGENCIA -->
+<div class="modal-bg" id="m-vig">
+  <div class="modal">
+    <div class="modal-title">Nueva tabla de aranceles</div>
+    <div class="alert aw" style="font-size:12px">Se clonan los precios actuales de todos los alumnos. Podes editarlos despues.</div>
+    <div class="r2">
+      <div class="fg"><label>Vigente desde</label><input type="date" id="vig-desde"></div>
+      <div class="fg"><label>Descripcion (opcional)</label><input type="text" id="vig-desc" placeholder="Ej: Aumento junio"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn bob" onclick="cerrarM('m-vig')">Cancelar</button>
+      <button class="btn bpb" onclick="crearVigencia()">Crear</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR VIGENCIA -->
+<div class="modal-bg" id="m-edit-vig">
+  <div class="modal" style="width:680px">
+    <div class="modal-title" id="edit-vig-tit">Editar aranceles</div>
+    <div class="alert ai" style="font-size:11px">Modifica los precios y confirma. Si la vigencia ya esta activa, los precios de los alumnos se actualizan automaticamente.</div>
+    <div class="twrap" style="max-height:400px;overflow-y:auto">
+      <table id="edit-vig-table"></table>
+    </div>
+    <div class="modal-btns">
+      <button class="btn bob" onclick="cerrarM('m-edit-vig')">Cancelar</button>
+      <button class="btn bpb" onclick="guardarEditVig()">Guardar cambios</button>
     </div>
   </div>
 </div>
@@ -463,7 +509,7 @@ function poblarSelects(){
   });
 }
 
-var TITULOS={dashboard:'Resumen',alumnos:'Alumnos',cobro:'Cobro manual',banco:'Importar banco',historial:'Historial de pagos',reporte:'Reporte de deuda',cursos:'Gestion de cursos'};
+var TITULOS={dashboard:'Resumen',alumnos:'Alumnos',cobro:'Cobro manual',banco:'Importar banco',historial:'Historial de pagos',reporte:'Reporte de deuda',cursos:'Gestion de cursos',aranceles:'Tabla de aranceles'};
 
 function nav(id){
   document.querySelectorAll('.section').forEach(function(s){s.classList.remove('active');});
@@ -477,6 +523,7 @@ function nav(id){
   if(id==='alumnos')cargarAlumnos();
   if(id==='historial')cargarHistorial();
   if(id==='reporte')cargarReporte();
+  if(id==='aranceles')cargarAranceles();
   if(id==='cursos')renderCursos();
 }
 
@@ -868,12 +915,99 @@ async function eliminarCurso(id){
   renderCursos();toast('Curso dado de baja','i');
 }
 
-// EXPORT
-function exportarPagos(){
-  if(!_pagos.length){toast('Sin pagos','e');return;}
-  var datos=_pagos.map(function(p){return{'N Recibo':p.id,'Fecha':p.fecha,'Alumno':p.alumno_nombre,'Curso':p.curso,'Monto':p.monto,'Concepto':p.concepto,'Medio':p.origen};});
-  var ws=XLSX.utils.json_to_sheet(datos);var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Pagos');
-  XLSX.writeFile(wb,'pagos_'+new Date().toISOString().slice(0,10)+'.xlsx');
+// EXPORT - corregido
+async function exportarPagos(){
+  showSpinner('Exportando...');
+  try {
+    var pagos = await api('GET','/api/exportar/pagos');
+    if(!pagos||!pagos.length){toast('Sin pagos para exportar','e');return;}
+    var datos=pagos.map(function(p){return{'N Recibo':p.id,'Fecha':p.fecha,'Alumno':p.alumno_nombre,'Curso':p.curso,'Monto':p.monto,'Concepto':p.concepto,'Medio':p.medio,'Origen':p.origen};});
+    var ws=XLSX.utils.json_to_sheet(datos);var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Pagos');
+    XLSX.writeFile(wb,'pagos_'+new Date().toISOString().slice(0,10)+'.xlsx');
+    toast('Exportado correctamente','s');
+  } catch(e){ toast('Error al exportar','e'); }
+}
+
+// ARANCELES
+var _aranceles=[], editVigId=null;
+
+async function cargarAranceles(){
+  _aranceles=await api('GET','/api/aranceles');
+  renderVigencias();
+}
+
+function renderVigencias(){
+  var hoy=new Date().toISOString().slice(0,10);
+  var h='<table><thead><tr><th>Desde</th><th>Descripcion</th><th>Estado</th><th></th></tr></thead><tbody>';
+  if(!_aranceles.length){ h+='<tr><td colspan="4" style="text-align:center;color:var(--m);padding:20px">Sin vigencias. Crea la primera.</td></tr>'; }
+  _aranceles.forEach(function(v){
+    var act=v.desde<=hoy;
+    h+='<tr><td style="font-weight:600">'+v.desde+'</td><td>'+(v.descripcion||'—')+'</td>'+
+      '<td><span class="badge '+(act?'bs':'bp')+'">'+(act?'Activa':'Futura')+'</span></td>'+
+      '<td style="white-space:nowrap">'+
+        '<button class="btn bob" style="font-size:11px;padding:4px 9px" onclick="abrirEditVig('+v.id+')">Editar precios</button> '+
+        (_aranceles.length>1?'<button class="btn bob" style="font-size:11px;padding:4px 9px;color:var(--d)" onclick="eliminarVig('+v.id+')">Eliminar</button>':'')+
+      '</td></tr>';
+  });
+  h+='</tbody></table>';
+  document.getElementById('tabla-vig').innerHTML=h;
+}
+
+function nuevaVigencia(){
+  document.getElementById('vig-desde').value=new Date().toISOString().slice(0,10);
+  document.getElementById('vig-desc').value='';
+  abrirM('m-vig');
+}
+
+async function crearVigencia(){
+  var desde=document.getElementById('vig-desde').value;
+  if(!desde){toast('Indica una fecha','e');return;}
+  var desc=document.getElementById('vig-desc').value;
+  await api('POST','/api/aranceles',{desde,descripcion:desc});
+  cerrarM('m-vig');
+  cargarAranceles();
+  toast('Vigencia creada. Edita los precios si es necesario.','s');
+}
+
+async function abrirEditVig(id){
+  editVigId=id;
+  var v=_aranceles.find(function(x){return x.id===id;});
+  document.getElementById('edit-vig-tit').textContent='Editar aranceles — '+v.desde+(v.descripcion?' ('+v.descripcion+')':'');
+  var precios=await api('GET','/api/aranceles/'+id+'/precios');
+  var h='<thead><tr><th>Alumno</th><th>Curso</th><th>P. Normal ($)</th><th>P. Bonificado ($)</th></tr></thead><tbody>';
+  precios.forEach(function(p){
+    h+='<tr><td style="font-size:12px;font-weight:500">'+p.nombre+'</td>'+
+      '<td style="font-size:10.5px;color:var(--m)">'+p.curso+'</td>'+
+      '<td><input type="number" data-id="'+p.alumno_id+'" data-f="precio_normal" value="'+p.precio_normal+'" step="500" style="width:120px;padding:5px;border:1px solid var(--b);border-radius:4px;font-size:12px"></td>'+
+      '<td><input type="number" data-id="'+p.alumno_id+'" data-f="precio_bonificado" value="'+p.precio_bonificado+'" step="500" style="width:120px;padding:5px;border:1px solid var(--b);border-radius:4px;font-size:12px"></td></tr>';
+  });
+  h+='</tbody>';
+  document.getElementById('edit-vig-table').innerHTML=h;
+  abrirM('m-edit-vig');
+}
+
+async function guardarEditVig(){
+  var inputs=document.querySelectorAll('#edit-vig-table input[type=number]');
+  var mapa={};
+  inputs.forEach(function(inp){
+    var id=inp.dataset.id;
+    var f=inp.dataset.f;
+    if(!mapa[id]) mapa[id]={alumno_id:parseInt(id)};
+    mapa[id][f]=parseFloat(inp.value)||0;
+  });
+  var precios=Object.values(mapa);
+  await api('PUT','/api/aranceles/'+editVigId+'/precios',{precios});
+  cerrarM('m-edit-vig');
+  // Recargar alumnos por si cambiaron precios
+  _alumnos=await api('GET','/api/alumnos');
+  toast('Precios actualizados','s');
+}
+
+async function eliminarVig(id){
+  if(!confirm('Eliminar esta vigencia?'))return;
+  await api('DELETE','/api/aranceles/'+id);
+  cargarAranceles();
+  toast('Vigencia eliminada','i');
 }
 
 function exportarReporte(){
