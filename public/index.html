@@ -334,10 +334,17 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
       <div class="card" style="padding:0">
         <div style="padding:10px 16px;border-bottom:1px solid var(--b);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
           <div class="ctitle" style="margin:0">Historial de pagos</div>
-          <div style="display:flex;gap:8px;align-items:center">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="text" id="hist-q" placeholder="Buscar alumno..." oninput="filtrarHistorial()" style="width:200px;padding:5px 10px;font-size:12px">
+            <select id="hist-origen" onchange="filtrarHistorial()" style="width:150px;padding:5px 10px;font-size:12px">
+              <option value="">Todos los origenes</option>
+              <option value="Manual">Manual</option>
+              <option value="Banco">Banco</option>
+              <option value="Importado">Importado</option>
+            </select>
             <span id="hist-cnt" style="font-size:11px;color:var(--m)"></span>
-            <button class="btn bob" onclick="backfillPagos()" style="font-size:11px;padding:4px 10px" title="Genera registros en el historial para las cuotas importadas que no aparecen">
-              Sincronizar pagos importados
+            <button class="btn bob" onclick="backfillPagos()" style="font-size:11px;padding:4px 10px" title="Genera registros para las cuotas importadas que no aparecen">
+              Sincronizar importados
             </button>
           </div>
         </div>
@@ -933,25 +940,57 @@ function resetBanco(){
 function bstep(n){for(var i=1;i<=3;i++){document.getElementById('bst'+i).className='step'+(i<n?' done':i===n?' active':'');document.getElementById('bp'+i).style.display=i===n?'block':'none';}}
 
 // HISTORIAL
+var _todosLosPagos = [];
+
 async function cargarHistorial(){
-  _pagos=await api('GET','/api/pagos');
-  var list=document.getElementById('hist-list'),empty=document.getElementById('hist-empty'),cnt=document.getElementById('hist-cnt');
-  if(!_pagos.length){list.innerHTML='';empty.style.display='block';cnt.textContent='';return;}
-  empty.style.display='none';cnt.textContent=_pagos.length+' registros';
-  list.innerHTML=_pagos.map(function(p){
-    var esM=(p.origen||'').indexOf('Manual')>=0;
-    return '<div class="hist-entry"><div class="hist-icon '+(esM?'hi-m':'hi-b')+'">'+
-      (esM?'<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>':
-           '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>')+
+  _pagos = await api('GET','/api/pagos');
+  _todosLosPagos = _pagos || [];
+  document.getElementById('hist-q').value = '';
+  document.getElementById('hist-origen').value = '';
+  filtrarHistorial();
+}
+
+function filtrarHistorial(){
+  var q = (document.getElementById('hist-q').value || '').toLowerCase();
+  var origen = document.getElementById('hist-origen').value;
+  var lista = _todosLosPagos.filter(function(p){
+    var matchNombre = !q || (p.alumno_nombre||'').toLowerCase().indexOf(q) >= 0;
+    var matchOrigen = !origen || (p.origen||'').indexOf(origen) >= 0;
+    return matchNombre && matchOrigen;
+  });
+  var list = document.getElementById('hist-list');
+  var empty = document.getElementById('hist-empty');
+  var cnt = document.getElementById('hist-cnt');
+  if (!lista.length) {
+    list.innerHTML = '';
+    empty.style.display = 'block';
+    cnt.textContent = '';
+    return;
+  }
+  empty.style.display = 'none';
+  cnt.textContent = lista.length + ' de ' + _todosLosPagos.length + ' registros';
+  list.innerHTML = lista.map(function(p){
+    var esM = (p.origen||'').indexOf('Manual') >= 0;
+    var esI = (p.origen||'').indexOf('Importado') >= 0;
+    var iconClass = esM ? 'hi-m' : 'hi-b';
+    var icon = esM
+      ? '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>'
+      : '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+    var origenBadge = esI
+      ? '<span class="badge bp" style="font-size:9px;margin-left:4px">Importado</span>'
+      : esM ? '' : '<span class="badge bs" style="font-size:9px;margin-left:4px">Banco</span>';
+    return '<div class="hist-entry">'+
+      '<div class="hist-icon '+iconClass+'">'+icon+'</div>'+
+      '<div class="hist-info">'+
+        '<div class="hn">'+p.alumno_nombre+' <span class="badge bp" style="margin-left:4px;font-size:9px">'+p.curso+'</span>'+origenBadge+'</div>'+
+        '<div class="hd">'+p.fecha+' · '+p.concepto+' · Recibo #'+p.id+'</div>'+
       '</div>'+
-      '<div class="hist-info"><div class="hn">'+p.alumno_nombre+' <span class="badge bp" style="margin-left:4px;font-size:9px">'+p.curso+'</span></div>'+
-      '<div class="hd">'+p.fecha+' · '+p.concepto+' · Recibo #'+p.id+'</div></div>'+
       '<div class="hm">+'+pesos(p.monto)+'</div>'+
       '<div style="display:flex;gap:5px;margin-left:10px;flex-shrink:0">'+
         '<button class="btn bob" style="padding:2px 8px;font-size:10.5px" onclick=\'abrirEditPago('+JSON.stringify(p)+')\'>Editar</button>'+
         '<button class="btn bob" style="padding:2px 8px;font-size:10.5px;color:var(--d)" onclick="abrirEliminarPago('+p.id+','+p.alumno_id+')">Eliminar</button>'+
       '</div>'+
-      '</div>';
+    '</div>';
   }).join('');
 }
 
