@@ -646,6 +646,41 @@ app.delete('/api/aranceles/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// Editar pago
+app.put('/api/pagos/:id', (req, res) => {
+  const { monto, concepto, medio, fecha } = req.body;
+  db.prepare('UPDATE pagos SET monto=?, concepto=?, medio=?, fecha=? WHERE id=?')
+    .run(monto, concepto, medio, fecha, req.params.id);
+  res.json({ ok: true });
+});
+
+// Eliminar pago
+app.delete('/api/pagos/:id', (req, res) => {
+  const pagoId = req.params.id;
+  const revertir = req.query.revertir === '1';
+
+  const pago = db.prepare('SELECT * FROM pagos WHERE id = ?').get(pagoId);
+  if (!pago) return res.json({ ok: false, error: 'Pago no encontrado' });
+
+  if (revertir) {
+    // Revertir cuotas cubiertas por este pago
+    // El concepto tiene el formato "Cuota N (Mes 2026), Cuota M ..."
+    // Extraer números de cuota del concepto
+    var concepto = pago.concepto || '';
+    var matches = concepto.match(/Cuota (\d+)/g);
+    if (matches) {
+      matches.forEach(function(m) {
+        var numC = parseInt(m.replace('Cuota ', ''));
+        db.prepare('UPDATE cuotas SET estado=?, fecha_pago=?, monto_pagado=? WHERE alumno_id=? AND numero_cuota=?')
+          .run('pendiente', '', 0, pago.alumno_id, numC);
+      });
+    }
+  }
+
+  db.prepare('DELETE FROM pagos WHERE id = ?').run(pagoId);
+  res.json({ ok: true });
+});
+
 // Exportar pagos como JSON (el Excel lo genera el frontend)
 app.get('/api/exportar/pagos', (req, res) => {
   const pagos = db.prepare('SELECT * FROM pagos ORDER BY id').all();
