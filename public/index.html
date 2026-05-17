@@ -360,7 +360,7 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
         </div>
         <div id="rep-resumen" style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap"></div>
         <div class="alert ai" style="font-size:11px;margin-bottom:10px">
-          <span><strong style="color:var(--s)">✓</strong> Pagada &nbsp;|&nbsp; <strong style="color:#E65100">↔ COMP</strong> Compensada por saldo &nbsp;|&nbsp; <strong style="color:var(--d)">$</strong> Debe &nbsp;|&nbsp; <strong style="color:var(--m)">—</strong> No generada</span>
+          <span><strong style="color:var(--s)">✓</strong> Pagada &nbsp;|&nbsp; <strong style="color:#E65100">↔ COMP</strong> Compensada por saldo &nbsp;|&nbsp; <strong style="color:#1a7a1a">★ GRATIS</strong> Cuota 10 bonificacion completa &nbsp;|&nbsp; <strong style="color:var(--d)">$</strong> Debe &nbsp;|&nbsp; <strong style="color:var(--m)">—</strong> No generada</span>
         </div>
         <div class="twrap"><div id="rep-tabla-wrap"></div></div>
       </div>
@@ -696,12 +696,22 @@ async function selAlumno(id){
   document.getElementById('paso3').style.display='block';
 }
 
-function getPrecio(alumno,numCuota){
-  var dia=new Date().getDate();
-  return(MESES_TODO_EL_MES.indexOf(numCuota)>=0||dia<=10)?parseFloat(alumno.precio_bonificado)||0:parseFloat(alumno.precio_normal)||0;
+function getPrecio(alumno, numCuota, cuotasPagadas) {
+  // Cuota 10 gratis si cuotas 1-9 todas pagadas con precio bonificado
+  if (numCuota === 10 && cuotasPagadas) {
+    var ant = cuotasPagadas.filter(function(c){ return c.numero_cuota <= 9; });
+    if (ant.length === 9 && ant.every(function(c){
+      return c.estado === 'pagada' &&
+        (MESES_TODO_EL_MES.indexOf(c.numero_cuota) >= 0 || c.monto_pagado <= parseFloat(alumno.precio_bonificado));
+    })) return 0;
+  }
+  var dia = new Date().getDate();
+  return (MESES_TODO_EL_MES.indexOf(numCuota) >= 0 || dia <= 10) ?
+    parseFloat(alumno.precio_bonificado) || 0 :
+    parseFloat(alumno.precio_normal) || 0;
 }
 
-function renderCuotas(a,cuotas){
+function renderCuotas(a, cuotas){
   var cont=document.getElementById('cob-cuotas');
   var sinD=document.getElementById('cob-sindeuda');
   var hoyMesIdx=new Date().getMonth();
@@ -711,18 +721,22 @@ function renderCuotas(a,cuotas){
   sinD.style.display='none';
   cont.innerHTML=pendientes.map(function(c){
     var numC=c.numero_cuota;
-    var precio=getPrecio(a,numC);
-    var esBon=precio===(parseFloat(a.precio_bonificado)||0);
+    var precio=getPrecio(a, numC, cuotas);
+    var esGratis=precio===0;
+    var esBon=!esGratis && precio===(parseFloat(a.precio_bonificado)||0);
     var todoElMes=MESES_TODO_EL_MES.indexOf(numC)>=0;
     var vencida=mesesIdx[numC-1]<hoyMesIdx;
+    var tagBonif=esGratis
+      ? '<span class="ctag ctag-b" style="background:#c8f7c5;color:#1a7a1a;font-weight:700">¡GRATIS!</span>'
+      : '<span class="ctag '+(esBon?'ctag-b':'ctag-n')+'">'+(todoElMes?'Todo el mes':(esBon?'Bonificada':'Normal'))+'</span>';
     return '<div class="cuota-row sel" id="crow-'+numC+'">' +
       '<input type="checkbox" data-num="'+numC+'" checked onchange="toggleCuotaCheck(this)">' +
       '<div class="cuota-mes">Cuota '+numC+' — '+CUOTAS[numC-1].mes+' 2026</div>'+
       '<span class="ctag '+(vencida?'ctag-v':'ctag-b')+'">'+(vencida?'Vencida':'Vigente')+'</span>'+
-      '<span class="ctag '+(esBon?'ctag-b':'ctag-n')+'">'+(todoElMes?'Todo el mes':(esBon?'Bonificada':'Normal'))+'</span>'+
+      tagBonif+
       '<input type="number" class="cuota-monto-input" data-num="'+numC+'" data-precio-base="'+precio+'" value="'+precio+'" min="0" step="100" '+
-        'style="width:110px;padding:4px 7px;border:1px solid var(--b);border-radius:var(--rs);font-size:12.5px;font-weight:700;color:'+(esBon?'var(--s)':'var(--w)')+';" '+
-        'oninput="actualizarTotal()" title="Podés modificar el monto manualmente">'+
+        'style="width:110px;padding:4px 7px;border:1px solid var(--b);border-radius:var(--rs);font-size:12.5px;font-weight:700;color:'+(esGratis?'var(--s)':esBon?'var(--s)':'var(--w)')+';" '+
+        'oninput="actualizarTotal()" title="Podes modificar el monto manualmente">'+
     '</div>';
   }).join('');
 }
@@ -921,6 +935,7 @@ function filtrarReporte(){
       if(e==='futura'){h+='<td style="text-align:center;color:var(--m);font-size:10px">—</td>';}
       else if(e==='pagada'){h+='<td style="text-align:center;background:var(--sl)"><span style="color:var(--s);font-size:13px">✓</span></td>';}
       else if(e==='compensada'){h+='<td style="text-align:center;background:#FFF3E0;border:1px solid #FFB74D" title="Compensada por saldo"><div style="font-size:9px;color:#E65100;font-weight:700">↔<br>COMP</div></td>';}
+      else if(e==='gratis'){h+='<td style="text-align:center;background:#c8f7c5;border:1px solid #5cb85c" title="Cuota 10 gratis por bonificacion completa"><div style="font-size:9px;color:#1a7a1a;font-weight:700">★<br>GRATIS</div></td>';}
       else{h+='<td style="text-align:center;background:var(--dl)"><span style="font-size:10px;font-weight:700;color:var(--d)">'+pesos(a.deudaReal)+'</span></td>';}
     });
     h+='<td style="font-weight:700;color:'+(a.deudaReal>0?'var(--d)':'var(--s)')+'">'+( a.deudaReal>0?pesos(a.deudaReal):'Al dia')+'</td></tr>';
