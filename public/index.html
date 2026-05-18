@@ -458,6 +458,25 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
   </div>
 </div>
 
+<!-- MODAL REIMPUTAR -->
+<div class="modal-bg" id="m-reimputar">
+  <div class="modal" style="width:420px">
+    <div class="modal-title">Reimputar cuota</div>
+    <div class="alert ai" style="font-size:12px" id="reim-info"></div>
+    <div class="fg">
+      <label>Mover esta cuota al periodo</label>
+      <select id="reim-destino" style="font-size:13px"></select>
+    </div>
+    <div class="alert aw" style="font-size:11px">
+      La cuota origen quedara como <strong>pendiente</strong> y la destino quedara como <strong>pagada</strong> con los mismos datos.
+    </div>
+    <div class="modal-btns">
+      <button class="btn bob" onclick="cerrarM('m-reimputar')">Cancelar</button>
+      <button class="btn bpb" onclick="confirmarReimputar()">Confirmar reimputacion</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL DETALLE ALUMNO REPORTE -->
 <div class="modal-bg" id="m-det-alumno">
   <div class="modal" style="width:680px">
@@ -1168,16 +1187,23 @@ function abrirDetalleAlumno(id){
     '<th style="text-align:center;padding:6px 10px;background:var(--gl);color:var(--m)">Estado</th>'+
     '<th style="text-align:right;padding:6px 10px;background:var(--gl);color:var(--m)">Monto</th>'+
     '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Fecha de pago</th>'+
+    '<th style="padding:6px 10px;background:var(--gl)"></th>'+
     '</tr></thead><tbody>';
 
   CUOTAS.forEach(function(c){
     var e=est[c.num]||est[String(c.num)]||'futura';
+    // Buscar fecha — puede venir como numero de cuota entero o string
     var fecha=fechas[c.num]||fechas[String(c.num)]||'';
     var monto=montos[c.num]||montos[String(c.num)]||0;
     var fechaCorta=fecha?fecha.toString().slice(0,10):'—';
-    var estadoHtml,bg,montoTxt;
+    var estadoHtml,bg,montoTxt,accion='';
     if(e==='futura'){bg='';estadoHtml='<span style="color:var(--m)">No generada</span>';montoTxt='—';}
-    else if(e==='pagada'){bg='var(--sl)';estadoHtml='<span style="color:var(--s);font-weight:600">✓ Pagada</span>';montoTxt=monto?pesos(monto):'—';}
+    else if(e==='pagada'){
+      bg='var(--sl)';estadoHtml='<span style="color:var(--s);font-weight:600">✓ Pagada</span>';
+      montoTxt=monto?pesos(monto):'—';
+      // Boton reimputar en cuotas pagadas
+      accion='<button class="btn bob" style="padding:2px 7px;font-size:10px" onclick="abrirReimputar('+a.id+','+c.num+')">Reimputar</button>';
+    }
     else if(e==='compensada'){bg='#FFF3E0';estadoHtml='<span style="color:#E65100;font-weight:600">↔ Compensada</span>';montoTxt='—';}
     else if(e==='gratis'){bg='#c8f7c5';estadoHtml='<span style="color:#1a7a1a;font-weight:600">★ Gratis</span>';montoTxt='$0';}
     else{
@@ -1191,6 +1217,7 @@ function abrirDetalleAlumno(id){
       '<td style="padding:6px 10px;text-align:center">'+estadoHtml+'</td>'+
       '<td style="padding:6px 10px;text-align:right;font-weight:600">'+montoTxt+'</td>'+
       '<td style="padding:6px 10px;color:var(--m)">'+fechaCorta+'</td>'+
+      '<td style="padding:6px 10px">'+accion+'</td>'+
     '</tr>';
   });
   cuotasHtml+='</tbody></table>';
@@ -1210,6 +1237,44 @@ function abrirDetalleAlumno(id){
     '</div>'+
     cuotasHtml;
   abrirM('m-det-alumno');
+}
+
+// REIMPUTAR
+var _reimputarAlumnoId = null;
+var _reimputarCuotaOrigen = null;
+
+function abrirReimputar(alumnoId, cuotaOrigen) {
+  _reimputarAlumnoId = alumnoId;
+  _reimputarCuotaOrigen = cuotaOrigen;
+  var a = _reporte.find(function(x){ return x.id === alumnoId; });
+  document.getElementById('reim-info').textContent = (a ? a.nombre : '') + ' — Cuota ' + cuotaOrigen + ' (' + CUOTAS[cuotaOrigen-1].mes + ' 2026)';
+  // Poblar selector de destino con cuotas disponibles (1-10 excepto la origen)
+  var sel = document.getElementById('reim-destino');
+  sel.innerHTML = '';
+  CUOTAS.forEach(function(c){
+    if (c.num === cuotaOrigen) return;
+    var o = document.createElement('option');
+    o.value = c.num;
+    o.textContent = 'Cuota ' + c.num + ' — ' + c.mes + ' 2026';
+    sel.appendChild(o);
+  });
+  abrirM('m-reimputar');
+}
+
+async function confirmarReimputar() {
+  var destino = parseInt(document.getElementById('reim-destino').value);
+  if (!destino || !_reimputarAlumnoId || !_reimputarCuotaOrigen) return;
+  var r = await api('POST', '/api/reimputar', {
+    alumnoId: _reimputarAlumnoId,
+    cuotaOrigen: _reimputarCuotaOrigen,
+    cuotaDestino: destino
+  });
+  if (!r || !r.ok) { toast('Error: ' + (r ? r.error : 'desconocido'), 'e'); return; }
+  cerrarM('m-reimputar');
+  cerrarM('m-det-alumno');
+  // Recargar reporte
+  await cargarReporte();
+  toast('Cuota reimputada correctamente', 's');
 }
 
 // CURSOS
