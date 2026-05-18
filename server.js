@@ -28,7 +28,8 @@ db.exec(`
     cuits TEXT DEFAULT '',
     precio_normal REAL DEFAULT 0,
     precio_bonificado REAL DEFAULT 0,
-    activo INTEGER DEFAULT 1
+    activo INTEGER DEFAULT 1,
+    telefono TEXT DEFAULT ''
   );
 
   CREATE TABLE IF NOT EXISTS cuotas (
@@ -75,6 +76,9 @@ db.exec(`
     precio_bonificado REAL DEFAULT 0
   );
 `);
+
+// Migración: agregar columna telefono si no existe
+try { db.prepare("ALTER TABLE alumnos ADD COLUMN telefono TEXT DEFAULT ''").run(); } catch(e) {}
 
 // Verificar si ya se cargaron los datos iniciales
 const iniciado = db.prepare("SELECT valor FROM config WHERE clave = 'iniciado'").get();
@@ -372,15 +376,15 @@ app.get('/api/alumnos', (req, res) => {
 });
 
 app.post('/api/alumnos', (req, res) => {
-  const { nombre, curso, cuits, precio_normal, precio_bonificado } = req.body;
-  const r = db.prepare('INSERT INTO alumnos (nombre, curso, cuits, precio_normal, precio_bonificado) VALUES (?, ?, ?, ?, ?)').run(nombre.trim().toUpperCase(), curso, cuits||'', precio_normal||0, precio_bonificado||0);
+  const { nombre, curso, cuits, precio_normal, precio_bonificado, telefono } = req.body;
+  const r = db.prepare('INSERT INTO alumnos (nombre, curso, cuits, precio_normal, precio_bonificado, telefono) VALUES (?, ?, ?, ?, ?, ?)').run(nombre.trim().toUpperCase(), curso, cuits||'', precio_normal||0, precio_bonificado||0, telefono||'');
   generarCuotas(r.lastInsertRowid);
   res.json({ ok: true, id: r.lastInsertRowid });
 });
 
 app.put('/api/alumnos/:id', (req, res) => {
-  const { nombre, curso, cuits, precio_normal, precio_bonificado } = req.body;
-  db.prepare('UPDATE alumnos SET nombre=?, curso=?, cuits=?, precio_normal=?, precio_bonificado=? WHERE id=?').run(nombre.trim().toUpperCase(), curso, cuits||'', precio_normal||0, precio_bonificado||0, req.params.id);
+  const { nombre, curso, cuits, precio_normal, precio_bonificado, telefono } = req.body;
+  db.prepare('UPDATE alumnos SET nombre=?, curso=?, cuits=?, precio_normal=?, precio_bonificado=?, telefono=? WHERE id=?').run(nombre.trim().toUpperCase(), curso, cuits||'', precio_normal||0, precio_bonificado||0, telefono||'', req.params.id);
   res.json({ ok: true });
 });
 
@@ -548,6 +552,8 @@ app.get('/api/reporte', (req, res) => {
     const totalPagado = pagos?.total || 0;
 
     const estadoCuotas = {};
+    const fechasPago = {};   // numCuota -> fecha_pago
+    const montosPago = {};   // numCuota -> monto_pagado
     for (let i = 0; i < 10; i++) {
       const numC = i + 1;
       const mesIdx = MESES_IDX[i];
@@ -555,6 +561,8 @@ app.get('/api/reporte', (req, res) => {
       const cuota = cuotas.find(c => c.numero_cuota === numC);
       if (!cuota) { estadoCuotas[numC] = 'pendiente'; continue; }
       estadoCuotas[numC] = cuota.estado === 'pagada' ? (cuota.compensada ? 'compensada' : 'pagada') : 'pendiente';
+      if (cuota.fecha_pago) fechasPago[numC] = cuota.fecha_pago;
+      if (cuota.monto_pagado) montosPago[numC] = cuota.monto_pagado;
     }
 
     // Calcular saldo neto y compensar visualmente
@@ -599,7 +607,7 @@ app.get('/api/reporte', (req, res) => {
       return s + getPrecioRep(parseInt(k));
     }, 0);
 
-    return { id: a.id, nombre: a.nombre, curso: a.curso, precio_normal: a.precio_normal, precio_bonificado: a.precio_bonificado, cuits: a.cuits, activo: a.activo, estadoCuotas, deudaReal, totalPagado, cuota10Gratis };
+    return { id: a.id, nombre: a.nombre, curso: a.curso, precio_normal: a.precio_normal, precio_bonificado: a.precio_bonificado, cuits: a.cuits, telefono: a.telefono||'', activo: a.activo, estadoCuotas, fechasPago, montosPago, deudaReal, totalPagado, cuota10Gratis };
   });
 
   res.json(resultado);
