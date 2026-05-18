@@ -762,6 +762,16 @@ app.post('/api/backfill-pagos', (req, res) => {
   res.json({ ok: true, insertados });
 });
 
+// Diagnóstico - verificar estructura de tabla
+app.get('/api/diagnostico', (req, res) => {
+  const cols = db.prepare("PRAGMA table_info(alumnos)").all();
+  const tieneTelefono = cols.some(c => c.name === 'telefono');
+  if (!tieneTelefono) {
+    db.prepare("ALTER TABLE alumnos ADD COLUMN telefono TEXT DEFAULT ''").run();
+  }
+  res.json({ columnas: cols.map(c => c.name), tieneTelefono, migrado: !tieneTelefono });
+});
+
 // Exportar pagos como JSON (el Excel lo genera el frontend)
 app.get('/api/exportar/pagos', (req, res) => {
   const pagos = db.prepare('SELECT * FROM pagos ORDER BY id').all();
