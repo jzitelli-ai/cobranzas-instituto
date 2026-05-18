@@ -427,6 +427,7 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
       <div class="fg"><label>Precio bonificado ($)</label><input type="number" id="ma-pbonif" placeholder="0"></div>
       <div class="fg"><label>CUITs (separados por coma)</label><input type="text" id="ma-cuits" placeholder="20123456789"></div>
     </div>
+    <div class="fg"><label>Telefono WhatsApp (sin 0 ni 15, ej: 3874123456)</label><input type="text" id="ma-tel" placeholder="3874123456"></div>
     <div class="modal-btns">
       <button class="btn bob" onclick="cerrarM('m-alum')">Cancelar</button>
       <button class="btn bpb" onclick="guardarAlumno()">Guardar</button>
@@ -448,10 +449,23 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
       <div class="fg"><label>Precio bonificado ($)</label><input type="number" id="ea-pbonif"></div>
       <div class="fg"><label>CUITs (separados por coma)</label><input type="text" id="ea-cuits"></div>
     </div>
+    <div class="fg"><label>Telefono WhatsApp (sin 0 ni 15, ej: 3874123456)</label><input type="text" id="ea-tel" placeholder="3874123456"></div>
     <input type="hidden" id="ea-id">
     <div class="modal-btns">
       <button class="btn bob" onclick="cerrarM('m-edit-alum')">Cancelar</button>
       <button class="btn bpb" onclick="guardarEdicionAlumno()">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALLE ALUMNO REPORTE -->
+<div class="modal-bg" id="m-det-alumno">
+  <div class="modal" style="width:680px">
+    <div class="modal-title">Detalle de pagos</div>
+    <div id="det-body"></div>
+    <div class="modal-btns">
+      <button class="btn bob" onclick="cerrarM('m-det-alumno')">Cerrar</button>
+      <button class="btn bpb" onclick="cerrarM('m-det-alumno');nav('cobro')">Registrar pago</button>
     </div>
   </div>
 </div>
@@ -684,8 +698,9 @@ async function guardarAlumno(){
   var pn=parseFloat(document.getElementById('ma-pnormal').value)||0;
   var pb=parseFloat(document.getElementById('ma-pbonif').value)||0;
   var cuits=document.getElementById('ma-cuits').value.trim();
+  var tel=document.getElementById('ma-tel').value.trim();
   if(!nombre||!curso){toast('Completa nombre y curso','e');return;}
-  await api('POST','/api/alumnos',{nombre,curso,cuits,precio_normal:pn,precio_bonificado:pb});
+  await api('POST','/api/alumnos',{nombre,curso,cuits,precio_normal:pn,precio_bonificado:pb,telefono:tel});
   cerrarM('m-alum');cargarAlumnos();toast('Alumno agregado','s');
 }
 
@@ -695,6 +710,7 @@ function abrirEditAlumno(a){
   document.getElementById('ea-pnormal').value=a.precio_normal;
   document.getElementById('ea-pbonif').value=a.precio_bonificado;
   document.getElementById('ea-cuits').value=a.cuits||'';
+  document.getElementById('ea-tel').value=a.telefono||'';
   setTimeout(function(){document.getElementById('ea-curso').value=a.curso;},50);
   abrirM('m-edit-alum');
 }
@@ -706,7 +722,8 @@ async function guardarEdicionAlumno(){
   var pn=parseFloat(document.getElementById('ea-pnormal').value)||0;
   var pb=parseFloat(document.getElementById('ea-pbonif').value)||0;
   var cuits=document.getElementById('ea-cuits').value.trim();
-  await api('PUT','/api/alumnos/'+id,{nombre,curso,cuits,precio_normal:pn,precio_bonificado:pb});
+  var tel=document.getElementById('ea-tel').value.trim();
+  await api('PUT','/api/alumnos/'+id,{nombre,curso,cuits,precio_normal:pn,precio_bonificado:pb,telefono:tel});
   cerrarM('m-edit-alum');cargarAlumnos();toast('Alumno actualizado','s');
 }
 
@@ -1084,30 +1101,105 @@ function filtrarReporte(){
   document.getElementById('rep-resumen').innerHTML=
     rsc('Deuda real total',pesos(totalDeuda),'d')+rsc('Con deuda',conDeuda+' alumnos','d')+rsc('Compensados',conComp+' alumnos','p')+rsc('Al dia',(lista.length-conDeuda-conComp)+' alumnos','s');
   var h='<table><thead><tr><th>Alumno</th><th>Curso</th>';
-  CUOTAS.forEach(function(c){h+='<th style="font-size:10px;text-align:center;min-width:44px">C'+c.num+'<br><span style="font-weight:400">'+c.mes.slice(0,3)+'</span></th>';});
-  h+='<th>Deuda real</th></tr></thead><tbody>';
+  CUOTAS.forEach(function(c){h+='<th style="font-size:10px;text-align:center;min-width:52px">C'+c.num+'<br><span style="font-weight:400">'+c.mes.slice(0,3)+'</span></th>';});
+  h+='<th>Deuda real</th><th style="width:80px">WA</th></tr></thead><tbody>';
   lista.forEach(function(a){
     var est=a.estadoCuotas||{};
-    h+='<tr><td style="font-weight:500;font-size:12px;white-space:nowrap">'+a.nombre+'</td><td><span class="badge bp" style="font-size:9px">'+a.curso+'</span></td>';
-    CUOTAS.forEach(function(c){var e=est[c.num]||est[String(c.num)]||'futura';
+    var fechas=a.fechasPago||{};
+    h+='<tr style="cursor:pointer" onclick="abrirDetalleAlumno('+a.id+')" title="Clic para ver detalle completo">';
+    h+='<td style="font-weight:500;font-size:12px;white-space:nowrap">'+a.nombre+'</td>';
+    h+='<td><span class="badge bp" style="font-size:9px">'+a.curso+'</span></td>';
+    CUOTAS.forEach(function(c){
+      var e=est[c.num]||est[String(c.num)]||'futura';
+      var fecha=fechas[c.num]||fechas[String(c.num)]||'';
+      var fechaCorta=fecha?fecha.toString().slice(0,10):'';
       if(e==='futura'){h+='<td style="text-align:center;color:var(--m);font-size:10px">—</td>';}
-      else if(e==='pagada'){h+='<td style="text-align:center;background:var(--sl)"><span style="color:var(--s);font-size:13px">✓</span></td>';}
+      else if(e==='pagada'){h+='<td style="text-align:center;background:var(--sl)"><span style="color:var(--s);font-size:12px">✓</span>'+(fechaCorta?'<div style="font-size:9px;color:var(--s);margin-top:1px">'+fechaCorta+'</div>':'')+'</td>';}
       else if(e==='compensada'){h+='<td style="text-align:center;background:#FFF3E0;border:1px solid #FFB74D" title="Compensada por saldo"><div style="font-size:9px;color:#E65100;font-weight:700">↔<br>COMP</div></td>';}
-      else if(e==='gratis'){h+='<td style="text-align:center;background:#c8f7c5;border:1px solid #5cb85c" title="Cuota 10 gratis por bonificacion completa"><div style="font-size:9px;color:#1a7a1a;font-weight:700">★<br>GRATIS</div></td>';}
+      else if(e==='gratis'){h+='<td style="text-align:center;background:#c8f7c5;border:1px solid #5cb85c"><div style="font-size:9px;color:#1a7a1a;font-weight:700">★<br>GRATIS</div></td>';}
       else{
-        // Calcular precio de esa cuota específica
-        var numCuota=c.num;
-        var dia=new Date().getDate();
+        var numCuota=c.num;var dia=new Date().getDate();
         var precioCuota=(MESES_TODO_EL_MES.indexOf(numCuota)>=0||dia<=10)?parseFloat(a.precio_bonificado)||0:parseFloat(a.precio_normal)||0;
         h+='<td style="text-align:center;background:var(--dl)"><span style="font-size:10px;font-weight:700;color:var(--d)">'+pesos(precioCuota)+'</span></td>';
       }
     });
-    h+='<td style="font-weight:700;color:'+(a.deudaReal>0?'var(--d)':'var(--s)')+'">'+( a.deudaReal>0?pesos(a.deudaReal):'Al dia')+'</td></tr>';
+    h+='<td style="font-weight:700;color:'+(a.deudaReal>0?'var(--d)':'var(--s)')+'">'+( a.deudaReal>0?pesos(a.deudaReal):'Al dia')+'</td>';
+    // Botón WhatsApp
+    if(a.deudaReal>0){
+      var tel=(a.telefono||'').replace(/[^0-9]/g,'');
+      var msg=encodeURIComponent('Hola! Le recordamos que tiene una deuda pendiente de '+pesos(a.deudaReal)+' correspondiente al Instituto Cultural Cerrillos. Por favor comuniquese para regularizar su situacion. Gracias!');
+      var waLink=tel?'https://wa.me/549'+tel+'?text='+msg:'https://wa.me/?text='+msg;
+      h+='<td style="text-align:center"><a href="'+waLink+'" target="_blank" onclick="event.stopPropagation()" style="background:#25D366;color:#fff;border-radius:6px;padding:3px 7px;font-size:11px;font-weight:700;text-decoration:none;display:inline-block">WA</a></td>';
+    } else {
+      h+='<td></td>';
+    }
+    h+='</tr>';
   });
   h+='</tbody></table>';
   document.getElementById('rep-tabla-wrap').innerHTML=h;
 }
 function rsc(l,v,c){return '<div class="sc" style="padding:8px 12px"><div class="sc-l">'+l+'</div><div class="sc-v '+c+'" style="font-size:15px">'+v+'</div></div>';}
+
+function abrirDetalleAlumno(id){
+  var a=_reporte.find(function(x){return x.id===id;});
+  if(!a)return;
+  var est=a.estadoCuotas||{};
+  var fechas=a.fechasPago||{};
+  var montos=a.montosPago||{};
+  var dia=new Date().getDate();
+  var tel=(a.telefono||'').replace(/[^0-9]/g,'');
+  var msg=encodeURIComponent('Hola! Le recordamos que tiene una deuda pendiente de '+pesos(a.deudaReal)+' correspondiente al Instituto Cultural Cerrillos. Por favor comuniquese para regularizar su situacion. Gracias!');
+  var waLink=tel?'https://wa.me/549'+tel+'?text='+msg:'';
+
+  var cuotasHtml='<table style="width:100%;font-size:12.5px;border-collapse:collapse"><thead><tr>'+
+    '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Cuota</th>'+
+    '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Mes</th>'+
+    '<th style="text-align:center;padding:6px 10px;background:var(--gl);color:var(--m)">Estado</th>'+
+    '<th style="text-align:right;padding:6px 10px;background:var(--gl);color:var(--m)">Monto</th>'+
+    '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Fecha de pago</th>'+
+    '</tr></thead><tbody>';
+
+  CUOTAS.forEach(function(c){
+    var e=est[c.num]||est[String(c.num)]||'futura';
+    var fecha=fechas[c.num]||fechas[String(c.num)]||'';
+    var monto=montos[c.num]||montos[String(c.num)]||0;
+    var fechaCorta=fecha?fecha.toString().slice(0,10):'—';
+    var estadoHtml,bg,montoTxt;
+    if(e==='futura'){bg='';estadoHtml='<span style="color:var(--m)">No generada</span>';montoTxt='—';}
+    else if(e==='pagada'){bg='var(--sl)';estadoHtml='<span style="color:var(--s);font-weight:600">✓ Pagada</span>';montoTxt=monto?pesos(monto):'—';}
+    else if(e==='compensada'){bg='#FFF3E0';estadoHtml='<span style="color:#E65100;font-weight:600">↔ Compensada</span>';montoTxt='—';}
+    else if(e==='gratis'){bg='#c8f7c5';estadoHtml='<span style="color:#1a7a1a;font-weight:600">★ Gratis</span>';montoTxt='$0';}
+    else{
+      bg='var(--dl)';estadoHtml='<span style="color:var(--d);font-weight:600">Pendiente</span>';
+      var precioCuota=(MESES_TODO_EL_MES.indexOf(c.num)>=0||dia<=10)?parseFloat(a.precio_bonificado)||0:parseFloat(a.precio_normal)||0;
+      montoTxt=pesos(precioCuota);fechaCorta='—';
+    }
+    cuotasHtml+='<tr style="background:'+bg+'">'+
+      '<td style="padding:6px 10px;font-weight:600">'+c.num+'</td>'+
+      '<td style="padding:6px 10px">'+c.mes+' 2026</td>'+
+      '<td style="padding:6px 10px;text-align:center">'+estadoHtml+'</td>'+
+      '<td style="padding:6px 10px;text-align:right;font-weight:600">'+montoTxt+'</td>'+
+      '<td style="padding:6px 10px;color:var(--m)">'+fechaCorta+'</td>'+
+    '</tr>';
+  });
+  cuotasHtml+='</tbody></table>';
+
+  document.getElementById('det-body').innerHTML=
+    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">'+
+      '<div class="avatar" style="width:44px;height:44px;font-size:13px">'+a.nombre.split(/[\s,]+/).filter(Boolean).slice(0,2).map(function(x){return x[0];}).join('').toUpperCase()+'</div>'+
+      '<div style="flex:1">'+
+        '<div style="font-weight:700;font-size:14px">'+a.nombre+'</div>'+
+        '<div style="font-size:12px;color:var(--m)">'+a.curso+' · Tel: '+(a.telefono||'no registrado')+'</div>'+
+      '</div>'+
+      (a.deudaReal>0&&waLink?'<a href="'+waLink+'" target="_blank" style="background:#25D366;color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;text-decoration:none">WhatsApp</a>':'<span class="badge bs">Al dia</span>')+
+    '</div>'+
+    '<div class="r2" style="margin-bottom:14px">'+
+      '<div style="background:var(--gl);padding:10px;border-radius:var(--rs)"><div style="font-size:11px;color:var(--m)">Total pagado</div><div style="font-weight:700;font-size:15px;color:var(--s)">'+pesos(a.totalPagado)+'</div></div>'+
+      '<div style="background:'+(a.deudaReal>0?'var(--dl)':'var(--sl)')+';padding:10px;border-radius:var(--rs)"><div style="font-size:11px;color:var(--m)">Deuda real</div><div style="font-weight:700;font-size:15px;color:'+(a.deudaReal>0?'var(--d)':'var(--s)')+'">'+( a.deudaReal>0?pesos(a.deudaReal):'Al dia')+'</div></div>'+
+    '</div>'+
+    cuotasHtml;
+  abrirM('m-det-alumno');
+}
 
 // CURSOS
 async function renderCursos(){
