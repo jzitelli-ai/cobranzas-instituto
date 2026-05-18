@@ -561,8 +561,12 @@ app.get('/api/reporte', (req, res) => {
       const cuota = cuotas.find(c => c.numero_cuota === numC);
       if (!cuota) { estadoCuotas[numC] = 'pendiente'; continue; }
       estadoCuotas[numC] = cuota.estado === 'pagada' ? (cuota.compensada ? 'compensada' : 'pagada') : 'pendiente';
-      if (cuota.fecha_pago) fechasPago[numC] = cuota.fecha_pago;
-      if (cuota.monto_pagado) montosPago[numC] = cuota.monto_pagado;
+      if (cuota.fecha_pago && cuota.fecha_pago !== '') {
+        fechasPago[numC] = String(cuota.fecha_pago).slice(0, 10);
+      }
+      if (cuota.monto_pagado && cuota.monto_pagado > 0) {
+        montosPago[numC] = cuota.monto_pagado;
+      }
     }
 
     // Calcular saldo neto y compensar visualmente
@@ -801,6 +805,46 @@ app.post('/api/migrar-fechas', (req, res) => {
   });
 
   res.json({ ok: true, actualizados, errores });
+});
+
+// Diagnóstico - ver estado real de cuotas de un alumno
+app.get('/api/diagnostico/cuotas/:nombre', (req, res) => {
+  const nombre = decodeURIComponent(req.params.nombre);
+  const alumno = db.prepare("SELECT * FROM alumnos WHERE nombre LIKE ?").get('%' + nombre + '%');
+  if (!alumno) return res.json({ error: 'No encontrado' });
+  const cuotas = db.prepare('SELECT * FROM cuotas WHERE alumno_id = ?').all(alumno.id);
+  res.json({ alumno: alumno.nombre, id: alumno.id, cuotas });
+});
+
+// Reimputar cuota: mover estado de una cuota a otra
+app.post('/api/reimputar', (req, res) => {
+  const { alumnoId, cuotaOrigen, cuotaDestino } = req.body;
+  
+  const origen = db.prepare('SELECT * FROM cuotas WHERE alumno_id = ? AND numero_cuota = ?').get(alumnoId, cuotaOrigen);
+  const destino = db.prepare('SELECT * FROM cuotas WHERE alumno_id = ? AND numero_cuota = ?').get(alumnoId, cuotaDestino);
+  
+  if (!origen) return res.json({ ok: false, error: 'Cuota origen no encontrada' });
+  if (!destino) return res.json({ ok: false, error: 'Cuota destino no encontrada' });
+  if (origen.estado !== 'pagada') return res.json({ ok: false, error: 'La cuota origen no está pagada' });
+
+  // Marcar destino como pagada con los datos del origen
+  db.prepare('UPDATE cuotas SET estado=?, fecha_pago=?, monto_pagado=?, compensada=? WHERE alumno_id=? AND numero_cuota=?')
+    .run('pagada', origen.fecha_pago, origen.monto_pagado, origen.compensada, alumnoId, cuotaDestino);
+  
+  // Marcar origen como pendiente
+  db.prepare('UPDATE cuotas SET estado=?, fecha_pago=?, monto_pagado=?, compensada=? WHERE alumno_id=? AND numero_cuota=?')
+    .run('pendiente', '', 0, 0, alumnoId, cuotaOrigen);
+
+  // Actualizar concepto del pago relacionado si existe
+  const MESES = ['Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const pago = db.prepare("SELECT * FROM pagos WHERE alumno_id=? AND concepto LIKE ? ORDER BY id DESC LIMIT 1")
+    .get(alumnoId, '%Cuota ' + cuotaOrigen + '%');
+  if (pago) {
+    const nuevoConc = pago.concepto.replace('Cuota ' + cuotaOrigen + ' (' + MESES[cuotaOrigen-1] + ' 2026)', 'Cuota ' + cuotaDestino + ' (' + MESES[cuotaDestino-1] + ' 2026)');
+    db.prepare('UPDATE pagos SET concepto=? WHERE id=?').run(nuevoConc, pago.id);
+  }
+
+  res.json({ ok: true });
 });
 
 // Exportar pagos como JSON (el Excel lo genera el frontend)
