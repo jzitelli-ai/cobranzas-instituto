@@ -343,8 +343,8 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
               <option value="Importado">Importado</option>
             </select>
             <span id="hist-cnt" style="font-size:11px;color:var(--m)"></span>
-            <button class="btn bob" onclick="backfillPagos()" style="font-size:11px;padding:4px 10px" title="Genera registros para las cuotas importadas que no aparecen">
-              Sincronizar importados
+            <button class="btn bob" onclick="migrarFechas()" style="font-size:11px;padding:4px 10px" title="Migra fechas y montos reales del Excel original a las cuotas historicas">
+              Migrar fechas historicas
             </button>
           </div>
         </div>
@@ -1059,6 +1059,17 @@ async function eliminarPago(pagoId, alumnoId, revertirCuotas) {
   if (!r || !r.ok) { toast('Error al eliminar', 'e'); return; }
   cargarHistorial();
   toast('Pago eliminado' + (revertirCuotas ? ' — cuotas revertidas a pendiente' : ''), 'i');
+}
+
+async function migrarFechas() {
+  if (!confirm('Esto actualiza las fechas y montos de las cuotas 1, 2 y 3 con los datos reales del Excel original. Solo hace falta ejecutarlo una vez. Continuar?')) return;
+  showSpinner('Migrando fechas historicas...');
+  var r = await api('POST', '/api/migrar-fechas', {});
+  hideSpinner();
+  if (!r || !r.ok) { toast('Error al migrar', 'e'); return; }
+  if (r.errores && r.errores.length > 0) console.warn('Errores:', r.errores);
+  cargarHistorial();
+  toast('Fechas migradas: ' + r.actualizados + ' cuotas actualizadas', 's');
 }
 
 async function backfillPagos() {
