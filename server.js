@@ -158,17 +158,100 @@ app.post('/api/cobro', async (req,res) => {
   const dia=new Date().getDate();
   const fecha=new Date().toLocaleDateString('es-AR')+' '+new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
   const conceptos=[];
+
   if(cuotasSeleccionadas&&cuotasSeleccionadas.length>0) {
+    // Cobro manual: respetar la selección del usuario pero aplicar saldo extra automáticamente
+    let montoRestante = monto;
     for(const numC of cuotasSeleccionadas) {
       const esGratis=numC===10&&await cuota10Gratis(alumnoId,alumno);
       const precio=esGratis?0:getPrecio(alumno,numC,dia);
       conceptos.push(`Cuota ${numC} (${MESES_NOMBRE_ALL[numC-1]} 2026)${esGratis?' (GRATIS)':''}`);
       await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE alumno_id=$4 AND numero_cuota=$5',['pagada',fecha,precio,alumnoId,numC]);
+      montoRestante -= precio;
+    }
+    // Si sobra saldo, aplicar a siguientes cuotas
+    if (montoRestante > 0) {
+      const pendientes = await q('SELECT * FROM cuotas WHERE alumno_id=$1 AND estado=$2 ORDER BY numero_cuota',[alumnoId,'pendiente']);
+      for (const c of pendientes) {
+        if (montoRestante <= 0) break;
+        const esGratis = c.numero_cuota===10&&await cuota10Gratis(alumnoId,alumno);
+        const precio = esGratis?0:getPrecio(alumno,c.numero_cuota,dia);
+        if (precio===0||montoRestante>=precio) {
+          await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4',['pagada',fecha,precio,c.id]);
+          conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota-1]} 2026) [credito]`);
+          montoRestante -= precio;
+        }
+      }
     }
   }
   const r=await q('INSERT INTO pagos (fecha,alumno_id,alumno_nombre,curso,monto,concepto,medio,origen) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',[fecha,alumnoId,alumno.nombre,alumno.curso,monto,conceptos.join(', '),medio,origen]);
   res.json({ok:true,pagoId:r[0].id,fecha,conceptos});
 });
+
+// Reprocesar pagos históricos del Excel aplicando lógica de saldo
+app.post('/api/reprocesar-historicos', async (req,res) => {
+  const alumnos = await q('SELECT * FROM alumnos ORDER BY id');
+  let reprocesados = 0;
+
+  for (const alumno of alumnos) {
+    // Obtener pagos importados de este alumno ordenados por fecha
+    const pagosAlumno = await q(
+      "SELECT * FROM pagos WHERE alumno_id=$1 AND origen LIKE '%Importado%' ORDER BY fecha ASC",
+      [alumno.id]
+    );
+    if (!pagosAlumno.length) continue;
+
+    // Resetear todas las cuotas históricas (1-3) a pendiente
+    await q("UPDATE cuotas SET estado='pendiente',fecha_pago='',monto_pagado=0 WHERE alumno_id=$1 AND numero_cuota<=3", [alumno.id]);
+
+    // Re-aplicar cada pago con la lógica de saldo
+    for (const pago of pagosAlumno) {
+      const fecha = pago.fecha;
+      const dia = parseInt((fecha||'').split('/')[0]) || 1;
+      await aplicarPagoConSaldo(alumno.id, alumno, parseFloat(pago.monto), fecha, pago.origen);
+    }
+    reprocesados++;
+  }
+
+  res.json({ ok: true, reprocesados, mensaje: `${reprocesados} alumnos reprocesados` });
+});
+
+// Función central: aplica un monto a cuotas pendientes de más antigua a más nueva
+// Si sobra saldo, lo aplica a la siguiente cuota que venza
+async function aplicarPagoConSaldo(alumnoId, alumno, monto, fecha, origen) {
+  const dia = parseInt((fecha||'').split('/')[0]) || new Date().getDate();
+  const pendientes = await q('SELECT * FROM cuotas WHERE alumno_id=$1 AND estado=$2 ORDER BY numero_cuota', [alumnoId, 'pendiente']);
+  let restante = monto;
+  const conceptos = [];
+
+  for (const c of pendientes) {
+    if (restante <= 0) break;
+    const esGratis = c.numero_cuota === 10 && await cuota10Gratis(alumnoId, alumno);
+    const precio = esGratis ? 0 : getPrecio(alumno, c.numero_cuota, dia);
+    if (precio === 0 || restante >= precio) {
+      await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', ['pagada', fecha, precio, c.id]);
+      conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota-1]} 2026)${esGratis?' (GRATIS)':''}`);
+      restante -= precio;
+    }
+  }
+
+  // Si sobra saldo, aplicar a la siguiente cuota pendiente (crédito adelantado)
+  if (restante > 0) {
+    const siguientes = await q('SELECT * FROM cuotas WHERE alumno_id=$1 AND estado=$2 ORDER BY numero_cuota', [alumnoId, 'pendiente']);
+    for (const c of siguientes) {
+      if (restante <= 0) break;
+      const esGratis = c.numero_cuota === 10 && await cuota10Gratis(alumnoId, alumno);
+      const precio = esGratis ? 0 : getPrecio(alumno, c.numero_cuota, dia);
+      if (precio === 0 || restante >= precio) {
+        await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', ['pagada', fecha, precio, c.id]);
+        conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota-1]} 2026) [credito]`);
+        restante -= precio;
+      }
+    }
+  }
+
+  return { conceptos, saldoRestante: restante };
+}
 
 app.post('/api/banco', async (req,res) => {
   const {filas,colCuit,colMonto}=req.body;
@@ -193,16 +276,10 @@ app.post('/api/banco', async (req,res) => {
     }
     const yaExiste=await q1('SELECT id FROM pagos WHERE alumno_id=$1 AND origen LIKE $2 AND monto=$3 AND fecha=$4',[alumno.id,`%CUIT ${cuit}%`,monto,fecha]);
     if(yaExiste){duplicados++;continue;}
-    const pendientes=await q('SELECT * FROM cuotas WHERE alumno_id=$1 AND estado=$2 ORDER BY numero_cuota',[alumno.id,'pendiente']);
-    let restante=monto; const conceptos=[];
-    for(const c of pendientes) {
-      if(restante<=0)break;
-      const actual=await q1('SELECT estado FROM cuotas WHERE id=$1',[c.id]);
-      if(!actual||actual.estado!=='pendiente')continue;
-      let precio=c.numero_cuota===10&&await cuota10Gratis(alumno.id,alumno)?0:getPrecio(alumno,c.numero_cuota,dia);
-      if(restante>=precio){await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4',['pagada',fecha,precio,c.id]);conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota-1]} 2026)`);restante-=precio;}
-    }
-    await q('INSERT INTO pagos (fecha,alumno_id,alumno_nombre,curso,monto,concepto,medio,origen) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',[fecha,alumno.id,alumno.nombre,alumno.curso,monto,conceptos.join(', ')||'Transferencia bancaria','Transferencia',`Banco (CUIT ${cuit})`]);
+
+    const {conceptos} = await aplicarPagoConSaldo(alumno.id, alumno, monto, fecha, `Banco (CUIT ${cuit})`);
+    await q('INSERT INTO pagos (fecha,alumno_id,alumno_nombre,curso,monto,concepto,medio,origen) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+      [fecha,alumno.id,alumno.nombre,alumno.curso,monto,conceptos.join(', ')||'Transferencia bancaria','Transferencia',`Banco (CUIT ${cuit})`]);
     aplicados++;
   }
   res.json({ok:true,aplicados,duplicados,noEncontrados,sinCuit,totalFilas:filas.length});
