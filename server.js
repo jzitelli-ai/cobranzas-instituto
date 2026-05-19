@@ -489,8 +489,40 @@ app.post('/api/banco', (req, res) => {
     }
   });
 
+  // Función para parsear montos en formato argentino
+  // Soporta: $42.500,00 / 42.500,00 / 42500.00 / 42,500.00
+  function parsearMonto(valor) {
+    if (!valor && valor !== 0) return 0;
+    let s = String(valor).trim();
+    // Quitar símbolo $ y espacios
+    s = s.replace(/\$\s*/g, '').trim();
+    // Detectar formato argentino: tiene punto como separador de miles y coma decimal
+    // Ejemplo: 42.500,00 o 1.234.567,89
+    if (/^\d{1,3}(\.\d{3})*(,\d{1,2})?$/.test(s)) {
+      // Formato argentino: quitar puntos, reemplazar coma por punto
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else if (/^\d{1,3}(,\d{3})*(\.\d{1,2})?$/.test(s)) {
+      // Formato anglosajón: quitar comas
+      s = s.replace(/,/g, '');
+    } else {
+      // Fallback: quitar todo excepto dígitos y último separador
+      s = s.replace(/[^0-9,\.]/g, '');
+      // Si tiene coma y punto, el último es el decimal
+      const lastComma = s.lastIndexOf(',');
+      const lastDot = s.lastIndexOf('.');
+      if (lastComma > lastDot) {
+        s = s.replace(/\./g, '').replace(',', '.');
+      } else {
+        s = s.replace(/,/g, '');
+      }
+    }
+    return parseFloat(s) || 0;
+  }
+
   let aplicados = 0;
+  let duplicados = 0;
   const noEncontrados = [];
+  const sinCuit = [];
   const MESES_NOMBRE = ['Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const MESES_TODO_EL_MES = [1, 5];
   const hoy = new Date();
@@ -499,11 +531,24 @@ app.post('/api/banco', (req, res) => {
 
   filas.forEach(fila => {
     const cuit = extraerCuit(fila[colCuit]);
-    const monto = parseFloat(String(fila[colMonto]).replace(',', '.')) || 0;
-    if (!cuit || monto <= 0) return;
+    const monto = parsearMonto(fila[colMonto]);
+
+    if (!cuit) {
+      sinCuit.push({ detalle: String(fila[colCuit] || '').slice(0, 80), monto });
+      return;
+    }
+    if (monto <= 0) return;
 
     const alumno = cuitMap[cuit];
-    if (!alumno) { noEncontrados.push({ cuit, monto, detalle: String(fila[colCuit]).slice(0, 50) }); return; }
+    if (!alumno) {
+      noEncontrados.push({
+        cuit,
+        monto,
+        detalle: String(fila[colCuit] || '').slice(0, 80),
+        montoOriginal: String(fila[colMonto] || '')
+      });
+      return;
+    }
 
     // Aplicar a cuotas pendientes
     let restante = monto;
@@ -512,7 +557,9 @@ app.post('/api/banco', (req, res) => {
 
     for (const c of pendientes) {
       if (restante <= 0) break;
-      // Cuota 10 gratis si cuotas 1-9 todas pagadas con bonificado
+      // Solo procesar cuotas que siguen pendientes (evita duplicar si se reimporta)
+      const cuotaActual = db.prepare('SELECT estado FROM cuotas WHERE id=?').get(c.id);
+      if (!cuotaActual || cuotaActual.estado !== 'pendiente') continue;
       let precio = 0;
       if (c.numero_cuota === 10) {
         const ant = db.prepare('SELECT * FROM cuotas WHERE alumno_id = ? AND numero_cuota <= 9').all(alumno.id);
@@ -529,11 +576,21 @@ app.post('/api/banco', (req, res) => {
       }
     }
 
+    // Verificar si ya existe un pago de este CUIT en la misma fecha con el mismo monto
+    const yaExiste = db.prepare(
+      "SELECT id FROM pagos WHERE alumno_id=? AND origen LIKE ? AND monto=? AND fecha=?"
+    ).get(alumno.id, '%CUIT ' + cuit + '%', monto, fecha);
+
+    if (yaExiste) {
+      duplicados++;
+      return;
+    }
+
     db.prepare('INSERT INTO pagos (fecha, alumno_id, alumno_nombre, curso, monto, concepto, medio, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(fecha, alumno.id, alumno.nombre, alumno.curso, monto, conceptos.join(', ') || 'Transferencia bancaria', 'Transferencia', `Banco (CUIT ${cuit})`);
     aplicados++;
   });
 
-  res.json({ ok: true, aplicados, noEncontrados });
+  res.json({ ok: true, aplicados, duplicados, noEncontrados, sinCuit, totalFilas: filas.length });
 });
 
 // Reporte
