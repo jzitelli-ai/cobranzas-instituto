@@ -425,9 +425,9 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
     </div>
     <div class="r2">
       <div class="fg"><label>Precio bonificado ($)</label><input type="number" id="ma-pbonif" placeholder="0"></div>
-      <div class="fg"><label>CUITs (separados por coma)</label><input type="text" id="ma-cuits" placeholder="20123456789"></div>
+      <div class="fg"><label>CUITs (separados por coma)</label><input type="text" id="ma-cuits" inputmode="numeric" placeholder="20123456789"><div style="font-size:10px;color:var(--m);margin-top:3px">Solo números sin puntos ni guiones. Ej: 27056276675</div></div>
     </div>
-    <div class="fg"><label>Telefono WhatsApp (sin 0 ni 15, ej: 3874123456)</label><input type="text" id="ma-tel" placeholder="3874123456"></div>
+    <div class="fg"><label>Telefono WhatsApp (sin 0 ni 15, ej: 3874123456)</label><input type="text" id="ma-tel" inputmode="numeric" placeholder="3874123456"></div>
     <div class="modal-btns">
       <button class="btn bob" onclick="cerrarM('m-alum')">Cancelar</button>
       <button class="btn bpb" onclick="guardarAlumno()">Guardar</button>
@@ -447,9 +447,9 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
     </div>
     <div class="r2">
       <div class="fg"><label>Precio bonificado ($)</label><input type="number" id="ea-pbonif"></div>
-      <div class="fg"><label>CUITs (separados por coma)</label><input type="text" id="ea-cuits"></div>
+      <div class="fg"><label>CUITs (separados por coma)</label><input type="text" id="ea-cuits" inputmode="numeric" placeholder="20123456789"><div style="font-size:10px;color:var(--m);margin-top:3px">Ingresá solo números, sin puntos ni guiones. Ej: 27056276675</div></div>
     </div>
-    <div class="fg"><label>Telefono WhatsApp (sin 0 ni 15, ej: 3874123456)</label><input type="text" id="ea-tel" placeholder="3874123456"></div>
+    <div class="fg"><label>Telefono WhatsApp (sin 0 ni 15, ej: 3874123456)</label><input type="text" id="ea-tel" inputmode="numeric" placeholder="3874123456"><div style="font-size:10px;color:var(--m);margin-top:3px">Solo números. Ej: 3874123456</div></div>
     <input type="hidden" id="ea-id">
     <div class="modal-btns">
       <button class="btn bob" onclick="cerrarM('m-edit-alum')">Cancelar</button>
@@ -728,8 +728,9 @@ function abrirEditAlumno(a){
   document.getElementById('ea-nombre').value=a.nombre;
   document.getElementById('ea-pnormal').value=a.precio_normal;
   document.getElementById('ea-pbonif').value=a.precio_bonificado;
-  document.getElementById('ea-cuits').value=a.cuits||'';
-  document.getElementById('ea-tel').value=a.telefono||'';
+  // Forzar como string para evitar formateo numérico
+  document.getElementById('ea-cuits').value=String(a.cuits||'');
+  document.getElementById('ea-tel').value=String(a.telefono||'');
   setTimeout(function(){document.getElementById('ea-curso').value=a.curso;},50);
   abrirM('m-edit-alum');
 }
