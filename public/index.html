@@ -985,22 +985,33 @@ function leerBanco(file){
         cols.forEach(function(c){s.innerHTML+='<option value="'+c+'">'+c+'</option>';});
       });
 
-      // Auto-detectar columnas
-      cols.forEach(function(c,i){
-        var sample=String(bancoData[0]&&bancoData[0][c]||'').toLowerCase();
-        // Columna con CUIT: buscar la que tenga '/' en algún valor
-        var tieneBarra=bancoData.some(function(row){return String(row[c]||'').indexOf('/')>=0;});
-        if(tieneBarra) document.getElementById('bc-cuit').value=c;
-        // Columna con monto: buscar la que tenga valores numéricos altos
-        var esMonto=bancoData.every(function(row){
-          var v=parseFloat(String(row[c]||'').replace(/[^0-9.,]/g,'').replace(',','.'));
-          return !isNaN(v)&&v>0;
-        })&&bancoData.some(function(row){
-          var v=parseFloat(String(row[c]||'').replace(/[^0-9.,]/g,'').replace(',','.'));
-          return v>1000;
+      // Auto-detectar columnas - mejorado
+      var cuitColDetectada = null;
+      var montoColDetectada = null;
+
+      cols.forEach(function(c){
+        // Columna CUIT: algún valor tiene '/' Y contiene 11 dígitos consecutivos
+        var tieneCuit = bancoData.some(function(row){
+          var v = String(row[c]||'');
+          return v.indexOf('/') >= 0 && /\d{11}/.test(v.replace(/[\s\-]/g,''));
         });
-        if(esMonto) document.getElementById('bc-monto').value=c;
+        if(tieneCuit && !cuitColDetectada) cuitColDetectada = c;
+
+        // Columna monto: todos los valores son numéricos y positivos > 100
+        var todosNumericos = bancoData.length > 0 && bancoData.every(function(row){
+          var v = String(row[c]||'').replace(/[\$\s\.]/g,'').replace(',','.');
+          var n = parseFloat(v);
+          return !isNaN(n) && n > 0;
+        });
+        var algunoGrande = bancoData.some(function(row){
+          var v = String(row[c]||'').replace(/[\$\s\.]/g,'').replace(',','.');
+          return parseFloat(v) > 100;
+        });
+        if(todosNumericos && algunoGrande && !montoColDetectada) montoColDetectada = c;
       });
+
+      if(cuitColDetectada) document.getElementById('bc-cuit').value = cuitColDetectada;
+      if(montoColDetectada) document.getElementById('bc-monto').value = montoColDetectada;
 
       bstep(2);
     }catch(err){console.error(err);toast('Error al leer el archivo: '+err.message,'e');}
