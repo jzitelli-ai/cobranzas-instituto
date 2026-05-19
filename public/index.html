@@ -949,19 +949,58 @@ async function procesarBanco(){
   var colC=document.getElementById('bc-cuit').value;
   var colM=document.getElementById('bc-monto').value;
   var r=await api('POST','/api/banco',{filas:bancoData,colCuit:colC,colMonto:colM});
+  if(!r||!r.ok){toast('Error al procesar','e');return;}
+
   document.getElementById('imp-stats').innerHTML=
     '<div class="is ok"><div class="n">'+r.aplicados+'</div><div class="l">Pagos aplicados</div></div>'+
     '<div class="is ww"><div class="n">'+r.noEncontrados.length+'</div><div class="l">CUITs no encontrados</div></div>'+
-    '<div class="is ii"><div class="n">0</div><div class="l">Sin CUIT</div></div>';
-  if(r.noEncontrados.length>0){
-    document.getElementById('imp-noenc').style.display='block';
-    var h='<table style="font-size:11.5px"><thead><tr><th>CUIT</th><th>Monto</th><th>Detalle</th></tr></thead><tbody>';
-    r.noEncontrados.forEach(function(x){h+='<tr><td>'+x.cuit+'</td><td>'+pesos(x.monto)+'</td><td>'+x.detalle+'</td></tr>';});
-    h+='</tbody></table>';
-    document.getElementById('imp-tabla').innerHTML=h;
+    '<div class="is ii"><div class="n">'+(r.sinCuit||[]).length+'</div><div class="l">Sin CUIT</div></div>'+
+    '<div class="is" style="background:var(--gl)"><div class="n" style="color:var(--m)">'+(r.duplicados||0)+'</div><div class="l">Ya importados</div></div>';
+
+  var noEncDiv = document.getElementById('imp-noenc');
+  var tablaDiv = document.getElementById('imp-tabla');
+
+  if(r.noEncontrados.length > 0 || (r.sinCuit && r.sinCuit.length > 0)){
+    noEncDiv.style.display='block';
+    var h='';
+
+    if(r.noEncontrados.length > 0){
+      h+='<div style="font-weight:700;font-size:11px;color:var(--d);margin-bottom:6px">CUITs no vinculados a ningún alumno:</div>';
+      h+='<table style="font-size:11.5px;width:100%"><thead><tr><th>CUIT</th><th>Monto</th><th>Detalle del banco</th></tr></thead><tbody>';
+      r.noEncontrados.forEach(function(x){
+        h+='<tr><td style="font-weight:600">'+x.cuit+'</td><td style="color:var(--w)">$'+x.monto.toLocaleString('es-AR')+'</td><td style="font-size:10.5px;color:var(--m)">'+x.detalle+'</td></tr>';
+      });
+      h+='</tbody></table>';
+      h+='<button class="btn bob" style="font-size:11px;margin-top:8px" onclick="exportarNoEncontrados('+JSON.stringify(r.noEncontrados)+')">Exportar no encontrados a Excel</button>';
+    }
+
+    if(r.sinCuit && r.sinCuit.length > 0){
+      h+='<div style="font-weight:700;font-size:11px;color:var(--m);margin:12px 0 6px">Registros sin CUIT detectado:</div>';
+      h+='<table style="font-size:11px;width:100%"><thead><tr><th>Detalle</th><th>Monto</th></tr></thead><tbody>';
+      r.sinCuit.forEach(function(x){
+        h+='<tr><td style="font-size:10px;color:var(--m)">'+x.detalle+'</td><td>$'+(x.monto||0).toLocaleString('es-AR')+'</td></tr>';
+      });
+      h+='</tbody></table>';
+    }
+
+    tablaDiv.innerHTML = h;
+  } else {
+    noEncDiv.style.display='none';
   }
+
   _pagos=await api('GET','/api/pagos');
-  bstep(3);toast(r.aplicados+' pagos aplicados','s');
+  bstep(3);
+  var msg = r.aplicados+' de '+r.totalFilas+' pagos aplicados';
+  if(r.duplicados>0) msg += ' · '+r.duplicados+' ya existían (no duplicados)';
+  toast(msg,'s');
+}
+
+function exportarNoEncontrados(datos) {
+  var rows = datos.map(function(x){ return {'CUIT': x.cuit, 'Monto': x.monto, 'Detalle banco': x.detalle}; });
+  var ws = XLSX.utils.json_to_sheet(rows);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'No encontrados');
+  XLSX.writeFile(wb, 'cuits_no_encontrados_'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
 
 function resetBanco(){
