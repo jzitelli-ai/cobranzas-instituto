@@ -1033,7 +1033,7 @@ async function procesarBanco(){
 
 function exportarNoEncontrados() {
   if(!_noEncontradosData||!_noEncontradosData.length){toast('Sin datos para exportar','e');return;}
-  var rows = _noEncontradosData.map(function(x){ return {'CUIT': x.cuit, 'Fecha': x.fecha||'', 'Monto': x.monto, 'Descripcion': x.descrip||'', 'Detalle': x.detalle||''}; });
+  var rows = _noEncontradosData.map(function(x){ return {'CUIT': String(x.cuit), 'Fecha': x.fecha||'', 'Monto': x.monto, 'Descripcion': x.descrip||''}; });
   var ws = XLSX.utils.json_to_sheet(rows);
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'No encontrados');
