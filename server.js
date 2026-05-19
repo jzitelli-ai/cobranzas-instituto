@@ -545,10 +545,24 @@ app.post('/api/banco', (req, res) => {
 
     const alumno = cuitMap[cuit];
     if (!alumno) {
+      // Convertir fecha de Excel (puede ser serial numérico o Date)
+      var fechaRaw = fila['FECHA']||fila['fecha']||fila['Fecha']||'';
+      var fechaStr = '';
+      if (fechaRaw) {
+        if (typeof fechaRaw === 'number') {
+          // Serial de Excel: días desde 1/1/1900
+          var d = new Date(Math.round((fechaRaw - 25569) * 86400 * 1000));
+          fechaStr = d.toLocaleDateString('es-AR');
+        } else if (fechaRaw instanceof Date) {
+          fechaStr = fechaRaw.toLocaleDateString('es-AR');
+        } else {
+          fechaStr = String(fechaRaw).slice(0,10);
+        }
+      }
       noEncontrados.push({
         cuit,
         monto,
-        fecha: String(fila['FECHA']||fila['fecha']||fila['Fecha']||'').slice(0,10),
+        fecha: fechaStr,
         detalle: String(fila[colCuit]||'').slice(0, 80),
         descrip: String(descrip).trim()
       });
