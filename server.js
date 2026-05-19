@@ -293,6 +293,124 @@ app.get('/api/diagnostico/cuotas/:nombre', async (req,res) => {
   res.json({alumno:alumno.nombre,id:alumno.id,cuotas:await q('SELECT * FROM cuotas WHERE alumno_id=$1 ORDER BY numero_cuota',[alumno.id])});
 });
 
+// Ruta manual para ejecutar backup
+app.get('/api/backup', async (req,res) => {
+  try { await ejecutarBackup(); res.json({ok:true,mensaje:'Backup ejecutado correctamente'}); }
+  catch(e) { res.json({ok:false,error:e.message}); }
+});
+
 app.get('*', (req,res) => { res.sendFile(path.join(__dirname,'public','index.html')); });
 
-inicializarDB().then(() => { app.listen(PORT, () => console.log(`Servidor en puerto ${PORT}`)); }).catch(err => { console.error('Error DB:',err); process.exit(1); });
+// ================================================================
+// BACKUP AUTOMÁTICO A GOOGLE SHEETS
+// ================================================================
+const SHEET_ID = '16aU_TffL58PWkSGIIMj3JkSCtj1kh682bsF8zshexsE';
+const SERVICE_ACCOUNT = {
+  client_email: 'cobranzas-backup@crypto-trail-496813-t8.iam.gserviceaccount.com',
+  private_key: '-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCwwZw/OdSOveeU\nu34q2g3Z3h8CsvfqgR8RqqA7t7c8xMTeT5/poK1IF2tNRcVUIsE77zplj11bgdmD\nkG/hPgGamq6HYJNwMYuahOFwB79p6ei0NMz0ecxzta2CVmjuNhVL0QlelGGumEby\nCxnphxywOhi+z+26PjFS4CGbw+zzgSLVBXg8JCthyUcdnIh0zb2057an8d+9tQ+3\nmlLDg1NYh6dg5VVXzbmK4GoNwoPT7O0c7UXoj08KW1ptLgIekOTxLqPOv/Go9B84\n1juPJdljqCWe43OPhiC/Rh730UIwowPW0qqopxKmi5R7FJcPXOC4VpB5VgaeF2KL\nWh2/tHTTAgMBAAECggEAAY+7RCmRAazH86LLQSArIswC/uNxFSx1WXiuOQX1P4oN\nj1+pd9rpIk1dH0aUb3Oo4/VLIzUoX4k2jqxJBnoH4TzPzxFf+z0oF0B1noAFe6i8\nLTIh5/Dt3iKUwhhV/TkJpsPVsW5uZIecTzFiRYzoL/97Lv5koBQHL+CfQYmz1V9A\neQ5CDsLUh0vhOJl++lb0+V+/RuG2YT7p6vkau+WwhrUfJhNzo9Kg1z3ubedPLkCA\nRxFZ/E6FwerSaFNAEmjBnS+VBp3svFpBwEL7Ve9T4vsvfshWjJwMwHBw8cYGp3iO\ni0ktfoZxISVxDZPuCJiCEfTtfEbAXTF6lxCN7mN3YQKBgQDfPt72mkEa/ZR1VKqc\nAaapn26NLeRKVqIa2+5lQWnZ5dHlGuw5G5Od44zOhWTqr7BHgRQkyddvgft0EsQs\ngNz4cGKHCLSv3y9IybCuKTFPo/8H59Oe8uh3Gbm1x+g4upoUSUfAMMzw/ORlmPG0\n5ckMTHixB6vHluzYSyhVgoW6AwKBgQDKsJieRmTP+ywZN7S87+BfR0G/vocc7rpM\n8o2XmYSUEGsJhkEvyQcq+7a7v7J1rXnxo5vNJ5v8xYlDtobpKnXWlBCC7nC5KAk6\nUbTtzs9qyL6Sf7oVBfPrwe7NXX2dAlQN85gQKYjyE/RrgpwwrBZgIFhu+MnJ6JbP\nt1xS9irI8QKBgQC8/aORjsrZB517qr54Lami5XaYjCY8jJTVOiTakYMD1VxYoO8j\n9WWFf5K/bwwc5bjM/8hG0JzSKG7wN8bdigYHSFUQzdzxGncUHrK07ehx7HrFfYuY\nfzkvQpcF/gNoqwgvbk4QtP96cA0GuXC93N3TzJVMARt6bxl4jj/KDCIbcwKBgC/G\nFgLgRqy63/cFqUULKRBsBDREnSYVorW2SedcmOIpSIFTMpQnxte7wqNYGKEiBWcO\nEA/38Q1QJf1ezUex6VptRcMGnm0V4a7sST/wCfV6YWi4UEzaPVbpO/cNvSi/vr4X\nF1Vf5NZiG68ndtcGCLQZi56EZ1N+zeUhq9ImEYmRAoGBAKKRux+H25C/MZW56cuu\n2JgZfmQKNyC+myt+oZQrB1MggETr7h4i0Z9oarYj0nfd3IAsStU5NMJvZAAPj6iz\ncJr9JzLihSMDadPxLYVInoUx/pwWC02ivHikAINrDQXYCrMmvbae44Rhs4QnScEA\n5iojtl3Rkc4jyxvX4jKKtHfc\n-----END PRIVATE KEY-----\n'
+};
+
+async function getAccessToken() {
+  const now = Math.floor(Date.now() / 1000);
+  const header = Buffer.from(JSON.stringify({alg:'RS256',typ:'JWT'})).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({
+    iss: SERVICE_ACCOUNT.client_email,
+    scope: 'https://www.googleapis.com/auth/spreadsheets',
+    aud: 'https://oauth2.googleapis.com/token',
+    exp: now + 3600, iat: now
+  })).toString('base64url');
+
+  const crypto = require('crypto');
+  const sign = crypto.createSign('RSA-SHA256');
+  sign.update(`${header}.${payload}`);
+  const signature = sign.sign(SERVICE_ACCOUNT.private_key, 'base64url');
+  const jwt = `${header}.${payload}.${signature}`;
+
+  const resp = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: {'Content-Type':'application/x-www-form-urlencoded'},
+    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`
+  });
+  const data = await resp.json();
+  return data.access_token;
+}
+
+async function sheetsRequest(token, method, path, body) {
+  const resp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}${path}`, {
+    method, headers: {'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
+    body: body ? JSON.stringify(body) : undefined
+  });
+  return resp.json();
+}
+
+async function ejecutarBackup() {
+  console.log('Iniciando backup a Google Sheets...');
+  const token = await getAccessToken();
+
+  // Obtener hojas existentes
+  const meta = await sheetsRequest(token, 'GET', '', null);
+  const hojas = (meta.sheets||[]).map(s=>s.properties.title);
+
+  // Función para crear hoja si no existe
+  async function asegurarHoja(nombre) {
+    if (!hojas.includes(nombre)) {
+      await sheetsRequest(token, 'POST', ':batchUpdate', {
+        requests:[{addSheet:{properties:{title:nombre}}}]
+      });
+    }
+  }
+
+  const fecha = new Date().toLocaleDateString('es-AR');
+  const hora = new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+
+  // 1. BACKUP ALUMNOS
+  await asegurarHoja('Alumnos_Backup');
+  const alumnos = await q('SELECT * FROM alumnos ORDER BY nombre');
+  const rowsAlumnos = [
+    ['ID','Nombre','Curso','CUITs','Precio Normal','Precio Bonificado','Activo','Telefono','Backup: '+fecha+' '+hora],
+    ...alumnos.map(a=>[a.id,a.nombre,a.curso,a.cuits,parseFloat(a.precio_normal),parseFloat(a.precio_bonificado),a.activo?'Si':'No',a.telefono||''])
+  ];
+  await sheetsRequest(token,'PUT',`/values/Alumnos_Backup!A1:I${rowsAlumnos.length}?valueInputOption=RAW`,{values:rowsAlumnos});
+
+  // 2. BACKUP PAGOS
+  await asegurarHoja('Pagos_Backup');
+  const pagos = await q('SELECT * FROM pagos ORDER BY id');
+  const rowsPagos = [
+    ['ID','Fecha','Alumno','Curso','Monto','Concepto','Medio','Origen','Backup: '+fecha+' '+hora],
+    ...pagos.map(p=>[p.id,p.fecha,p.alumno_nombre,p.curso,parseFloat(p.monto),p.concepto,p.medio,p.origen])
+  ];
+  await sheetsRequest(token,'PUT',`/values/Pagos_Backup!A1:I${rowsPagos.length}?valueInputOption=RAW`,{values:rowsPagos});
+
+  // 3. BACKUP CUOTAS
+  await asegurarHoja('Cuotas_Backup');
+  const cuotas = await q('SELECT c.*,a.nombre FROM cuotas c JOIN alumnos a ON c.alumno_id=a.id ORDER BY a.nombre,c.numero_cuota');
+  const rowsCuotas = [
+    ['ID','Alumno','Cuota','Estado','Fecha Pago','Monto Pagado','Backup: '+fecha+' '+hora],
+    ...cuotas.map(c=>[c.id,c.nombre,c.numero_cuota,c.estado,c.fecha_pago||'',parseFloat(c.monto_pagado)||0])
+  ];
+  await sheetsRequest(token,'PUT',`/values/Cuotas_Backup!A1:G${rowsCuotas.length}?valueInputOption=RAW`,{values:rowsCuotas});
+
+  console.log(`Backup completado: ${alumnos.length} alumnos, ${pagos.length} pagos, ${cuotas.length} cuotas`);
+}
+
+// Ejecutar backup cada 24 horas
+function programarBackup() {
+  // Primer backup a las 3 AM hora Argentina (UTC-3 = 6 AM UTC)
+  const ahora = new Date();
+  const proximoBackup = new Date();
+  proximoBackup.setUTCHours(6, 0, 0, 0);
+  if (proximoBackup <= ahora) proximoBackup.setUTCDate(proximoBackup.getUTCDate() + 1);
+  const msHasta = proximoBackup - ahora;
+  console.log(`Próximo backup automático en ${Math.round(msHasta/1000/60)} minutos`);
+  setTimeout(() => {
+    ejecutarBackup().catch(e => console.error('Error backup:', e));
+    setInterval(() => ejecutarBackup().catch(e => console.error('Error backup:', e)), 24*60*60*1000);
+  }, msHasta);
+}
+
+inicializarDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Servidor en puerto ${PORT}`);
+    programarBackup();
+  });
+}).catch(err => { console.error('Error DB:',err); process.exit(1); });
