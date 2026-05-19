@@ -927,19 +927,83 @@ function leerBanco(file){
     try{
       var wb=XLSX.read(e.target.result,{type:'array'});
       var ws=wb.Sheets[wb.SheetNames[0]];
-      bancoData=XLSX.utils.sheet_to_json(ws,{defval:''});
-      var cols=Object.keys(bancoData[0]||{});
-      document.getElementById('banco-msg').innerHTML='Archivo: <strong>'+file.name+'</strong> — '+bancoData.length+' filas';
-      var h='<table style="font-size:11px"><thead><tr>';cols.slice(0,6).forEach(function(c){h+='<th>'+c+'</th>';});h+='</tr></thead><tbody>';
-      bancoData.slice(0,4).forEach(function(row){h+='<tr>';cols.slice(0,6).forEach(function(c){h+='<td>'+String(row[c]).slice(0,25)+'</td>';});h+='</tr>';});h+='</tbody></table>';
-      document.getElementById('banco-prev').innerHTML=h;
-      ['bc-cuit','bc-monto'].forEach(function(id){var s=document.getElementById(id);s.innerHTML='';cols.forEach(function(c){s.innerHTML+='<option value="'+c+'">'+c+'</option>';});});
-      cols.forEach(function(c,i){var cl=c.toLowerCase();
-        if(cl.indexOf('concepto')>=0||cl.indexOf('detalle')>=0||cl.indexOf('referencia')>=0)document.getElementById('bc-cuit').selectedIndex=i;
-        if(cl.indexOf('importe')>=0||cl.indexOf('monto')>=0||cl.indexOf('haber')>=0)document.getElementById('bc-monto').selectedIndex=i;
+      // Leer sin headers para no perder la primera fila de datos
+      var rawData=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      if(!rawData||rawData.length===0){toast('Archivo vacío','e');return;}
+
+      // Detectar si la primera fila tiene headers textuales o datos
+      // Si la primera fila tiene números como valores, es dato puro (sin headers)
+      var primeraFila = rawData[0];
+      var tieneHeaders = primeraFila.some(function(v){
+        return typeof v === 'string' && v.length > 2 && isNaN(parseFloat(v));
       });
+
+      var cols, datos;
+      if(tieneHeaders){
+        // Primera fila son headers
+        cols = primeraFila.map(function(v,i){ return v||'Col'+i; });
+        datos = rawData.slice(1).map(function(row){
+          var obj={};
+          cols.forEach(function(c,i){obj[c]=row[i]!==undefined?row[i]:'';});
+          return obj;
+        });
+      } else {
+        // Sin headers — generar nombres de columna automáticos
+        var ncols = primeraFila.length;
+        cols = [];
+        for(var i=0;i<ncols;i++) cols.push('Col'+i);
+        datos = rawData.map(function(row){
+          var obj={};
+          cols.forEach(function(c,i){obj[c]=row[i]!==undefined?row[i]:'';});
+          return obj;
+        });
+      }
+
+      bancoData = datos;
+      document.getElementById('banco-msg').innerHTML='Archivo: <strong>'+file.name+'</strong> — '+bancoData.length+' filas';
+
+      // Preview
+      var h='<table style="font-size:11px"><thead><tr>';
+      cols.slice(0,8).forEach(function(c){h+='<th>'+c+'</th>';});
+      h+='</tr></thead><tbody>';
+      bancoData.slice(0,4).forEach(function(row){
+        h+='<tr>';
+        cols.slice(0,8).forEach(function(c){
+          var v=row[c];
+          // Formatear fechas
+          if(v instanceof Date) v=v.toLocaleDateString('es-AR');
+          h+='<td>'+String(v||'').slice(0,30)+'</td>';
+        });
+        h+='</tr>';
+      });
+      h+='</tbody></table>';
+      document.getElementById('banco-prev').innerHTML=h;
+
+      // Poblar selectores de columnas
+      ['bc-cuit','bc-monto'].forEach(function(id){
+        var s=document.getElementById(id);s.innerHTML='';
+        cols.forEach(function(c){s.innerHTML+='<option value="'+c+'">'+c+'</option>';});
+      });
+
+      // Auto-detectar columnas
+      cols.forEach(function(c,i){
+        var sample=String(bancoData[0]&&bancoData[0][c]||'').toLowerCase();
+        // Columna con CUIT: buscar la que tenga '/' en algún valor
+        var tieneBarra=bancoData.some(function(row){return String(row[c]||'').indexOf('/')>=0;});
+        if(tieneBarra) document.getElementById('bc-cuit').value=c;
+        // Columna con monto: buscar la que tenga valores numéricos altos
+        var esMonto=bancoData.every(function(row){
+          var v=parseFloat(String(row[c]||'').replace(/[^0-9.,]/g,'').replace(',','.'));
+          return !isNaN(v)&&v>0;
+        })&&bancoData.some(function(row){
+          var v=parseFloat(String(row[c]||'').replace(/[^0-9.,]/g,'').replace(',','.'));
+          return v>1000;
+        });
+        if(esMonto) document.getElementById('bc-monto').value=c;
+      });
+
       bstep(2);
-    }catch(e){toast('Error al leer el archivo','e');}
+    }catch(err){console.error(err);toast('Error al leer el archivo: '+err.message,'e');}
   };
   r.readAsArrayBuffer(file);
 }
