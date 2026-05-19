@@ -970,6 +970,8 @@ function leerBanco(file){
   r.readAsArrayBuffer(file);
 }
 
+var _noEncontradosData = [];
+
 async function procesarBanco(){
   if(!bancoData)return;
   var colC=document.getElementById('bc-cuit').value;
@@ -991,6 +993,7 @@ async function procesarBanco(){
     var h='';
 
     if(r.noEncontrados.length > 0){
+      _noEncontradosData = r.noEncontrados;
       h+='<div style="font-weight:700;font-size:11px;color:var(--d);margin-bottom:6px">CUITs no vinculados a ningún alumno:</div>';
       h+='<table style="font-size:11.5px;width:100%"><thead><tr><th>CUIT</th><th>Monto</th><th>Descripcion</th></tr></thead><tbody>';
       r.noEncontrados.forEach(function(x){
@@ -1001,10 +1004,9 @@ async function procesarBanco(){
           '</tr>';
       });
       h+='</tbody></table>';
-      // Calcular total no aplicado
       var totalNoApl = r.noEncontrados.reduce(function(s,x){return s+(x.monto||0);},0);
       h+='<div style="margin-top:6px;font-size:11px;color:var(--d);font-weight:600">Total no aplicado: $'+totalNoApl.toLocaleString('es-AR')+'</div>';
-      h+='<button class="btn bob" style="font-size:11px;margin-top:8px" onclick="exportarNoEncontrados('+JSON.stringify(r.noEncontrados)+')">Exportar a Excel</button>';
+      h+='<button class="btn bob" style="font-size:11px;margin-top:8px" onclick="exportarNoEncontrados()">Exportar a Excel</button>';
     }
 
     if(r.sinCuit && r.sinCuit.length > 0){
@@ -1028,12 +1030,14 @@ async function procesarBanco(){
   toast(msg,'s');
 }
 
-function exportarNoEncontrados(datos) {
-  var rows = datos.map(function(x){ return {'CUIT': x.cuit, 'Monto': x.monto, 'Descripcion': x.descrip||'', 'Detalle': x.detalle||''}; });
+function exportarNoEncontrados() {
+  if(!_noEncontradosData||!_noEncontradosData.length){toast('Sin datos para exportar','e');return;}
+  var rows = _noEncontradosData.map(function(x){ return {'CUIT': x.cuit, 'Monto': x.monto, 'Descripcion': x.descrip||'', 'Detalle': x.detalle||''}; });
   var ws = XLSX.utils.json_to_sheet(rows);
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'No encontrados');
   XLSX.writeFile(wb, 'cuits_no_encontrados_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  toast('Exportado correctamente','s');
 }
 
 function resetBanco(){
