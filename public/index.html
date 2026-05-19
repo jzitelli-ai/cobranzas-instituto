@@ -346,10 +346,15 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
             <button class="btn bob" onclick="migrarFechas()" style="font-size:11px;padding:4px 10px" title="Migra fechas y montos reales del Excel original a las cuotas historicas">
               Migrar fechas historicas
             </button>
-            <button class="btn bob" onclick="reprocesarHistoricos()" style="font-size:11px;padding:4px 10px" title="Re-aplica logica de saldo a pagos importados del Excel">
-              Reprocesar saldos Excel
-            </button>
           </div>
+        </div>
+        <div style="padding:8px 16px;border-bottom:1px solid var(--b);background:var(--gl);display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn bob" onclick="backfillPagos()" style="font-size:11px;padding:4px 10px">
+            Sincronizar importados
+          </button>
+          <button class="btn bpb" onclick="reprocesarHistoricos()" style="font-size:11px;padding:4px 10px" title="Re-aplica logica de saldo a pagos importados del Excel">
+            ↺ Reprocesar saldos Excel
+          </button>
         </div>
         <div id="hist-list"></div>
         <div id="hist-empty" style="display:none;text-align:center;padding:40px;color:var(--m)">Sin pagos registrados.</div>
