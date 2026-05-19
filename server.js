@@ -548,6 +548,7 @@ app.post('/api/banco', (req, res) => {
       noEncontrados.push({
         cuit,
         monto,
+        fecha: String(fila['FECHA']||fila['fecha']||fila['Fecha']||'').slice(0,10),
         detalle: String(fila[colCuit]||'').slice(0, 80),
         descrip: String(descrip).trim()
       });
