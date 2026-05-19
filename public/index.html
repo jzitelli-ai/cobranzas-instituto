@@ -927,50 +927,21 @@ function leerBanco(file){
     try{
       var wb=XLSX.read(e.target.result,{type:'array'});
       var ws=wb.Sheets[wb.SheetNames[0]];
-      // Leer sin headers para no perder la primera fila de datos
-      var rawData=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-      if(!rawData||rawData.length===0){toast('Archivo vacío','e');return;}
+      // Leer con headers (primera fila)
+      bancoData=XLSX.utils.sheet_to_json(ws,{defval:''});
+      if(!bancoData||bancoData.length===0){toast('Archivo vacío o sin datos','e');return;}
 
-      // Detectar si la primera fila tiene headers textuales o datos
-      // Si la primera fila tiene números como valores, es dato puro (sin headers)
-      var primeraFila = rawData[0];
-      var tieneHeaders = primeraFila.some(function(v){
-        return typeof v === 'string' && v.length > 2 && isNaN(parseFloat(v));
-      });
-
-      var cols, datos;
-      if(tieneHeaders){
-        // Primera fila son headers
-        cols = primeraFila.map(function(v,i){ return v||'Col'+i; });
-        datos = rawData.slice(1).map(function(row){
-          var obj={};
-          cols.forEach(function(c,i){obj[c]=row[i]!==undefined?row[i]:'';});
-          return obj;
-        });
-      } else {
-        // Sin headers — generar nombres de columna automáticos
-        var ncols = primeraFila.length;
-        cols = [];
-        for(var i=0;i<ncols;i++) cols.push('Col'+i);
-        datos = rawData.map(function(row){
-          var obj={};
-          cols.forEach(function(c,i){obj[c]=row[i]!==undefined?row[i]:'';});
-          return obj;
-        });
-      }
-
-      bancoData = datos;
-      document.getElementById('banco-msg').innerHTML='Archivo: <strong>'+file.name+'</strong> — '+bancoData.length+' filas';
+      var cols=Object.keys(bancoData[0]||{});
+      document.getElementById('banco-msg').innerHTML='Archivo: <strong>'+file.name+'</strong> — '+bancoData.length+' filas · Columnas: '+cols.join(', ');
 
       // Preview
       var h='<table style="font-size:11px"><thead><tr>';
-      cols.slice(0,8).forEach(function(c){h+='<th>'+c+'</th>';});
+      cols.forEach(function(c){h+='<th>'+c+'</th>';});
       h+='</tr></thead><tbody>';
       bancoData.slice(0,4).forEach(function(row){
         h+='<tr>';
-        cols.slice(0,8).forEach(function(c){
+        cols.forEach(function(c){
           var v=row[c];
-          // Formatear fechas
           if(v instanceof Date) v=v.toLocaleDateString('es-AR');
           h+='<td>'+String(v||'').slice(0,30)+'</td>';
         });
@@ -979,41 +950,25 @@ function leerBanco(file){
       h+='</tbody></table>';
       document.getElementById('banco-prev').innerHTML=h;
 
-      // Poblar selectores de columnas
+      // Poblar selectores
       ['bc-cuit','bc-monto'].forEach(function(id){
         var s=document.getElementById(id);s.innerHTML='';
         cols.forEach(function(c){s.innerHTML+='<option value="'+c+'">'+c+'</option>';});
       });
 
-      // Auto-detectar columnas - mejorado
-      var cuitColDetectada = null;
-      var montoColDetectada = null;
-
+      // Auto-detectar: CUIT = col con nombre CUIT o que tenga números de 11 dígitos
+      // Monto = col IMPORTE o con valores numéricos altos
       cols.forEach(function(c){
-        // Columna CUIT: algún valor tiene '/' Y contiene 11 dígitos consecutivos
-        var tieneCuit = bancoData.some(function(row){
-          var v = String(row[c]||'');
-          return v.indexOf('/') >= 0 && /\d{11}/.test(v.replace(/[\s\-]/g,''));
-        });
-        if(tieneCuit && !cuitColDetectada) cuitColDetectada = c;
-
-        // Columna monto: todos los valores son numéricos y positivos > 100
-        var todosNumericos = bancoData.length > 0 && bancoData.every(function(row){
-          var v = String(row[c]||'').replace(/[\$\s\.]/g,'').replace(',','.');
-          var n = parseFloat(v);
-          return !isNaN(n) && n > 0;
-        });
-        var algunoGrande = bancoData.some(function(row){
-          var v = String(row[c]||'').replace(/[\$\s\.]/g,'').replace(',','.');
-          return parseFloat(v) > 100;
-        });
-        if(todosNumericos && algunoGrande && !montoColDetectada) montoColDetectada = c;
+        var cl=c.toUpperCase();
+        if(cl==='CUIT'||cl.indexOf('CUIT')>=0) document.getElementById('bc-cuit').value=c;
+        if(cl==='IMPORTE'||cl==='MONTO'||cl==='HABER'||cl==='IMPORTE') document.getElementById('bc-monto').value=c;
       });
 
-      if(cuitColDetectada) document.getElementById('bc-cuit').value = cuitColDetectada;
-      if(montoColDetectada) document.getElementById('bc-monto').value = montoColDetectada;
-
       bstep(2);
+    }catch(err){console.error(err);toast('Error al leer el archivo: '+err.message,'e');}
+  };
+  r.readAsArrayBuffer(file);
+}
     }catch(err){console.error(err);toast('Error al leer el archivo: '+err.message,'e');}
   };
   r.readAsArrayBuffer(file);
@@ -1041,12 +996,19 @@ async function procesarBanco(){
 
     if(r.noEncontrados.length > 0){
       h+='<div style="font-weight:700;font-size:11px;color:var(--d);margin-bottom:6px">CUITs no vinculados a ningún alumno:</div>';
-      h+='<table style="font-size:11.5px;width:100%"><thead><tr><th>CUIT</th><th>Monto</th><th>Detalle del banco</th></tr></thead><tbody>';
+      h+='<table style="font-size:11.5px;width:100%"><thead><tr><th>CUIT</th><th>Monto</th><th>Descripcion</th></tr></thead><tbody>';
       r.noEncontrados.forEach(function(x){
-        h+='<tr><td style="font-weight:600">'+x.cuit+'</td><td style="color:var(--w)">$'+x.monto.toLocaleString('es-AR')+'</td><td style="font-size:10.5px;color:var(--m)">'+x.detalle+'</td></tr>';
+        h+='<tr>'+
+          '<td style="font-weight:600">'+x.cuit+'</td>'+
+          '<td style="color:var(--w)">$'+(x.monto||0).toLocaleString('es-AR')+'</td>'+
+          '<td style="font-size:10.5px;color:var(--m)">'+(x.descrip||x.detalle||'—')+'</td>'+
+          '</tr>';
       });
       h+='</tbody></table>';
-      h+='<button class="btn bob" style="font-size:11px;margin-top:8px" onclick="exportarNoEncontrados('+JSON.stringify(r.noEncontrados)+')">Exportar no encontrados a Excel</button>';
+      // Calcular total no aplicado
+      var totalNoApl = r.noEncontrados.reduce(function(s,x){return s+(x.monto||0);},0);
+      h+='<div style="margin-top:6px;font-size:11px;color:var(--d);font-weight:600">Total no aplicado: $'+totalNoApl.toLocaleString('es-AR')+'</div>';
+      h+='<button class="btn bob" style="font-size:11px;margin-top:8px" onclick="exportarNoEncontrados('+JSON.stringify(r.noEncontrados)+')">Exportar a Excel</button>';
     }
 
     if(r.sinCuit && r.sinCuit.length > 0){
@@ -1071,7 +1033,7 @@ async function procesarBanco(){
 }
 
 function exportarNoEncontrados(datos) {
-  var rows = datos.map(function(x){ return {'CUIT': x.cuit, 'Monto': x.monto, 'Detalle banco': x.detalle}; });
+  var rows = datos.map(function(x){ return {'CUIT': x.cuit, 'Monto': x.monto, 'Descripcion': x.descrip||'', 'Detalle': x.detalle||''}; });
   var ws = XLSX.utils.json_to_sheet(rows);
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'No encontrados');
