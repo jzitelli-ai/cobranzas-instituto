@@ -489,25 +489,26 @@ app.post('/api/banco', (req, res) => {
     }
   });
 
+  // Normalizar CUIT: quitar guiones, espacios, y dejar solo 11 dígitos
+  function normalizarCuit(valor) {
+    if (!valor && valor !== 0) return null;
+    const s = String(valor).replace(/[^0-9]/g, '');
+    if (s.length === 11) return s;
+    // Intentar extraer 11 dígitos consecutivos
+    const match = s.match(/\d{11}/);
+    return match ? match[0] : null;
+  }
+
   // Función para parsear montos en formato argentino
-  // Soporta: $42.500,00 / 42.500,00 / 42500.00 / 42,500.00
   function parsearMonto(valor) {
     if (!valor && valor !== 0) return 0;
-    let s = String(valor).trim();
-    // Quitar símbolo $ y espacios
-    s = s.replace(/\$\s*/g, '').trim();
-    // Detectar formato argentino: tiene punto como separador de miles y coma decimal
-    // Ejemplo: 42.500,00 o 1.234.567,89
+    let s = String(valor).trim().replace(/\$\s*/g, '').trim();
     if (/^\d{1,3}(\.\d{3})*(,\d{1,2})?$/.test(s)) {
-      // Formato argentino: quitar puntos, reemplazar coma por punto
       s = s.replace(/\./g, '').replace(',', '.');
     } else if (/^\d{1,3}(,\d{3})*(\.\d{1,2})?$/.test(s)) {
-      // Formato anglosajón: quitar comas
       s = s.replace(/,/g, '');
     } else {
-      // Fallback: quitar todo excepto dígitos y último separador
       s = s.replace(/[^0-9,\.]/g, '');
-      // Si tiene coma y punto, el último es el decimal
       const lastComma = s.lastIndexOf(',');
       const lastDot = s.lastIndexOf('.');
       if (lastComma > lastDot) {
@@ -530,11 +531,14 @@ app.post('/api/banco', (req, res) => {
   const fecha = hoy.toLocaleDateString('es-AR');
 
   filas.forEach(fila => {
-    const cuit = extraerCuit(fila[colCuit]);
+    const cuit = normalizarCuit(fila[colCuit]);
     const monto = parsearMonto(fila[colMonto]);
+    // Buscar columna DESCRIP si existe
+    const descrip = fila['DESCRIP'] || fila['descrip'] || fila['Descrip'] ||
+                    fila['DESCRIPCION'] || fila['descripcion'] || fila['DETALLE'] || '';
 
     if (!cuit) {
-      sinCuit.push({ detalle: String(fila[colCuit] || '').slice(0, 80), monto });
+      sinCuit.push({ detalle: String(fila[colCuit]||'').slice(0,80), descrip: String(descrip).trim(), monto });
       return;
     }
     if (monto <= 0) return;
@@ -544,11 +548,18 @@ app.post('/api/banco', (req, res) => {
       noEncontrados.push({
         cuit,
         monto,
-        detalle: String(fila[colCuit] || '').slice(0, 80),
-        montoOriginal: String(fila[colMonto] || '')
+        detalle: String(fila[colCuit]||'').slice(0, 80),
+        descrip: String(descrip).trim()
       });
       return;
     }
+
+    // Verificar duplicado
+    const yaExiste = db.prepare(
+      "SELECT id FROM pagos WHERE alumno_id=? AND origen LIKE ? AND monto=? AND fecha=?"
+    ).get(alumno.id, '%CUIT ' + cuit + '%', monto, fecha);
+
+    if (yaExiste) { duplicados++; return; }
 
     // Aplicar a cuotas pendientes
     let restante = monto;
@@ -557,7 +568,6 @@ app.post('/api/banco', (req, res) => {
 
     for (const c of pendientes) {
       if (restante <= 0) break;
-      // Solo procesar cuotas que siguen pendientes (evita duplicar si se reimporta)
       const cuotaActual = db.prepare('SELECT estado FROM cuotas WHERE id=?').get(c.id);
       if (!cuotaActual || cuotaActual.estado !== 'pendiente') continue;
       let precio = 0;
@@ -574,16 +584,6 @@ app.post('/api/banco', (req, res) => {
         conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE[c.numero_cuota-1]} 2026)`);
         restante -= precio;
       }
-    }
-
-    // Verificar si ya existe un pago de este CUIT en la misma fecha con el mismo monto
-    const yaExiste = db.prepare(
-      "SELECT id FROM pagos WHERE alumno_id=? AND origen LIKE ? AND monto=? AND fecha=?"
-    ).get(alumno.id, '%CUIT ' + cuit + '%', monto, fecha);
-
-    if (yaExiste) {
-      duplicados++;
-      return;
     }
 
     db.prepare('INSERT INTO pagos (fecha, alumno_id, alumno_nombre, curso, monto, concepto, medio, origen) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(fecha, alumno.id, alumno.nombre, alumno.curso, monto, conceptos.join(', ') || 'Transferencia bancaria', 'Transferencia', `Banco (CUIT ${cuit})`);
