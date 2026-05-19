@@ -1218,8 +1218,9 @@ function filtrarReporte(){
     h+='<td><span class="badge bp" style="font-size:9px">'+a.curso+'</span></td>';
     CUOTAS.forEach(function(c){
       var e=est[c.num]||est[String(c.num)]||'futura';
-      var fecha=fechas[c.num]||fechas[String(c.num)]||'';
-      var fechaCorta=fecha?fecha.toString().slice(0,10):'';
+      var _fk2=c.num; var _fs2=String(c.num);
+      var fecha=fechas.hasOwnProperty(_fk2)?fechas[_fk2]:(fechas.hasOwnProperty(_fs2)?fechas[_fs2]:'');
+      var fechaCorta=fecha&&fecha!==''?String(fecha).slice(0,10):'';
       if(e==='futura'){h+='<td style="text-align:center;color:var(--m);font-size:10px">—</td>';}
       else if(e==='pagada'){h+='<td style="text-align:center;background:var(--sl)"><span style="color:var(--s);font-size:12px">✓</span>'+(fechaCorta?'<div style="font-size:9px;color:var(--s);margin-top:1px">'+fechaCorta+'</div>':'')+'</td>';}
       else if(e==='compensada'){h+='<td style="text-align:center;background:#FFF3E0;border:1px solid #FFB74D" title="Compensada por saldo"><div style="font-size:9px;color:#E65100;font-weight:700">↔<br>COMP</div></td>';}
@@ -1270,16 +1271,16 @@ function abrirDetalleAlumno(id){
   CUOTAS.forEach(function(c){
     var e=est[c.num]||est[String(c.num)]||'futura';
     // Buscar fecha — puede venir como numero de cuota entero o string
-    var fecha=fechas[c.num]||fechas[String(c.num)]||'';
-    var monto=montos[c.num]||montos[String(c.num)]||0;
-    var fechaCorta=fecha?fecha.toString().slice(0,10):'—';
+    var _fk = c.num; var _fs = String(c.num);
+    var fecha = fechas.hasOwnProperty(_fk) ? fechas[_fk] : (fechas.hasOwnProperty(_fs) ? fechas[_fs] : '');
+    var monto = montos.hasOwnProperty(_fk) ? montos[_fk] : (montos.hasOwnProperty(_fs) ? montos[_fs] : 0);
+    var fechaCorta = fecha && fecha !== '' ? String(fecha).slice(0,10) : '—';
     var estadoHtml,bg,montoTxt,accion='';
     if(e==='futura'){bg='';estadoHtml='<span style="color:var(--m)">No generada</span>';montoTxt='—';}
     else if(e==='pagada'){
       bg='var(--sl)';estadoHtml='<span style="color:var(--s);font-weight:600">✓ Pagada</span>';
       montoTxt=monto?pesos(monto):'—';
-      // Boton reimputar en cuotas pagadas
-      accion='<button class="btn bob" style="padding:2px 7px;font-size:10px" onclick="abrirReimputar('+a.id+','+c.num+')">Reimputar</button>';
+      accion='<button class="btn bob" style="padding:2px 7px;font-size:10px" onclick="event.stopPropagation();abrirReimputar('+a.id+','+c.num+')">Reimputar</button>';
     }
     else if(e==='compensada'){bg='#FFF3E0';estadoHtml='<span style="color:#E65100;font-weight:600">↔ Compensada</span>';montoTxt='—';}
     else if(e==='gratis'){bg='#c8f7c5';estadoHtml='<span style="color:#1a7a1a;font-weight:600">★ Gratis</span>';montoTxt='$0';}
