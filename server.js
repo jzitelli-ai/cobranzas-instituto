@@ -191,64 +191,61 @@ app.post('/api/cobro', async (req,res) => {
 // Reprocesar pagos históricos con lógica de saldo correcta
 app.post('/api/reprocesar-historicos', async (req,res) => {
   const alumnos = await q('SELECT * FROM alumnos ORDER BY id');
-  let reprocesados = 0;
+  let reprocesados = 0, corregidos = 0;
 
   for (const alumno of alumnos) {
-    // Obtener pagos importados ordenados por fecha ASC
+    // Solo procesar alumnos con pagos importados
     const pagosAlumno = await q(
       "SELECT * FROM pagos WHERE alumno_id=$1 AND (origen LIKE '%Importado%' OR origen LIKE '%Banco%') ORDER BY fecha ASC, id ASC",
       [alumno.id]
     );
     if (!pagosAlumno.length) continue;
 
-    // Resetear cuotas 1-3 a pendiente
-    await q("UPDATE cuotas SET estado='pendiente',fecha_pago='',monto_pagado=0 WHERE alumno_id=$1 AND numero_cuota<=3", [alumno.id]);
+    // Obtener cuotas actuales del alumno (1-3)
+    const cuotasActuales = await q(
+      'SELECT * FROM cuotas WHERE alumno_id=$1 AND numero_cuota<=3 ORDER BY numero_cuota',
+      [alumno.id]
+    );
 
-    // Re-aplicar cada pago en orden cronológico
-    for (const pago of pagosAlumno) {
-      const fechaPago = pago.fecha || '';
-      // Extraer día de la fecha (formato dd/mm/yyyy o yyyy-mm-dd)
-      let dia = 1;
-      if (fechaPago.includes('/')) {
-        dia = parseInt(fechaPago.split('/')[0]) || 1;
-      } else if (fechaPago.includes('-')) {
-        dia = parseInt(fechaPago.split('-')[2]) || 1;
-      }
+    // Calcular total pagado vs total de cuotas marcadas como pagadas
+    const totalPagado = pagosAlumno.reduce((s, p) => s + parseFloat(p.monto), 0);
+    const cuotasPagadas = cuotasActuales.filter(c => c.estado === 'pagada');
 
-      let restante = parseFloat(pago.monto);
-      const conceptos = [];
+    // Si hay exceso de pago sobre las cuotas marcadas, puede haber cuotas adicionales a cubrir
+    let totalCuotasPagadas = 0;
+    for (const c of cuotasPagadas) {
+      totalCuotasPagadas += parseFloat(c.monto_pagado) || 0;
+    }
 
-      // Aplicar a cuotas pendientes de más antigua a más nueva
+    const exceso = totalPagado - totalCuotasPagadas;
+
+    if (exceso >= 100) { // Hay exceso significativo
+      // Verificar si puede cubrir cuotas pendientes
       const pendientes = await q(
-        'SELECT * FROM cuotas WHERE alumno_id=$1 AND estado=$2 ORDER BY numero_cuota',
+        'SELECT * FROM cuotas WHERE alumno_id=$1 AND estado=$2 AND numero_cuota<=3 ORDER BY numero_cuota',
         [alumno.id, 'pendiente']
       );
 
+      let disponible = exceso;
       for (const c of pendientes) {
-        if (restante <= 0) break;
-        const esGratis = c.numero_cuota === 10 && await cuota10Gratis(alumno.id, alumno);
-        // Precio según día de pago real
-        const esBonif = MESES_TODO_EL_MES.includes(c.numero_cuota) || dia <= 10;
-        const precio = esGratis ? 0 : (esBonif ? parseFloat(alumno.precio_bonificado) : parseFloat(alumno.precio_normal));
+        if (disponible <= 0) break;
+        const esBonif = MESES_TODO_EL_MES.includes(c.numero_cuota); // Solo meses especiales
+        const precio = esBonif ? parseFloat(alumno.precio_bonificado) : parseFloat(alumno.precio_normal);
 
-        if (precio === 0 || restante >= precio) {
+        // Si el exceso cubre la cuota pendiente, marcarla como pagada
+        if (disponible >= precio * 0.9) { // 90% del precio como mínimo
+          const ultimoPago = pagosAlumno[pagosAlumno.length - 1];
           await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4',
-            ['pagada', fechaPago, precio, c.id]);
-          conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota-1]} 2026)`);
-          restante -= precio;
+            ['pagada', ultimoPago.fecha, Math.min(disponible, precio), c.id]);
+          disponible -= precio;
+          corregidos++;
         }
-      }
-
-      // Actualizar el concepto del pago
-      if (conceptos.length > 0) {
-        await q('UPDATE pagos SET concepto=$1 WHERE id=$2',
-          [conceptos.join(', ') + (restante > 0 ? ` + saldo $${restante.toLocaleString('es-AR')}` : ''), pago.id]);
       }
     }
     reprocesados++;
   }
 
-  res.json({ ok: true, reprocesados, mensaje: `${reprocesados} alumnos reprocesados con lógica de saldo` });
+  res.json({ ok: true, reprocesados, corregidos, mensaje: `${reprocesados} alumnos procesados, ${corregidos} cuotas corregidas por exceso de pago` });
 });
 
 // Función central: aplica un monto a cuotas pendientes de más antigua a más nueva
