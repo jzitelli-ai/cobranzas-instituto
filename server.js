@@ -306,11 +306,13 @@ app.post('/api/banco', async (req,res) => {
       noEncontrados.push({cuit,monto,fecha:fs,detalle:String(fila[colCuit]||'').slice(0,80),descrip:String(descrip).trim()});
       continue;
     }
-    const yaExiste=await q1(
-      "SELECT id FROM pagos WHERE alumno_id=$1 AND origen LIKE $2 AND monto=$3",
-      [alumno.id,`%CUIT ${cuit}%`,monto]
+    // Anti-duplicado: verificar si ya existe un pago del mismo alumno con el mismo monto
+    // independientemente de la fecha o el origen (Excel, banco, manual)
+    const yaExiste = await q1(
+      "SELECT id, fecha, origen FROM pagos WHERE alumno_id=$1 AND monto=$2",
+      [alumno.id, monto]
     );
-    if(yaExiste){duplicados++;continue;}
+    if (yaExiste) { duplicados++; continue; }
 
     const {conceptos} = await aplicarPagoConSaldo(alumno.id, alumno, monto, fecha, `Banco (CUIT ${cuit})`);
     await q('INSERT INTO pagos (fecha,alumno_id,alumno_nombre,curso,monto,concepto,medio,origen) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
@@ -519,6 +521,48 @@ app.get('/api/limpiar-banco-20mayo', async (req,res) => {
   await q("DELETE FROM pagos WHERE origen LIKE '%Banco%' AND fecha=$1", [fecha]);
 
   res.json({ ok: true, pagosEliminados: pagos.length, cuotasRevertidas });
+});
+
+// Limpiar pagos bancarios que duplican pagos ya existentes (del Excel u otro origen)
+app.get('/api/limpiar-duplicados-banco', async (req,res) => {
+  // Buscar pagos bancarios que tengan el mismo alumno_id y monto que otro pago previo
+  const bancarios = await q(
+    "SELECT * FROM pagos WHERE origen LIKE '%Banco%' ORDER BY id ASC"
+  );
+
+  let eliminados = 0;
+  let cuotasRevertidas = 0;
+
+  for (const pago of bancarios) {
+    // Buscar si existe otro pago del mismo alumno con el mismo monto pero diferente id
+    const previo = await q1(
+      "SELECT id FROM pagos WHERE alumno_id=$1 AND monto=$2 AND id != $3",
+      [pago.alumno_id, pago.monto, pago.id]
+    );
+
+    if (previo) {
+      // Es un duplicado — revertir cuotas si las marcó
+      const matches = (pago.concepto||'').match(/Cuota (\d+)/g)||[];
+      for (const m of matches) {
+        const n = parseInt(m.replace('Cuota ',''));
+        const cuota = await q1(
+          'SELECT * FROM cuotas WHERE alumno_id=$1 AND numero_cuota=$2',
+          [pago.alumno_id, n]
+        );
+        // Solo revertir si la fecha_pago de la cuota coincide con la fecha del pago bancario duplicado
+        if (cuota && cuota.fecha_pago === pago.fecha) {
+          // Restaurar con datos del pago previo si corresponde
+          await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE alumno_id=$4 AND numero_cuota=$5',
+            ['pendiente','',0,pago.alumno_id,n]);
+          cuotasRevertidas++;
+        }
+      }
+      await q('DELETE FROM pagos WHERE id=$1', [pago.id]);
+      eliminados++;
+    }
+  }
+
+  res.json({ ok: true, bancariosProcesados: bancarios.length, eliminados, cuotasRevertidas });
 });
 
 // Ruta manual para ejecutar backup
