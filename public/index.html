@@ -1139,6 +1139,7 @@ function filtrarHistorial(){
       '</div>'+
       '<div class="hm">+'+pesos(p.monto)+'</div>'+
       '<div style="display:flex;gap:5px;margin-left:10px;flex-shrink:0">'+
+        '<button class="btn bob" style="padding:2px 8px;font-size:10.5px" onclick=\'reimprimirRecibo('+JSON.stringify(p)+')\'>Reimprimir</button>'+
         '<button class="btn bob" style="padding:2px 8px;font-size:10.5px" onclick=\'abrirEditPago('+JSON.stringify(p)+')\'>Editar</button>'+
         '<button class="btn bob" style="padding:2px 8px;font-size:10.5px;color:var(--d)" onclick="abrirEliminarPago('+p.id+','+p.alumno_id+')">Eliminar</button>'+
       '</div>'+
@@ -1172,6 +1173,14 @@ async function guardarEditPago() {
   cerrarM('m-edit-pago');
   cargarHistorial();
   toast('Pago actualizado', 's');
+}
+
+function reimprimirRecibo(p) {
+  // Buscar el alumno para obtener el curso
+  var alumno = (_alumnos||[]).find(function(a){ return a.id == p.alumno_id; });
+  var curso = alumno ? alumno.curso : (p.curso||'');
+  var medio = (p.medio||'') + (p.origen && p.origen.indexOf('·')>=0 ? ' — ' + p.origen.split('·').slice(1).join('·').trim() : '');
+  imprimirReciboDuplicado(p.id, p.fecha, p.alumno_nombre, curso, p.concepto, medio, pesos(p.monto));
 }
 
 function abrirEliminarPago(pagoId, alumnoId) {
