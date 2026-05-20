@@ -431,6 +431,38 @@ app.get('/api/restaurar-historicos', async (req,res) => {
   res.json({ ok: true, restaurados, mensaje: `${restaurados} alumnos restaurados al estado original del Excel` });
 });
 
+// Eliminar pagos duplicados (mismo alumno_id + monto + fecha + origen)
+app.get('/api/limpiar-duplicados', async (req,res) => {
+  // Encontrar duplicados
+  const duplicados = await q(`
+    SELECT MIN(id) as id_keep, alumno_id, monto, fecha, origen, COUNT(*) as cnt
+    FROM pagos
+    GROUP BY alumno_id, monto, fecha, origen
+    HAVING COUNT(*) > 1
+  `);
+
+  let eliminados = 0;
+  for (const d of duplicados) {
+    // Eliminar todos menos el primero
+    const resultado = await q(
+      'DELETE FROM pagos WHERE alumno_id=$1 AND monto=$2 AND fecha=$3 AND origen=$4 AND id != $5',
+      [d.alumno_id, d.monto, d.fecha, d.origen, d.id_keep]
+    );
+    eliminados += (parseInt(d.cnt) - 1);
+  }
+
+  res.json({ ok: true, duplicadosEncontrados: duplicados.length, eliminados });
+});
+
+// Ver pagos por fecha para diagnóstico
+app.get('/api/diagnostico/pagos-fecha/:fecha', async (req,res) => {
+  const pagos = await q(
+    'SELECT p.*,a.nombre FROM pagos p JOIN alumnos a ON p.alumno_id=a.id WHERE p.fecha LIKE $1 ORDER BY a.nombre',
+    [`%${req.params.fecha}%`]
+  );
+  res.json({ total: pagos.length, pagos });
+});
+
 // Ruta manual para ejecutar backup
 app.get('/api/backup', async (req,res) => {
   try { await ejecutarBackup(); res.json({ok:true,mensaje:'Backup ejecutado correctamente'}); }
