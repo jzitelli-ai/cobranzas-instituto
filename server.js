@@ -565,6 +565,26 @@ app.get('/api/limpiar-duplicados-banco', async (req,res) => {
   res.json({ ok: true, bancariosProcesados: bancarios.length, eliminados, cuotasRevertidas });
 });
 
+// Corregir cuotas marcadas como pagadas con monto 0 → pendiente
+app.get('/api/corregir-cuotas-cero', async (req,res) => {
+  const cuotasCero = await q(
+    "SELECT c.*, a.nombre FROM cuotas c JOIN alumnos a ON c.alumno_id=a.id WHERE c.estado='pagada' AND (c.monto_pagado=0 OR c.monto_pagado IS NULL)"
+  );
+
+  let corregidas = 0;
+  for (const c of cuotasCero) {
+    // Marcar como pendiente
+    await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4',
+      ['pendiente','',0,c.id]);
+    // Eliminar el pago asociado si existe con monto 0
+    await q("DELETE FROM pagos WHERE alumno_id=$1 AND monto=0 AND concepto LIKE $2",
+      [c.alumno_id, `%Cuota ${c.numero_cuota}%`]);
+    corregidas++;
+  }
+
+  res.json({ ok: true, corregidas, detalle: cuotasCero.map(c=>({nombre:c.nombre, cuota:c.numero_cuota})) });
+});
+
 // Ruta manual para ejecutar backup
 app.get('/api/backup', async (req,res) => {
   try { await ejecutarBackup(); res.json({ok:true,mensaje:'Backup ejecutado correctamente'}); }
