@@ -463,6 +463,35 @@ app.get('/api/diagnostico/pagos-fecha/:fecha', async (req,res) => {
   res.json({ total: pagos.length, pagos });
 });
 
+// Ver todos los pagos bancarios recientes
+app.get('/api/diagnostico/pagos-banco-recientes', async (req,res) => {
+  const pagos = await q(`
+    SELECT p.id, p.fecha, p.monto, p.concepto, p.origen, a.nombre, a.curso
+    FROM pagos p JOIN alumnos a ON p.alumno_id = a.id
+    WHERE p.origen LIKE '%Banco%'
+    ORDER BY p.fecha DESC, p.id DESC
+    LIMIT 100
+  `);
+  res.json({ total: pagos.length, pagos });
+});
+
+// Eliminar TODOS los pagos bancarios de una fecha específica
+app.delete('/api/pagos-banco-fecha/:fecha', async (req,res) => {
+  const fecha = decodeURIComponent(req.params.fecha);
+  // Primero revertir cuotas asociadas
+  const pagos = await q("SELECT * FROM pagos WHERE origen LIKE '%Banco%' AND fecha=$1", [fecha]);
+  for (const pago of pagos) {
+    const matches = (pago.concepto||'').match(/Cuota (\d+)/g)||[];
+    for (const m of matches) {
+      const n = parseInt(m.replace('Cuota ',''));
+      await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE alumno_id=$4 AND numero_cuota=$5 AND fecha_pago=$6',
+        ['pendiente','',0,pago.alumno_id,n,fecha]);
+    }
+  }
+  const r = await q("DELETE FROM pagos WHERE origen LIKE '%Banco%' AND fecha=$1", [fecha]);
+  res.json({ ok: true, eliminados: pagos.length, fecha });
+});
+
 // Ruta manual para ejecutar backup
 app.get('/api/backup', async (req,res) => {
   try { await ejecutarBackup(); res.json({ok:true,mensaje:'Backup ejecutado correctamente'}); }
