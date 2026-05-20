@@ -306,7 +306,10 @@ app.post('/api/banco', async (req,res) => {
       noEncontrados.push({cuit,monto,fecha:fs,detalle:String(fila[colCuit]||'').slice(0,80),descrip:String(descrip).trim()});
       continue;
     }
-    const yaExiste=await q1('SELECT id FROM pagos WHERE alumno_id=$1 AND origen LIKE $2 AND monto=$3 AND fecha=$4',[alumno.id,`%CUIT ${cuit}%`,monto,fecha]);
+    const yaExiste=await q1(
+      "SELECT id FROM pagos WHERE alumno_id=$1 AND origen LIKE $2 AND monto=$3",
+      [alumno.id,`%CUIT ${cuit}%`,monto]
+    );
     if(yaExiste){duplicados++;continue;}
 
     const {conceptos} = await aplicarPagoConSaldo(alumno.id, alumno, monto, fecha, `Banco (CUIT ${cuit})`);
@@ -490,6 +493,32 @@ app.delete('/api/pagos-banco-fecha/:fecha', async (req,res) => {
   }
   const r = await q("DELETE FROM pagos WHERE origen LIKE '%Banco%' AND fecha=$1", [fecha]);
   res.json({ ok: true, eliminados: pagos.length, fecha });
+});
+
+// Eliminar pagos bancarios del 20/5/2026 (duplicados) y revertir cuotas
+app.get('/api/limpiar-banco-20mayo', async (req,res) => {
+  const fecha = '20/5/2026';
+  const pagos = await q("SELECT * FROM pagos WHERE origen LIKE '%Banco%' AND fecha=$1", [fecha]);
+
+  let cuotasRevertidas = 0;
+  for (const pago of pagos) {
+    // Revertir cuotas que fueron marcadas por este pago específico
+    // Solo revertir si la fecha_pago coincide con 20/5/2026
+    const matches = (pago.concepto||'').match(/Cuota (\d+)/g)||[];
+    for (const m of matches) {
+      const n = parseInt(m.replace('Cuota ',''));
+      const cuota = await q1('SELECT * FROM cuotas WHERE alumno_id=$1 AND numero_cuota=$2', [pago.alumno_id, n]);
+      if (cuota && cuota.fecha_pago === fecha) {
+        await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE alumno_id=$4 AND numero_cuota=$5',
+          ['pendiente','',0,pago.alumno_id,n]);
+        cuotasRevertidas++;
+      }
+    }
+  }
+
+  await q("DELETE FROM pagos WHERE origen LIKE '%Banco%' AND fecha=$1", [fecha]);
+
+  res.json({ ok: true, pagosEliminados: pagos.length, cuotasRevertidas });
 });
 
 // Ruta manual para ejecutar backup
