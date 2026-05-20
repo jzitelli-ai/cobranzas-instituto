@@ -120,19 +120,16 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
 .comp-tag{font-size:9px;color:#E65100;font-weight:700;line-height:1.2}
 .tag-inactivo{background:#eee;color:#999;font-size:10px;padding:1px 5px;border-radius:8px;margin-left:4px}
 @media print{
-  .sidebar,.topbar,.cobro-busq,#cobro-busq,#paso3,.tbar-r,.ni,.ssep,.slogo,
-  #s-dashboard,#s-alumnos,#s-banco,#s-historial,#s-reporte,#s-cursos,#s-aranceles,
-  .spinner,.toast,.modal-bg,#rec-btns,#rec-ph,#cob-cuotas,#cobro-alumno,
-  button:not(.print-ok){display:none!important}
-  .main{margin-left:0!important}
-  .content{padding:0!important}
-  #s-cobro{display:block!important}
-  .recibo{border:1px solid #ccc!important;display:block!important;max-width:400px;margin:0 auto}
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  body > *{display:none!important}
+  #print-area{display:flex!important;flex-direction:column;align-items:center;gap:20px;width:100%}
+  @page{margin:10mm;size:A4}
 }
 </style>
 </head>
 <body>
 <div class="spinner" id="spinner"><div class="spin"></div><div class="spin-txt" id="spin-txt">Cargando...</div></div>
+<div id="print-area" style="display:none"></div>
 <div class="app">
 <aside class="sidebar">
   <div class="slogo"><h1>Cobranzas<br>Instituto 2026</h1><p>Sistema de gestion</p></div>
@@ -918,8 +915,41 @@ async function confirmarCobro(){
   cambiarAlumno();
   _pagos=await api('GET','/api/pagos');
   toast('Cobro '+pesos(total)+' registrado · Recibo #'+r.pagoId,'s');
-  // Imprimir automáticamente
-  setTimeout(function(){ window.print(); }, 400);
+  // Imprimir por duplicado usando print-area
+  setTimeout(function(){ imprimirReciboDuplicado(r.pagoId, r.fecha, alumnoActual.nombre, alumnoActual.curso, r.conceptos.join(', '), medio+(obs?' — '+obs:''), pesos(total)); }, 400);
+}
+
+function imprimirReciboDuplicado(num, fecha, alumno, curso, concepto, medio, total) {
+  var logoSrc = document.querySelector('#recibo img').src;
+  var reciboHtml = function(copia) {
+    return '<div style="width:90mm;border:1px solid #ccc;border-radius:8px;padding:16px;font-family:Arial,sans-serif;font-size:12px;line-height:1.7;background:#fafaf8;margin:0 auto">'+
+      '<div style="text-align:center;margin-bottom:10px">'+
+        '<img src="'+logoSrc+'" style="width:80px;height:80px;object-fit:contain;display:block;margin:0 auto 6px">'+
+        '<strong style="font-size:14px">RECIBO DE PAGO</strong><br>'+
+        '<span style="font-size:10px;color:#777">Cultural Cerrillos — Teaching English with Love</span><br>'+
+        '<span style="font-size:10px;color:#777;font-style:italic">'+copia+'</span>'+
+      '</div>'+
+      '<table style="width:100%;border-collapse:collapse">'+
+        '<tr><td style="padding:4px 0;color:#777;border-bottom:1px dashed #ddd">N Recibo</td><td style="text-align:right;padding:4px 0;border-bottom:1px dashed #ddd">'+num+'</td></tr>'+
+        '<tr><td style="padding:4px 0;color:#777;border-bottom:1px dashed #ddd">Fecha</td><td style="text-align:right;padding:4px 0;border-bottom:1px dashed #ddd">'+fecha+'</td></tr>'+
+        '<tr><td style="padding:4px 0;color:#777;border-bottom:1px dashed #ddd">Alumno</td><td style="text-align:right;padding:4px 0;border-bottom:1px dashed #ddd">'+alumno+'</td></tr>'+
+        '<tr><td style="padding:4px 0;color:#777;border-bottom:1px dashed #ddd">Curso</td><td style="text-align:right;padding:4px 0;border-bottom:1px dashed #ddd">'+curso+'</td></tr>'+
+        '<tr><td style="padding:4px 0;color:#777;border-bottom:1px dashed #ddd">Concepto</td><td style="text-align:right;padding:4px 0;border-bottom:1px dashed #ddd">'+concepto+'</td></tr>'+
+        '<tr><td style="padding:4px 0;color:#777;border-bottom:1px dashed #ddd">Medio</td><td style="text-align:right;padding:4px 0;border-bottom:1px dashed #ddd">'+medio+'</td></tr>'+
+        '<tr><td style="padding:6px 0;font-weight:700;font-size:13px">TOTAL</td><td style="text-align:right;padding:6px 0;font-weight:700;font-size:13px">'+total+'</td></tr>'+
+      '</table>'+
+      '<div style="text-align:center;margin-top:12px;font-size:11px;color:#999;border-top:1px dashed #ddd;padding-top:8px">Firma y sello ________________________</div>'+
+    '</div>';
+  };
+  var area = document.getElementById('print-area');
+  area.innerHTML =
+    '<div style="display:flex;flex-direction:column;gap:24px;padding:10px;align-items:center">'+
+      reciboHtml('Original')+
+      '<div style="width:90mm;border-top:2px dashed #aaa;text-align:center;font-size:10px;color:#aaa;padding:4px 0">✂ ─────────────────────────────</div>'+
+      reciboHtml('Duplicado')+
+    '</div>';
+  window.print();
+  area.innerHTML = '';
 }
 
 function nuevoCobro(){
