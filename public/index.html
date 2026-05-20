@@ -1329,31 +1329,91 @@ async function abrirDetalleAlumno(id){
   if (pagosAlumno.length > 0) {
     cuentaCorriente = '<div style="margin-top:14px">'+
       '<div class="ctitle">Cuenta corriente</div>'+
-      '<table style="width:100%;font-size:12px;border-collapse:collapse">'+
-      '<thead><tr>'+
-        '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Fecha</th>'+
-        '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Concepto</th>'+
-        '<th style="text-align:right;padding:5px 8px;background:var(--gl);color:var(--m)">Monto</th>'+
-        '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Origen</th>'+
-      '</tr></thead><tbody>';
-    var saldoAcum = 0;
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
+
+      // Columna izquierda: Ingresos
+      '<div>'+
+        '<div style="font-size:11px;font-weight:700;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Ingresos</div>'+
+        '<table style="width:100%;font-size:12px;border-collapse:collapse">'+
+        '<thead><tr>'+
+          '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Fecha</th>'+
+          '<th style="text-align:right;padding:5px 8px;background:var(--gl);color:var(--m)">Monto</th>'+
+          '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Origen</th>'+
+        '</tr></thead><tbody>';
+
+    var totalIngresos = 0;
     pagosAlumno.forEach(function(p){
-      saldoAcum += parseFloat(p.monto)||0;
-      cuentaCorriente += '<tr style="border-bottom:1px solid var(--b)">'+
-        '<td style="padding:5px 8px;color:var(--m)">'+p.fecha+'</td>'+
-        '<td style="padding:5px 8px">'+p.concepto+'</td>'+
-        '<td style="padding:5px 8px;text-align:right;font-weight:600;color:var(--s)">+'+pesos(p.monto)+'</td>'+
-        '<td style="padding:5px 8px;font-size:10.5px;color:var(--m)">'+
-          (p.origen||'').replace('Importado desde planilla','Excel').replace('Manual · ','')+'</td>'+
-      '</tr>';
+      totalIngresos += parseFloat(p.monto)||0;
+      var origenCorto = (p.origen||'')
+        .replace('Importado desde planilla','Excel')
+        .replace('Manual · ','')
+        .replace('Transferencia','Transfer.')
+        .slice(0,25);
+      cuentaCorriente +=
+        '<tr style="border-bottom:1px solid var(--b)">'+
+          '<td style="padding:5px 8px;color:var(--m);white-space:nowrap">'+p.fecha+'</td>'+
+          '<td style="padding:5px 8px;text-align:right;font-weight:600;color:var(--s)">+'+pesos(p.monto)+'</td>'+
+          '<td style="padding:5px 8px;font-size:10.5px;color:var(--m)">'+origenCorto+'</td>'+
+        '</tr>';
     });
-    cuentaCorriente += '</tbody>'+
-      '<tfoot><tr style="background:var(--gl)">'+
-        '<td colspan="2" style="padding:6px 8px;font-weight:700">Total acumulado</td>'+
-        '<td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--s)">'+pesos(saldoAcum)+'</td>'+
-        '<td></td>'+
-      '</tr></tfoot>'+
-    '</table></div>';
+    cuentaCorriente +=
+        '</tbody>'+
+        '<tfoot><tr style="background:var(--gl)">'+
+          '<td style="padding:6px 8px;font-weight:700">Total</td>'+
+          '<td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--s)">'+pesos(totalIngresos)+'</td>'+
+          '<td></td>'+
+        '</tr></tfoot>'+
+        '</table>'+
+      '</div>'+
+
+      // Columna derecha: Aplicaciones
+      '<div>'+
+        '<div style="font-size:11px;font-weight:700;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Aplicado a cuotas</div>'+
+        '<table style="width:100%;font-size:12px;border-collapse:collapse">'+
+        '<thead><tr>'+
+          '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Cuota</th>'+
+          '<th style="text-align:right;padding:5px 8px;background:var(--gl);color:var(--m)">Monto</th>'+
+          '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Fecha</th>'+
+        '</tr></thead><tbody>';
+
+    var totalAplicado = 0;
+    CUOTAS.forEach(function(c){
+      var _fk=c.num; var _fs=String(c.num);
+      var e=est[_fk]||est[_fs]||'futura';
+      var fecha=fechas.hasOwnProperty(_fk)?fechas[_fk]:(fechas.hasOwnProperty(_fs)?fechas[_fs]:'');
+      var monto=montos.hasOwnProperty(_fk)?montos[_fk]:(montos.hasOwnProperty(_fs)?montos[_fs]:0);
+      if(e==='pagada'||e==='compensada'){
+        totalAplicado += parseFloat(monto)||0;
+        var fechaCorta = fecha?String(fecha).slice(0,10):'—';
+        cuentaCorriente +=
+          '<tr style="border-bottom:1px solid var(--b)">'+
+            '<td style="padding:5px 8px;font-weight:600">C'+c.num+' '+c.mes+'</td>'+
+            '<td style="padding:5px 8px;text-align:right;color:var(--s)">'+( monto?pesos(monto):'—')+'</td>'+
+            '<td style="padding:5px 8px;font-size:10.5px;color:var(--m)">'+fechaCorta+'</td>'+
+          '</tr>';
+      }
+    });
+
+    var saldoPendiente = totalIngresos - totalAplicado;
+    cuentaCorriente +=
+        '</tbody>'+
+        '<tfoot>'+
+          '<tr style="background:var(--gl)">'+
+            '<td style="padding:6px 8px;font-weight:700">Aplicado</td>'+
+            '<td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--s)">'+pesos(totalAplicado)+'</td>'+
+            '<td></td>'+
+          '</tr>'+
+          (saldoPendiente > 100 ?
+            '<tr style="background:var(--wl)">'+
+              '<td style="padding:6px 8px;font-weight:700;color:var(--w)">Saldo sin aplicar</td>'+
+              '<td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--w)">'+pesos(saldoPendiente)+'</td>'+
+              '<td></td>'+
+            '</tr>' : '')+
+        '</tfoot>'+
+        '</table>'+
+      '</div>'+
+
+      '</div></div>'; // cierre grid y cuenta corriente
   }
 
   document.getElementById('det-body').innerHTML=
