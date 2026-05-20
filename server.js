@@ -629,6 +629,48 @@ app.get('/api/corregir-cuota/:alumnoId/:numCuota/:estado', async (req,res) => {
   res.json({ ok: true, alumnoId, numCuota, estado });
 });
 
+// Re-aplicar pagos bancarios que quedaron sin cuota asignada
+app.get('/api/reaplicar-pagos-banco', async (req,res) => {
+  const dia = 19; // Día de pago original del banco
+  let aplicados = 0;
+
+  // Buscar pagos bancarios cuyo concepto es "Transferencia bancaria" (sin cuota asignada)
+  const pagosHuerfanos = await q(
+    "SELECT p.*, a.precio_normal, a.precio_bonificado FROM pagos p JOIN alumnos a ON p.alumno_id=a.id WHERE p.origen LIKE '%Banco%' AND (p.concepto='Transferencia bancaria' OR p.concepto LIKE '%saldo%')"
+  );
+
+  for (const pago of pagosHuerfanos) {
+    const pendientes = await q(
+      'SELECT * FROM cuotas WHERE alumno_id=$1 AND estado=$2 ORDER BY numero_cuota',
+      [pago.alumno_id, 'pendiente']
+    );
+    if (!pendientes.length) continue;
+
+    let restante = parseFloat(pago.monto);
+    const conceptos = [];
+
+    for (const c of pendientes) {
+      if (restante <= 0) break;
+      const esBonif = MESES_TODO_EL_MES.includes(c.numero_cuota) || dia <= 10;
+      const precio = esBonif ? parseFloat(pago.precio_bonificado) : parseFloat(pago.precio_normal);
+      if (restante >= precio) {
+        await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4',
+          ['pagada', pago.fecha, precio, c.id]);
+        conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota-1]} 2026)`);
+        restante -= precio;
+      }
+    }
+
+    if (conceptos.length > 0) {
+      const nuevoConc = conceptos.join(', ') + (restante > 0 ? ` + saldo $${Math.round(restante).toLocaleString('es-AR')}` : '');
+      await q('UPDATE pagos SET concepto=$1 WHERE id=$2', [nuevoConc, pago.id]);
+      aplicados++;
+    }
+  }
+
+  res.json({ ok: true, pagosReaplicados: aplicados, mensaje: `${aplicados} pagos bancarios re-aplicados a cuotas` });
+});
+
 // Ruta manual para ejecutar backup
 app.get('/api/backup', async (req,res) => {
   try { await ejecutarBackup(); res.json({ok:true,mensaje:'Backup ejecutado correctamente'}); }
