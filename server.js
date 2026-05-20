@@ -36,8 +36,9 @@ async function cuota10Gratis(alumnoId, alumno) {
 function normalizarCuit(valor) {
   if (!valor && valor !== 0) return null;
   const s = String(valor).replace(/[^0-9]/g, '');
-  if (s.length === 11) return s;
-  const match = s.match(/\d{11}/);
+  // Aceptar CUIT (11 dígitos) o DNI (7-8 dígitos)
+  if (s.length === 11 || s.length === 8 || s.length === 7) return s;
+  const match = s.match(/\d{11}/) || s.match(/\d{8}/) || s.match(/\d{7}/);
   return match ? match[0] : null;
 }
 
@@ -289,7 +290,12 @@ app.post('/api/banco', async (req,res) => {
   const {filas,colCuit,colMonto}=req.body;
   const alumnos=await q('SELECT * FROM alumnos WHERE activo=TRUE');
   const cuitMap={};
-  alumnos.forEach(a=>{if(a.cuits)a.cuits.split(',').forEach(c=>{const cl=c.trim().replace(/[^0-9]/g,'');if(cl.length===11)cuitMap[cl]=a;});});
+  alumnos.forEach(a=>{
+    if(a.cuits) a.cuits.split(',').forEach(c=>{
+      const clean=c.trim().replace(/[^0-9]/g,'');
+      if(clean.length>=7) cuitMap[clean]=a;
+    });
+  });
   const dia=new Date().getDate(), fecha=new Date().toLocaleDateString('es-AR');
   let aplicados=0,duplicados=0; const noEncontrados=[],sinCuit=[];
   for(const fila of filas) {
