@@ -1319,6 +1319,43 @@ function abrirDetalleAlumno(id){
   });
   cuotasHtml+='</tbody></table>';
 
+  // Cargar pagos del alumno para cuenta corriente
+  var pagosAlumno = await api('GET', '/api/pagos?alumnoId=' + id) || [];
+  // Filtrar pagos de este alumno del historial
+  pagosAlumno = (_pagos || []).filter(function(p){ return p.alumno_id === id || p.alumno_id === String(id); })
+    .sort(function(a,b){ return a.id - b.id; });
+
+  var cuentaCorriente = '';
+  if (pagosAlumno.length > 0) {
+    cuentaCorriente = '<div style="margin-top:14px">'+
+      '<div class="ctitle">Cuenta corriente</div>'+
+      '<table style="width:100%;font-size:12px;border-collapse:collapse">'+
+      '<thead><tr>'+
+        '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Fecha</th>'+
+        '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Concepto</th>'+
+        '<th style="text-align:right;padding:5px 8px;background:var(--gl);color:var(--m)">Monto</th>'+
+        '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Origen</th>'+
+      '</tr></thead><tbody>';
+    var saldoAcum = 0;
+    pagosAlumno.forEach(function(p){
+      saldoAcum += parseFloat(p.monto)||0;
+      cuentaCorriente += '<tr style="border-bottom:1px solid var(--b)">'+
+        '<td style="padding:5px 8px;color:var(--m)">'+p.fecha+'</td>'+
+        '<td style="padding:5px 8px">'+p.concepto+'</td>'+
+        '<td style="padding:5px 8px;text-align:right;font-weight:600;color:var(--s)">+'+pesos(p.monto)+'</td>'+
+        '<td style="padding:5px 8px;font-size:10.5px;color:var(--m)">'+
+          (p.origen||'').replace('Importado desde planilla','Excel').replace('Manual · ','')+'</td>'+
+      '</tr>';
+    });
+    cuentaCorriente += '</tbody>'+
+      '<tfoot><tr style="background:var(--gl)">'+
+        '<td colspan="2" style="padding:6px 8px;font-weight:700">Total acumulado</td>'+
+        '<td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--s)">'+pesos(saldoAcum)+'</td>'+
+        '<td></td>'+
+      '</tr></tfoot>'+
+    '</table></div>';
+  }
+
   document.getElementById('det-body').innerHTML=
     '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">'+
       '<div class="avatar" style="width:44px;height:44px;font-size:13px">'+a.nombre.split(/[\s,]+/).filter(Boolean).slice(0,2).map(function(x){return x[0];}).join('').toUpperCase()+'</div>'+
@@ -1332,7 +1369,8 @@ function abrirDetalleAlumno(id){
       '<div style="background:var(--gl);padding:10px;border-radius:var(--rs)"><div style="font-size:11px;color:var(--m)">Total pagado</div><div style="font-weight:700;font-size:15px;color:var(--s)">'+pesos(a.totalPagado)+'</div></div>'+
       '<div style="background:'+(a.deudaReal>0?'var(--dl)':'var(--sl)')+';padding:10px;border-radius:var(--rs)"><div style="font-size:11px;color:var(--m)">Deuda real</div><div style="font-weight:700;font-size:15px;color:'+(a.deudaReal>0?'var(--d)':'var(--s)')+'">'+( a.deudaReal>0?pesos(a.deudaReal):'Al dia')+'</div></div>'+
     '</div>'+
-    cuotasHtml;
+    cuotasHtml +
+    cuentaCorriente;
   abrirM('m-det-alumno');
 }
 
