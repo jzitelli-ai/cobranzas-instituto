@@ -671,6 +671,56 @@ app.get('/api/reaplicar-pagos-banco', async (req,res) => {
   res.json({ ok: true, pagosReaplicados: aplicados, mensaje: `${aplicados} pagos bancarios re-aplicados a cuotas` });
 });
 
+// Aplicar saldo disponible a cuotas pendientes para todos los alumnos con saldo sin aplicar
+app.get('/api/aplicar-saldos-pendientes', async (req,res) => {
+  const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
+  let corregidos = 0;
+  const detalle = [];
+
+  for (const a of alumnos) {
+    const totalPagado = parseFloat((await q1('SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE alumno_id=$1',[a.id]))?.t||0);
+    const cuotas = await q('SELECT * FROM cuotas WHERE alumno_id=$1 ORDER BY numero_cuota',[a.id]);
+    const totalAplicado = cuotas.filter(c=>c.estado==='pagada').reduce((s,c)=>s+parseFloat(c.monto_pagado||0),0);
+    let saldo = totalPagado - totalAplicado;
+
+    if (saldo < 100) continue;
+
+    const pendientes = cuotas.filter(c=>c.estado==='pendiente').sort((a,b)=>a.numero_cuota-b.numero_cuota);
+    if (!pendientes.length) continue;
+
+    const dia = 19; // Día de referencia para precios
+    const cuotasAplicadas = [];
+
+    for (const c of pendientes) {
+      if (saldo <= 0) break;
+      const esBonif = MESES_TODO_EL_MES.includes(c.numero_cuota) || dia <= 10;
+      const precio = esBonif ? parseFloat(a.precio_bonificado) : parseFloat(a.precio_normal);
+      if (saldo >= precio * 0.9) { // 90% mínimo para cubrir la cuota
+        await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4',
+          ['pagada', '19/5/2026', precio, c.id]);
+        cuotasAplicadas.push(c.numero_cuota);
+        saldo -= precio;
+      }
+    }
+
+    if (cuotasAplicadas.length > 0) {
+      // Actualizar concepto del último pago bancario
+      const ultimoPago = await q1(
+        "SELECT * FROM pagos WHERE alumno_id=$1 AND origen LIKE '%Banco%' ORDER BY id DESC LIMIT 1",
+        [a.id]
+      );
+      if (ultimoPago) {
+        const nuevoConc = ultimoPago.concepto + ', ' + cuotasAplicadas.map(n=>`Cuota ${n} (${MESES_NOMBRE_ALL[n-1]} 2026)`).join(', ');
+        await q('UPDATE pagos SET concepto=$1 WHERE id=$2',[nuevoConc, ultimoPago.id]);
+      }
+      corregidos++;
+      detalle.push({ nombre: a.nombre, cuotasAplicadas });
+    }
+  }
+
+  res.json({ ok: true, corregidos, detalle });
+});
+
 // Verificar qué alumnos tienen saldo sin aplicar (pagos sin cuota asignada)
 app.get('/api/diagnostico/saldos-sin-aplicar', async (req,res) => {
   const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
