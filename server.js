@@ -671,6 +671,23 @@ app.get('/api/reaplicar-pagos-banco', async (req,res) => {
   res.json({ ok: true, pagosReaplicados: aplicados, mensaje: `${aplicados} pagos bancarios re-aplicados a cuotas` });
 });
 
+// Verificar qué alumnos tienen saldo sin aplicar (pagos sin cuota asignada)
+app.get('/api/diagnostico/saldos-sin-aplicar', async (req,res) => {
+  const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
+  const resultado = [];
+  for (const a of alumnos) {
+    const totalPagado = parseFloat((await q1('SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE alumno_id=$1',[a.id]))?.t||0);
+    const cuotas = await q('SELECT * FROM cuotas WHERE alumno_id=$1',[a.id]);
+    const totalAplicado = cuotas.filter(c=>c.estado==='pagada').reduce((s,c)=>s+parseFloat(c.monto_pagado||0),0);
+    const saldo = totalPagado - totalAplicado;
+    if (saldo >= 100) {
+      const pendientes = cuotas.filter(c=>c.estado==='pendiente').map(c=>c.numero_cuota);
+      resultado.push({ nombre: a.nombre, id: a.id, totalPagado, totalAplicado, saldo, cuotasPendientes: pendientes });
+    }
+  }
+  res.json({ total: resultado.length, alumnos: resultado });
+});
+
 // Ruta manual para ejecutar backup
 app.get('/api/backup', async (req,res) => {
   try { await ejecutarBackup(); res.json({ok:true,mensaje:'Backup ejecutado correctamente'}); }
