@@ -352,6 +352,12 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
           <button class="btn bpb" onclick="reprocesarHistoricos()" style="font-size:11px;padding:4px 10px" title="Re-aplica logica de saldo a pagos importados del Excel">
             ↺ Reprocesar saldos Excel
           </button>
+          <button class="btn bob" onclick="aplicarSaldosPendientes()" style="font-size:11px;padding:4px 10px" title="Aplica saldo disponible a cuotas pendientes">
+            ⚡ Aplicar saldos pendientes
+          </button>
+          <button class="btn bob" onclick="ejecutarBackup()" style="font-size:11px;padding:4px 10px;background:#25D366;color:#fff;border-color:#25D366" title="Ejecuta backup manual a Google Sheets">
+            ☁ Backup ahora
+          </button>
         </div>
         <div id="hist-list"></div>
         <div id="hist-empty" style="display:none;text-align:center;padding:40px;color:var(--m)">Sin pagos registrados.</div>
@@ -1203,6 +1209,25 @@ async function eliminarPago(pagoId, alumnoId, revertirCuotas) {
   if (!r || !r.ok) { toast('Error al eliminar', 'e'); return; }
   cargarHistorial();
   toast('Pago eliminado' + (revertirCuotas ? ' — cuotas revertidas a pendiente' : ''), 'i');
+}
+
+async function aplicarSaldosPendientes() {
+  if (!confirm('Esto aplica el saldo disponible de cada alumno a sus cuotas pendientes. ¿Continuar?')) return;
+  showSpinner('Aplicando saldos...');
+  var r = await api('GET', '/api/aplicar-saldos-pendientes');
+  hideSpinner();
+  if (!r || !r.ok) { toast('Error al aplicar saldos', 'e'); return; }
+  if (r.corregidos === 0) { toast('No hay saldos pendientes para aplicar', 's'); return; }
+  toast(r.corregidos + ' alumnos con saldos aplicados', 's');
+}
+
+async function ejecutarBackup() {
+  if (!confirm('¿Ejecutar backup manual a Google Sheets ahora?')) return;
+  showSpinner('Ejecutando backup...');
+  var r = await api('GET', '/api/backup');
+  hideSpinner();
+  if (!r || !r.ok) { toast('Error en el backup: ' + (r ? r.error : ''), 'e'); return; }
+  toast('Backup ejecutado correctamente en Google Sheets', 's');
 }
 
 async function reprocesarHistoricos() {
