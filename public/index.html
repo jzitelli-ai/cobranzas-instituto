@@ -153,6 +153,9 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
     <button class="ni" onclick="nav('reporte')">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Reporte de deuda
     </button>
+    <button class="ni" onclick="nav('reporte-medios')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Reporte por medio
+    </button>
     <div class="ssep">Configuracion</div>
     <button class="ni" onclick="nav('cursos')">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>Cursos
@@ -408,6 +411,45 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
     </div>
 
     <!-- ARANCELES -->
+    <!-- REPORTE POR MEDIO DE PAGO -->
+    <div id="s-reporte-medios" class="section">
+      <div class="card">
+        <div class="tbar">
+          <div class="ctitle">Reporte por medio de pago</div>
+        </div>
+        <div style="padding:16px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid var(--b)">
+          <div class="fg" style="min-width:140px">
+            <label>Mes</label>
+            <select id="rm-mes" onchange="rmCambioFiltro()" style="font-size:13px">
+              <option value="">-- Elegir mes --</option>
+              <option value="3/2026">Marzo 2026</option>
+              <option value="4/2026">Abril 2026</option>
+              <option value="5/2026">Mayo 2026</option>
+              <option value="6/2026">Junio 2026</option>
+              <option value="7/2026">Julio 2026</option>
+              <option value="8/2026">Agosto 2026</option>
+              <option value="9/2026">Septiembre 2026</option>
+              <option value="10/2026">Octubre 2026</option>
+              <option value="11/2026">Noviembre 2026</option>
+              <option value="12/2026">Diciembre 2026</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:center;padding-bottom:4px;color:var(--m);font-size:12px">— o —</div>
+          <div class="fg" style="min-width:130px">
+            <label>Desde</label>
+            <input type="date" id="rm-desde" onchange="rmCambioFiltro()" style="font-size:13px">
+          </div>
+          <div class="fg" style="min-width:130px">
+            <label>Hasta</label>
+            <input type="date" id="rm-hasta" onchange="rmCambioFiltro()" style="font-size:13px">
+          </div>
+          <button class="btn bpb" onclick="generarReporteMedios()" style="padding:6px 14px">Generar</button>
+          <button class="btn bob" onclick="exportarReporteMedios()" style="padding:6px 14px">Exportar Excel</button>
+        </div>
+        <div id="rm-resultado" style="padding:16px"></div>
+      </div>
+    </div>
+
     <div id="s-aranceles" class="section">
       <div class="card">
         <div class="ctitle">Tabla de aranceles por vigencia</div>
@@ -629,7 +671,7 @@ function poblarSelects(){
   });
 }
 
-var TITULOS={dashboard:'Resumen',alumnos:'Alumnos',cobro:'Cobro manual',banco:'Importar banco',historial:'Historial de pagos',reporte:'Reporte de deuda',cursos:'Gestion de cursos',aranceles:'Tabla de aranceles'};
+var TITULOS={dashboard:'Resumen',alumnos:'Alumnos',cobro:'Cobro manual',banco:'Importar banco',historial:'Historial de pagos',reporte:'Reporte de deuda',cursos:'Gestion de cursos',aranceles:'Tabla de aranceles','reporte-medios':'Reporte por medio de pago'};
 
 function nav(id){
   document.querySelectorAll('.section').forEach(function(s){s.classList.remove('active');});
@@ -1258,6 +1300,93 @@ async function backfillPagos() {
   if (!r || !r.ok) { toast('Error al sincronizar', 'e'); return; }
   cargarHistorial();
   toast('Sincronizacion completa — ' + r.insertados + ' registros generados', 's');
+}
+
+// REPORTE POR MEDIO DE PAGO
+var _reporteMediosData = null;
+
+function rmCambioFiltro() {
+  var mes = document.getElementById('rm-mes').value;
+  var desde = document.getElementById('rm-desde').value;
+  var hasta = document.getElementById('rm-hasta').value;
+  if (mes && (desde || hasta)) { document.getElementById('rm-desde').value=''; document.getElementById('rm-hasta').value=''; }
+}
+
+function rmFiltrarPagos() {
+  var mes=document.getElementById('rm-mes').value;
+  var desde=document.getElementById('rm-desde').value;
+  var hasta=document.getElementById('rm-hasta').value;
+  var pagos=_pagos||[];
+  if(mes){
+    var partes=mes.split('/'); var m=parseInt(partes[0]); var a=parseInt(partes[1]);
+    pagos=pagos.filter(function(p){
+      var f=p.fecha||'',pm,pa;
+      if(f.includes('/')){var fp=f.split('/');pm=parseInt(fp[1]);pa=parseInt(fp[2]||fp[2]);}
+      else if(f.includes('-')){var fp=f.split('-');pa=parseInt(fp[0]);pm=parseInt(fp[1]);}
+      return pm===m&&pa===a;
+    });
+  } else if(desde||hasta){
+    pagos=pagos.filter(function(p){
+      var f=p.fecha||'',fd;
+      if(f.includes('/')){var fp=f.split('/');fd=new Date(fp[2].slice(0,4),parseInt(fp[1])-1,parseInt(fp[0]));}
+      else{fd=new Date(f.slice(0,10));}
+      if(desde&&fd<new Date(desde))return false;
+      if(hasta&&fd>new Date(hasta))return false;
+      return true;
+    });
+  }
+  return pagos;
+}
+
+function generarReporteMedios(){
+  var pagos=rmFiltrarPagos();
+  if(!pagos.length){document.getElementById('rm-resultado').innerHTML='<div style="padding:20px;color:var(--m);text-align:center">No hay pagos en el período seleccionado</div>';return;}
+  var transferencias=pagos.filter(function(p){return (p.medio||'').toLowerCase().includes('transf')||(p.origen||'').toLowerCase().includes('banco');});
+  var efectivo=pagos.filter(function(p){return (p.medio||'').toLowerCase().includes('efectivo');});
+  var otros=pagos.filter(function(p){return !transferencias.includes(p)&&!efectivo.includes(p);});
+  var totalTransf=transferencias.reduce(function(s,p){return s+parseFloat(p.monto||0);},0);
+  var totalEfect=efectivo.reduce(function(s,p){return s+parseFloat(p.monto||0);},0);
+  var totalOtros=otros.reduce(function(s,p){return s+parseFloat(p.monto||0);},0);
+  var totalGeneral=totalTransf+totalEfect+totalOtros;
+  _reporteMediosData={transferencias,efectivo,otros};
+  function tablaGrupo(lista,titulo,color){
+    if(!lista.length)return '';
+    var tot=lista.reduce(function(s,p){return s+parseFloat(p.monto||0);},0);
+    var h='<div style="margin-bottom:20px"><div style="font-weight:700;font-size:13px;color:'+color+';margin-bottom:8px;padding:6px 10px;background:'+color+'22;border-radius:6px">'+titulo+' — Total: '+pesos(tot)+'</div>'+
+      '<table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr>'+
+      '<th style="text-align:left;padding:5px 8px;background:var(--gl)">Fecha</th>'+
+      '<th style="text-align:left;padding:5px 8px;background:var(--gl)">Alumno</th>'+
+      '<th style="text-align:left;padding:5px 8px;background:var(--gl)">Concepto</th>'+
+      '<th style="text-align:right;padding:5px 8px;background:var(--gl)">Monto</th>'+
+      '</tr></thead><tbody>';
+    lista.forEach(function(p){h+='<tr style="border-bottom:1px solid var(--b)"><td style="padding:5px 8px;color:var(--m);white-space:nowrap">'+p.fecha+'</td><td style="padding:5px 8px;font-weight:500">'+p.alumno_nombre+'</td><td style="padding:5px 8px;font-size:11px;color:var(--m)">'+p.concepto+'</td><td style="padding:5px 8px;text-align:right;font-weight:600;color:var(--s)">'+pesos(p.monto)+'</td></tr>';});
+    h+='</tbody></table></div>';return h;
+  }
+  var html='<div class="r2" style="margin-bottom:16px">'+
+    '<div style="background:var(--sl);padding:12px;border-radius:var(--rs);text-align:center"><div style="font-size:11px;color:var(--m)">Transferencias</div><div style="font-weight:700;font-size:18px;color:var(--s)">'+pesos(totalTransf)+'</div><div style="font-size:10px;color:var(--m)">'+transferencias.length+' pagos</div></div>'+
+    '<div style="background:#FFF3E0;padding:12px;border-radius:var(--rs);text-align:center"><div style="font-size:11px;color:var(--m)">Efectivo</div><div style="font-weight:700;font-size:18px;color:#E65100">'+pesos(totalEfect)+'</div><div style="font-size:10px;color:var(--m)">'+efectivo.length+' pagos</div></div>'+
+    (otros.length?'<div style="background:var(--gl);padding:12px;border-radius:var(--rs);text-align:center"><div style="font-size:11px;color:var(--m)">Otros</div><div style="font-weight:700;font-size:18px">'+pesos(totalOtros)+'</div><div style="font-size:10px;color:var(--m)">'+otros.length+' pagos</div></div>':'')+
+    '<div style="background:var(--pl,#e8f4fd);padding:12px;border-radius:var(--rs);text-align:center"><div style="font-size:11px;color:var(--m)">Total general</div><div style="font-weight:700;font-size:18px;color:#1565C0">'+pesos(totalGeneral)+'</div><div style="font-size:10px;color:var(--m)">'+(transferencias.length+efectivo.length+otros.length)+' pagos</div></div>'+
+    '</div>'+
+    tablaGrupo(transferencias,'🏦 Transferencias bancarias','var(--s)')+
+    tablaGrupo(efectivo,'💵 Efectivo','#E65100')+
+    tablaGrupo(otros,'📋 Otros medios','var(--m)');
+  document.getElementById('rm-resultado').innerHTML=html;
+}
+
+function exportarReporteMedios(){
+  if(!_reporteMediosData){toast('Generá el reporte primero','e');return;}
+  var wb=XLSX.utils.book_new();
+  function crearHoja(lista,nombre){
+    if(!lista.length)return;
+    var rows=lista.map(function(p){return{Fecha:p.fecha,Alumno:p.alumno_nombre,Concepto:p.concepto,Monto:parseFloat(p.monto),Medio:p.medio,Origen:p.origen};});
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),nombre);
+  }
+  crearHoja(_reporteMediosData.transferencias,'Transferencias');
+  crearHoja(_reporteMediosData.efectivo,'Efectivo');
+  if(_reporteMediosData.otros.length)crearHoja(_reporteMediosData.otros,'Otros');
+  XLSX.writeFile(wb,'reporte_medios_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  toast('Exportado correctamente','s');
 }
 
 // REPORTE
