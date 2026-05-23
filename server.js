@@ -740,8 +740,14 @@ app.get('/api/diagnostico/saldos-sin-aplicar', async (req,res) => {
 
 // Ruta manual para ejecutar backup
 app.get('/api/backup', async (req,res) => {
-  try { await ejecutarBackup(); res.json({ok:true,mensaje:'Backup ejecutado correctamente'}); }
-  catch(e) { res.json({ok:false,error:e.message}); }
+  try {
+    await ejecutarBackup();
+    res.set('Content-Type','application/json');
+    res.send('{"ok":true}');
+  } catch(e) {
+    res.set('Content-Type','application/json');
+    res.send('{"ok":false}');
+  }
 });
 
 app.get('*', (req,res) => { res.sendFile(path.join(__dirname,'public','index.html')); });
