@@ -156,6 +156,9 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
     <button class="ni" onclick="nav('reporte-medios')">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Reporte por medio
     </button>
+    <button class="ni" onclick="nav('saldos-pendientes')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Saldos sin imputar
+    </button>
     <div class="ssep">Configuracion</div>
     <button class="ni" onclick="nav('cursos')">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>Cursos
@@ -456,6 +459,22 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
       </div>
     </div>
 
+    <!-- SALDOS SIN IMPUTAR -->
+    <div id="s-saldos-pendientes" class="section">
+      <div class="card">
+        <div class="tbar">
+          <div class="ctitle">Saldos sin imputar</div>
+          <div class="tbar-r">
+            <button class="btn bob" onclick="cargarSaldosPendientes()" style="font-size:11px">↺ Actualizar</button>
+            <button class="btn bob" onclick="exportarSaldosPendientes()" style="font-size:11px">Exportar Excel</button>
+            <button class="btn bpb" onclick="aplicarSaldosPendientes()" style="font-size:11px">⚡ Aplicar todos</button>
+          </div>
+        </div>
+        <div id="sp-resumen" style="padding:12px 16px;border-bottom:1px solid var(--b);display:flex;gap:10px;flex-wrap:wrap"></div>
+        <div id="sp-tabla" style="padding:16px"></div>
+      </div>
+    </div>
+
     <div id="s-aranceles" class="section">
       <div class="card">
         <div class="ctitle">Tabla de aranceles por vigencia</div>
@@ -677,7 +696,7 @@ function poblarSelects(){
   });
 }
 
-var TITULOS={dashboard:'Resumen',alumnos:'Alumnos',cobro:'Cobro manual',banco:'Importar banco',historial:'Historial de pagos',reporte:'Reporte de deuda',cursos:'Gestion de cursos',aranceles:'Tabla de aranceles','reporte-medios':'Reporte por medio de pago'};
+var TITULOS={dashboard:'Resumen',alumnos:'Alumnos',cobro:'Cobro manual',banco:'Importar banco',historial:'Historial de pagos',reporte:'Reporte de deuda',cursos:'Gestion de cursos',aranceles:'Tabla de aranceles','reporte-medios':'Reporte por medio de pago','saldos-pendientes':'Saldos sin imputar'};
 
 function nav(id){
   document.querySelectorAll('.section').forEach(function(s){s.classList.remove('active');});
@@ -692,6 +711,7 @@ function nav(id){
   if(id==='historial')cargarHistorial();
   if(id==='reporte')cargarReporte();
   if(id==='reporte-medios'){if(!_pagos)api('GET','/api/pagos').then(function(r){_pagos=r;cargarCursosReporteMedios();});else cargarCursosReporteMedios();}
+  if(id==='saldos-pendientes')cargarSaldosPendientes();
   if(id==='aranceles')cargarAranceles();
   if(id==='cursos')renderCursos();
 }
@@ -939,7 +959,6 @@ function cambiarAlumno(){
 async function confirmarCobro(){
   if(!alumnoActual){toast('Selecciona un alumno','e');return;}
   var checks=[...document.querySelectorAll('#cob-cuotas input[type=checkbox]:checked')];
-  // Leer montos editables por cuota
   var cuotasSel=[];
   var totalCuotas=0;
   checks.forEach(function(cb){
@@ -955,6 +974,20 @@ async function confirmarCobro(){
   if(total===0){toast('Selecciona al menos una cuota','e');return;}
   var medio=document.getElementById('cob-medio').value;
   var obs=document.getElementById('cob-obs').value;
+
+  // Verificar duplicado — mismo alumno, mismo monto, mismas cuotas en los últimos pagos
+  if(_pagos){
+    var pagosAlumno=_pagos.filter(function(p){return p.alumno_id==alumnoActual.id;});
+    var conc='Cuota '+cuotasSel.join(', Cuota ');
+    var posibleDup=pagosAlumno.find(function(p){
+      return parseFloat(p.monto)===total && cuotasSel.some(function(n){return (p.concepto||'').indexOf('Cuota '+n)>=0;});
+    });
+    if(posibleDup){
+      var confirmar=confirm('⚠️ POSIBLE DUPLICADO\n\nYa existe un pago de '+pesos(total)+' para '+alumnoActual.nombre+' con concepto similar:\n"'+posibleDup.concepto+'"\nFecha: '+posibleDup.fecha+'\n\n¿Está seguro que desea registrar este cobro de todas formas?');
+      if(!confirmar)return;
+    }
+  }
+
   var r=await api('POST','/api/cobro',{alumnoId:alumnoActual.id,monto:total,medio,origen:'Manual · '+medio+(obs?' · '+obs:''),cuotasSeleccionadas:cuotasSel});
   if(!r.ok){toast('Error al registrar','e');return;}
   document.getElementById('r-num').textContent=r.pagoId;
@@ -970,7 +1003,6 @@ async function confirmarCobro(){
   cambiarAlumno();
   _pagos=await api('GET','/api/pagos');
   toast('Cobro '+pesos(total)+' registrado · Recibo #'+r.pagoId,'s');
-  // Imprimir por duplicado usando print-area
   setTimeout(function(){ imprimirReciboDuplicado(r.pagoId, r.fecha, alumnoActual.nombre, alumnoActual.curso, r.conceptos.join(', '), medio+(obs?' — '+obs:''), pesos(total)); }, 400);
 }
 
@@ -1307,6 +1339,65 @@ async function backfillPagos() {
   if (!r || !r.ok) { toast('Error al sincronizar', 'e'); return; }
   cargarHistorial();
   toast('Sincronizacion completa — ' + r.insertados + ' registros generados', 's');
+}
+
+// SALDOS SIN IMPUTAR
+var _saldosPendientesData = [];
+
+async function cargarSaldosPendientes() {
+  showSpinner('Calculando saldos...');
+  var r = await api('GET', '/api/diagnostico/saldos-sin-aplicar');
+  hideSpinner();
+  if (!r) { toast('Error al cargar', 'e'); return; }
+  _saldosPendientesData = r.alumnos || [];
+
+  var totalSaldo = _saldosPendientesData.reduce(function(s,a){return s+(a.saldo||0);},0);
+  var conCuotasPend = _saldosPendientesData.filter(function(a){return a.cuotasPendientes&&a.cuotasPendientes.length>0;});
+
+  document.getElementById('sp-resumen').innerHTML =
+    rsc('Alumnos con saldo', _saldosPendientesData.length+' alumnos', 'w') +
+    rsc('Total sin imputar', pesos(totalSaldo), 'd') +
+    rsc('Pueden aplicarse', conCuotasPend.length+' alumnos', 'p');
+
+  if (!_saldosPendientesData.length) {
+    document.getElementById('sp-tabla').innerHTML = '<div style="text-align:center;padding:40px;color:var(--m)">No hay saldos sin imputar</div>';
+    return;
+  }
+
+  var h = '<table style="width:100%;font-size:12.5px;border-collapse:collapse"><thead><tr>'+
+    '<th style="text-align:left;padding:6px 10px;background:var(--gl)">Alumno</th>'+
+    '<th style="text-align:right;padding:6px 10px;background:var(--gl)">Total pagado</th>'+
+    '<th style="text-align:right;padding:6px 10px;background:var(--gl)">Aplicado</th>'+
+    '<th style="text-align:right;padding:6px 10px;background:var(--gl)">Saldo</th>'+
+    '<th style="text-align:left;padding:6px 10px;background:var(--gl)">Cuotas pendientes</th>'+
+  '</tr></thead><tbody>';
+
+  _saldosPendientesData.forEach(function(a){
+    var tienePend = a.cuotasPendientes && a.cuotasPendientes.length > 0;
+    h += '<tr style="border-bottom:1px solid var(--b);background:'+(tienePend?'var(--wl)':'')+'">'+
+      '<td style="padding:6px 10px;font-weight:500">'+a.nombre+'</td>'+
+      '<td style="padding:6px 10px;text-align:right;color:var(--s)">'+pesos(a.totalPagado)+'</td>'+
+      '<td style="padding:6px 10px;text-align:right">'+pesos(a.totalAplicado)+'</td>'+
+      '<td style="padding:6px 10px;text-align:right;font-weight:700;color:var(--w)">'+pesos(a.saldo)+'</td>'+
+      '<td style="padding:6px 10px;font-size:11px;color:var(--m)">'+
+        (tienePend ? 'C'+a.cuotasPendientes.join(', C') : '<span style="color:var(--s)">Sin cuotas pendientes</span>')+
+      '</td>'+
+    '</tr>';
+  });
+  h += '</tbody></table>';
+  document.getElementById('sp-tabla').innerHTML = h;
+}
+
+function exportarSaldosPendientes() {
+  if (!_saldosPendientesData.length) { toast('No hay datos para exportar', 'e'); return; }
+  var rows = _saldosPendientesData.map(function(a){
+    return { Alumno: a.nombre, 'Total Pagado': a.totalPagado, 'Aplicado': a.totalAplicado, 'Saldo Sin Imputar': a.saldo, 'Cuotas Pendientes': a.cuotasPendientes.join(', ') };
+  });
+  var ws = XLSX.utils.json_to_sheet(rows);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Saldos sin imputar');
+  XLSX.writeFile(wb, 'saldos_sin_imputar_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  toast('Exportado correctamente', 's');
 }
 
 // REPORTE POR MEDIO DE PAGO
