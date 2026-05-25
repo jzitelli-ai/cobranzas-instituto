@@ -320,9 +320,23 @@ app.post('/api/banco', async (req,res) => {
     );
     if (yaExiste) { duplicados++; continue; }
 
-    const {conceptos} = await aplicarPagoConSaldo(alumno.id, alumno, monto, fecha, `Banco (CUIT ${cuit})`);
+    // Usar la fecha del archivo bancario, no la de importación
+    let fechaPago = fecha;
+    const fechaRaw = fila['FECHA'] || fila['fecha'] || fila['Fecha'] || '';
+    if (fechaRaw) {
+      if (typeof fechaRaw === 'number') {
+        const d = new Date(Math.round((fechaRaw - 25569) * 86400 * 1000));
+        fechaPago = d.toLocaleDateString('es-AR');
+      } else if (fechaRaw instanceof Date) {
+        fechaPago = fechaRaw.toLocaleDateString('es-AR');
+      } else if (String(fechaRaw).length >= 8) {
+        fechaPago = String(fechaRaw).slice(0, 10);
+      }
+    }
+
+    const {conceptos} = await aplicarPagoConSaldo(alumno.id, alumno, monto, fechaPago, `Banco (CUIT ${cuit})`);
     await q('INSERT INTO pagos (fecha,alumno_id,alumno_nombre,curso,monto,concepto,medio,origen) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-      [fecha,alumno.id,alumno.nombre,alumno.curso,monto,conceptos.join(', ')||'Transferencia bancaria','Transferencia',`Banco (CUIT ${cuit})`]);
+      [fechaPago,alumno.id,alumno.nombre,alumno.curso,monto,conceptos.join(', ')||'Transferencia bancaria','Transferencia',`Banco (CUIT ${cuit})`]);
     aplicados++;
   }
   res.json({ok:true,aplicados,duplicados,noEncontrados,sinCuit,totalFilas:filas.length});
