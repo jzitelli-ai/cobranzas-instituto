@@ -1563,17 +1563,34 @@ async function cargarSaldosPendientes() {
   _saldosPendientesData.forEach(function(a){
     var tienePend = a.cuotasPendientes && a.cuotasPendientes.length > 0;
     h += '<tr style="border-bottom:1px solid var(--b);background:'+(tienePend?'var(--wl)':'')+'">'+
-      '<td style="padding:6px 10px;font-weight:500">'+a.nombre+'</td>'+
+      '<td style="padding:6px 10px;font-weight:500">'+
+        '<span style="cursor:pointer;color:var(--p);text-decoration:underline" onclick="abrirDetalleDesdeReporte('+a.id+')">'+a.nombre+'</span>'+
+      '</td>'+
       '<td style="padding:6px 10px;text-align:right;color:var(--s)">'+pesos(a.totalPagado)+'</td>'+
       '<td style="padding:6px 10px;text-align:right">'+pesos(a.totalAplicado)+'</td>'+
       '<td style="padding:6px 10px;text-align:right;font-weight:700;color:var(--w)">'+pesos(a.saldo)+'</td>'+
       '<td style="padding:6px 10px;font-size:11px;color:var(--m)">'+
         (tienePend ? 'C'+a.cuotasPendientes.join(', C') : '<span style="color:var(--s)">Sin cuotas pendientes</span>')+
       '</td>'+
+      '<td style="padding:6px 10px">'+
+        '<button class="btn bob" style="padding:2px 8px;font-size:10.5px" onclick="abrirDetalleDesdeReporte('+a.id+')">Ver detalle</button>'+
+      '</td>'+
     '</tr>';
   });
   h += '</tbody></table>';
   document.getElementById('sp-tabla').innerHTML = h;
+}
+
+async function abrirDetalleDesdeReporte(id) {
+  if (_reporte && _reporte.length) {
+    var a = _reporte.find(function(x){ return x.id === id; });
+    if (a) { abrirDetalleAlumno(id); return; }
+  }
+  showSpinner('Cargando detalle...');
+  _reporte = await api('GET', '/api/reporte');
+  _pagos = await api('GET', '/api/pagos');
+  hideSpinner();
+  abrirDetalleAlumno(id);
 }
 
 function exportarSaldosPendientes() {
