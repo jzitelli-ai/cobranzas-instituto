@@ -899,7 +899,30 @@ app.get('/api/admin/stats', async (req, res) => {
   const deudores = await q1('SELECT COUNT(DISTINCT alumno_id) as n FROM cuotas WHERE estado=$1', ['pendiente']);
   const alDia = parseInt(totalAlumnos?.n||0) - parseInt(deudores?.n||0);
   const porCurso = await q(`SELECT a.curso, COUNT(DISTINCT a.id) as alumnos, COALESCE(SUM(p.monto),0) as cobrado FROM alumnos a LEFT JOIN pagos p ON a.id=p.alumno_id WHERE a.activo=TRUE GROUP BY a.curso ORDER BY cobrado DESC`);
-  res.json({ totalAlumnos: parseInt(totalAlumnos?.n||0), totalPagos: parseInt(totalPagos?.n||0), totalCobrado: parseFloat(totalPagos?.total||0), conDeuda: parseInt(deudores?.n||0), alDia, porMedio, porCurso });
+
+  // Calcular deuda real total
+  const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE');
+  const hoy = new Date();
+  const mesActual = hoy.getMonth();
+  const dia = hoy.getDate();
+  const MESES_IDX = [2,3,4,5,6,7,8,9,10,11];
+  const MESES_TODO_EL_MES = [1,5];
+  let totalDeuda = 0;
+  for (const a of alumnos) {
+    const cuotas = await q('SELECT * FROM cuotas WHERE alumno_id=$1', [a.id]);
+    const totalPagadoA = parseFloat((await q1('SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE alumno_id=$1',[a.id]))?.t||0);
+    let totalDebido = 0;
+    for (let i = 0; i < 10; i++) {
+      if (MESES_IDX[i] > mesActual) continue;
+      const numC = i+1;
+      const esBonif = MESES_TODO_EL_MES.includes(numC) || dia <= 10;
+      totalDebido += esBonif ? parseFloat(a.precio_bonificado) : parseFloat(a.precio_normal);
+    }
+    const saldo = totalPagadoA - totalDebido;
+    if (saldo < 0) totalDeuda += Math.abs(saldo);
+  }
+
+  res.json({ totalAlumnos: parseInt(totalAlumnos?.n||0), totalPagos: parseInt(totalPagos?.n||0), totalCobrado: parseFloat(totalPagos?.total||0), conDeuda: parseInt(deudores?.n||0), alDia, totalDeuda, porMedio, porCurso });
 });
 
 app.get('*', (req,res) => { res.sendFile(path.join(__dirname,'public','index.html')); });
