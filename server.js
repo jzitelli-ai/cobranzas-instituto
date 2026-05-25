@@ -386,6 +386,19 @@ app.get('/api/reporte', async (req,res) => {
   res.json(resultado);
 });
 
+// Corregir fechas de pagos bancarios al valor real del archivo
+app.get('/api/corregir-fechas-banco', async (req,res) => {
+  const correcciones = [{"id":435,"fecha_real":"2/5/2026"},{"id":431,"fecha_real":"7/5/2026"},{"id":430,"fecha_real":"11/5/2026"},{"id":428,"fecha_real":"11/5/2026"},{"id":426,"fecha_real":"13/5/2026"},{"id":424,"fecha_real":"6/5/2026"},{"id":382,"fecha_real":"11/5/2026"}];
+  let corregidos = 0;
+  for (const c of correcciones) {
+    await q('UPDATE pagos SET fecha=$1 WHERE id=$2', [c.fecha_real, c.id]);
+    // También actualizar las cuotas asociadas
+    await q('UPDATE cuotas SET fecha_pago=$1 WHERE alumno_id=(SELECT alumno_id FROM pagos WHERE id=$2) AND fecha_pago=(SELECT fecha FROM pagos WHERE id=$2)', [c.fecha_real, c.id]);
+    corregidos++;
+  }
+  res.json({ ok: true, corregidos });
+});
+
 // Bonificar cuota
 app.post('/api/bonificar', async (req, res) => {
   const { alumnoId, numCuota, monto, motivo } = req.body;
