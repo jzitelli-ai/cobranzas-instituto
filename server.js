@@ -750,8 +750,6 @@ app.get('/api/backup', async (req,res) => {
   }
 });
 
-app.get('*', (req,res) => { res.sendFile(path.join(__dirname,'public','index.html')); });
-
 // ================================================================
 // BACKUP AUTOMÁTICO A GOOGLE SHEETS
 // ================================================================
