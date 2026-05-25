@@ -159,6 +159,10 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
     <button class="ni" onclick="nav('saldos-pendientes')">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Saldos sin imputar
     </button>
+    <div class="ssep"></div>
+    <button class="ni" onclick="abrirAdmin()" style="color:var(--w)">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Administración
+    </button>
     <div class="ssep">Configuracion</div>
     <button class="ni" onclick="nav('cursos')">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>Cursos
@@ -475,6 +479,63 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
       </div>
     </div>
 
+    <!-- ADMINISTRACIÓN -->
+    <div id="s-admin" class="section">
+      <div class="card">
+        <div class="tbar">
+          <div class="ctitle">Panel de administración</div>
+          <div class="tbar-r">
+            <button class="btn bob" onclick="cerrarAdmin()" style="font-size:11px">🔒 Cerrar sesión</button>
+            <button class="btn bob" onclick="cargarStatsAdmin()" style="font-size:11px">↺ Actualizar</button>
+          </div>
+        </div>
+        <div id="admin-stats" style="padding:16px"></div>
+      </div>
+    </div>
+
+    <!-- MODAL LOGIN ADMIN -->
+    <div class="modal-bg" id="m-admin-login" style="z-index:700">
+      <div class="modal" style="width:360px;z-index:701">
+        <div class="modal-title">🔒 Acceso administración</div>
+        <div class="fg">
+          <label>Clave de acceso</label>
+          <input type="password" id="admin-pwd" placeholder="Ingresá la clave" onkeydown="if(event.key==='Enter')loginAdmin()">
+        </div>
+        <div id="admin-login-err" style="color:var(--d);font-size:12px;display:none;margin-top:4px"></div>
+        <div class="modal-btns">
+          <button class="btn bob" onclick="cerrarM('m-admin-login');history.back()">Cancelar</button>
+          <button class="btn bpb" onclick="loginAdmin()">Ingresar</button>
+        </div>
+        <div style="text-align:center;margin-top:8px">
+          <button onclick="mostrarRecuperar()" style="background:none;border:none;color:var(--p);cursor:pointer;font-size:12px;text-decoration:underline">Olvidé mi clave</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL RECUPERAR CLAVE -->
+    <div class="modal-bg" id="m-admin-recuperar" style="z-index:710">
+      <div class="modal" style="width:380px;z-index:711">
+        <div class="modal-title">Recuperar clave</div>
+        <div id="rec-paso1">
+          <div class="alert ai" style="font-size:12px">Se enviará un código de 6 dígitos a j***@gmail.com</div>
+          <div class="modal-btns">
+            <button class="btn bob" onclick="cerrarM('m-admin-recuperar')">Cancelar</button>
+            <button class="btn bpb" onclick="solicitarCodigo()">Enviar código</button>
+          </div>
+        </div>
+        <div id="rec-paso2" style="display:none">
+          <div class="fg"><label>Código recibido</label><input type="text" id="rec-codigo" placeholder="123456" maxlength="6"></div>
+          <div class="fg"><label>Nueva clave</label><input type="password" id="rec-nueva-clave" placeholder="Nueva clave"></div>
+          <div class="fg"><label>Confirmar clave</label><input type="password" id="rec-confirmar-clave" placeholder="Repetir clave"></div>
+          <div id="rec-err" style="color:var(--d);font-size:12px;display:none"></div>
+          <div class="modal-btns">
+            <button class="btn bob" onclick="cerrarM('m-admin-recuperar')">Cancelar</button>
+            <button class="btn bpb" onclick="verificarCodigo()">Cambiar clave</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="s-aranceles" class="section">
       <div class="card">
         <div class="ctitle">Tabla de aranceles por vigencia</div>
@@ -696,7 +757,7 @@ function poblarSelects(){
   });
 }
 
-var TITULOS={dashboard:'Resumen',alumnos:'Alumnos',cobro:'Cobro manual',banco:'Importar banco',historial:'Historial de pagos',reporte:'Reporte de deuda',cursos:'Gestion de cursos',aranceles:'Tabla de aranceles','reporte-medios':'Reporte por medio de pago','saldos-pendientes':'Saldos sin imputar'};
+var TITULOS={dashboard:'Resumen',alumnos:'Alumnos',cobro:'Cobro manual',banco:'Importar banco',historial:'Historial de pagos',reporte:'Reporte de deuda',cursos:'Gestion de cursos',aranceles:'Tabla de aranceles','reporte-medios':'Reporte por medio de pago','saldos-pendientes':'Saldos sin imputar',admin:'Administración'};
 
 function nav(id){
   document.querySelectorAll('.section').forEach(function(s){s.classList.remove('active');});
@@ -1339,6 +1400,107 @@ async function backfillPagos() {
   if (!r || !r.ok) { toast('Error al sincronizar', 'e'); return; }
   cargarHistorial();
   toast('Sincronizacion completa — ' + r.insertados + ' registros generados', 's');
+}
+
+// ADMINISTRACIÓN
+var _adminAutenticado = false;
+
+function abrirAdmin() {
+  if (_adminAutenticado) { nav('admin'); cargarStatsAdmin(); return; }
+  document.getElementById('admin-pwd').value='';
+  document.getElementById('admin-login-err').style.display='none';
+  abrirM('m-admin-login');
+  setTimeout(function(){ document.getElementById('admin-pwd').focus(); }, 200);
+}
+
+async function loginAdmin() {
+  var pwd = document.getElementById('admin-pwd').value;
+  if (!pwd) return;
+  var r = await api('POST', '/api/admin/login', { password: pwd });
+  if (r && r.ok) {
+    _adminAutenticado = true;
+    cerrarM('m-admin-login');
+    nav('admin');
+    cargarStatsAdmin();
+  } else {
+    var err = document.getElementById('admin-login-err');
+    err.textContent = 'Clave incorrecta';
+    err.style.display = 'block';
+    document.getElementById('admin-pwd').value = '';
+    document.getElementById('admin-pwd').focus();
+  }
+}
+
+function cerrarAdmin() {
+  _adminAutenticado = false;
+  nav('dashboard');
+}
+
+function mostrarRecuperar() {
+  cerrarM('m-admin-login');
+  document.getElementById('rec-paso1').style.display='block';
+  document.getElementById('rec-paso2').style.display='none';
+  abrirM('m-admin-recuperar');
+}
+
+async function solicitarCodigo() {
+  var r = await api('POST', '/api/admin/recuperar', {});
+  if (r && r.ok) {
+    toast(r.mensaje, 's');
+    document.getElementById('rec-paso1').style.display='none';
+    document.getElementById('rec-paso2').style.display='block';
+  } else { toast('Error al enviar', 'e'); }
+}
+
+async function verificarCodigo() {
+  var codigo = document.getElementById('rec-codigo').value.trim();
+  var nueva = document.getElementById('rec-nueva-clave').value;
+  var confirmar = document.getElementById('rec-confirmar-clave').value;
+  var err = document.getElementById('rec-err');
+  if (!codigo || !nueva) { err.textContent='Completá todos los campos'; err.style.display='block'; return; }
+  if (nueva !== confirmar) { err.textContent='Las claves no coinciden'; err.style.display='block'; return; }
+  if (nueva.length < 6) { err.textContent='La clave debe tener al menos 6 caracteres'; err.style.display='block'; return; }
+  var r = await api('POST', '/api/admin/verificar-codigo', { codigo, nuevaClave: nueva });
+  if (r && r.ok) {
+    cerrarM('m-admin-recuperar');
+    toast('Clave actualizada correctamente', 's');
+  } else {
+    err.textContent = r ? r.error : 'Error';
+    err.style.display = 'block';
+  }
+}
+
+async function cargarStatsAdmin() {
+  var r = await api('GET', '/api/admin/stats');
+  if (!r) return;
+  var html =
+    '<div class="r2" style="margin-bottom:20px">'+
+      '<div style="background:var(--sl);padding:14px;border-radius:var(--rs);text-align:center"><div style="font-size:11px;color:var(--m)">Total alumnos</div><div style="font-weight:700;font-size:22px;color:var(--p)">'+r.totalAlumnos+'</div></div>'+
+      '<div style="background:var(--dl);padding:14px;border-radius:var(--rs);text-align:center"><div style="font-size:11px;color:var(--m)">Con deuda</div><div style="font-weight:700;font-size:22px;color:var(--d)">'+r.conDeuda+'</div></div>'+
+      '<div style="background:var(--sl);padding:14px;border-radius:var(--rs);text-align:center"><div style="font-size:11px;color:var(--m)">Al dia</div><div style="font-weight:700;font-size:22px;color:var(--s)">'+r.alDia+'</div></div>'+
+      '<div style="background:#e8f5e9;padding:14px;border-radius:var(--rs);text-align:center"><div style="font-size:11px;color:var(--m)">Total cobrado</div><div style="font-weight:700;font-size:22px;color:var(--s)">'+pesos(r.totalCobrado)+'</div></div>'+
+      '<div style="background:var(--gl);padding:14px;border-radius:var(--rs);text-align:center"><div style="font-size:11px;color:var(--m)">Pagos</div><div style="font-weight:700;font-size:22px;color:var(--p)">'+r.totalPagos+'</div></div>'+
+    '</div>'+
+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">'+
+
+    '<div><div style="font-weight:700;font-size:12px;color:var(--m);margin-bottom:8px;text-transform:uppercase">Por medio de pago</div>'+
+    '<table style="width:100%;font-size:12px;border-collapse:collapse">'+
+    '<thead><tr><th style="text-align:left;padding:5px 8px;background:var(--gl)">Medio</th><th style="text-align:right;padding:5px 8px;background:var(--gl)">Pagos</th><th style="text-align:right;padding:5px 8px;background:var(--gl)">Total</th></tr></thead><tbody>';
+  (r.porMedio||[]).forEach(function(m){
+    html+='<tr style="border-bottom:1px solid var(--b)"><td style="padding:5px 8px">'+m.medio+'</td><td style="padding:5px 8px;text-align:right">'+m.cantidad+'</td><td style="padding:5px 8px;text-align:right;font-weight:600;color:var(--s)">'+pesos(m.total)+'</td></tr>';
+  });
+  html+='</tbody></table></div>'+
+
+    '<div><div style="font-weight:700;font-size:12px;color:var(--m);margin-bottom:8px;text-transform:uppercase">Por curso</div>'+
+    '<table style="width:100%;font-size:12px;border-collapse:collapse">'+
+    '<thead><tr><th style="text-align:left;padding:5px 8px;background:var(--gl)">Curso</th><th style="text-align:right;padding:5px 8px;background:var(--gl)">Alumnos</th><th style="text-align:right;padding:5px 8px;background:var(--gl)">Cobrado</th></tr></thead><tbody>';
+  (r.porCurso||[]).forEach(function(c){
+    html+='<tr style="border-bottom:1px solid var(--b)"><td style="padding:5px 8px"><span class="badge bp">'+c.curso+'</span></td><td style="padding:5px 8px;text-align:right">'+c.alumnos+'</td><td style="padding:5px 8px;text-align:right;font-weight:600;color:var(--s)">'+pesos(c.cobrado)+'</td></tr>';
+  });
+  html+='</tbody></table></div></div>';
+
+  document.getElementById('admin-stats').innerHTML = html;
 }
 
 // SALDOS SIN IMPUTAR
