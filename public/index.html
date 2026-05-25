@@ -1100,6 +1100,19 @@ function imprimirReciboDuplicado(num, fecha, alumno, curso, concepto, medio, tot
   area.innerHTML = '';
 }
 
+function toggleExtra(){
+  var div=document.getElementById('cob-extra');
+  var visible=div.style.display!=='none';
+  div.style.display=visible?'none':'block';
+  if(visible){
+    document.getElementById('extra-monto').value='';
+    document.getElementById('extra-conc').value='';
+    actualizarTotal();
+  } else {
+    document.getElementById('extra-conc').focus();
+  }
+}
+
 function nuevoCobro(){
   document.getElementById('recibo').classList.remove('visible');
   document.getElementById('rec-ph').style.display='block';
