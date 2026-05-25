@@ -372,6 +372,20 @@ app.get('/api/reporte', async (req,res) => {
   res.json(resultado);
 });
 
+// Bonificar cuota
+app.post('/api/bonificar', async (req, res) => {
+  const { alumnoId, numCuota, monto, motivo } = req.body;
+  const alumno = await q1('SELECT * FROM alumnos WHERE id=$1', [alumnoId]);
+  if (!alumno) return res.json({ ok: false, error: 'Alumno no encontrado' });
+  const fecha = new Date().toLocaleDateString('es-AR');
+  await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE alumno_id=$4 AND numero_cuota=$5',
+    ['pagada', fecha, monto, alumnoId, numCuota]);
+  const concepto = `Cuota ${numCuota} (${MESES_NOMBRE_ALL[numCuota-1]} 2026) — Bonificada${motivo ? ': ' + motivo : ''}`;
+  await q('INSERT INTO pagos (fecha,alumno_id,alumno_nombre,curso,monto,concepto,medio,origen) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+    [fecha, alumnoId, alumno.nombre, alumno.curso, monto, concepto, 'Bonificación', 'Bonificación manual']);
+  res.json({ ok: true });
+});
+
 app.post('/api/reimputar', async (req,res) => {
   const {alumnoId,cuotaOrigen,cuotaDestino}=req.body;
   const origen=await q1('SELECT * FROM cuotas WHERE alumno_id=$1 AND numero_cuota=$2',[alumnoId,cuotaOrigen]);
