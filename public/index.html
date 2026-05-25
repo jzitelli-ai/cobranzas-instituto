@@ -783,7 +783,7 @@ async function actualizarDashboard(){
   var conDeuda=_reporte.filter(function(a){return Object.keys(a.estadoCuotas||{}).some(function(k){return a.estadoCuotas[k]==='pendiente';});}).length;
   var cobrado=(_pagos||[]).reduce(function(s,p){return s+(parseFloat(p.monto)||0);},0);
   document.getElementById('dash-stats').innerHTML=
-    sc('Total alumnos',tot,'p')+sc('Con deuda',conDeuda,'d')+sc('Al dia',tot-conDeuda,'s')+sc('Total cobrado',pesos(cobrado),'s')+sc('Pagos',(_pagos||[]).length,'p');
+    sc('Total alumnos',tot,'p')+sc('Con deuda',conDeuda,'d')+sc('Al dia',tot-conDeuda,'s');
 
   var deudores=_reporte.filter(function(a){return Object.keys(a.estadoCuotas||{}).some(function(k){return a.estadoCuotas[k]==='pendiente';});}).slice(0,6);
   document.getElementById('dash-deud').innerHTML=deudores.length===0?'<p style="color:var(--m);font-size:12.5px">Todos al dia!</p>':
@@ -1689,7 +1689,7 @@ function filtrarReporte(){
     var hayComp=Object.keys(est).some(function(k){return est[k]==='compensada';});
     totalDeuda+=a.deudaReal||0;if(a.deudaReal>0)conDeuda++;if(hayComp)conComp++;});
   document.getElementById('rep-resumen').innerHTML=
-    rsc('Deuda real total',pesos(totalDeuda),'d')+rsc('Con deuda',conDeuda+' alumnos','d')+rsc('Compensados',conComp+' alumnos','p')+rsc('Al dia',(lista.length-conDeuda-conComp)+' alumnos','s');
+    rsc('Con deuda',conDeuda+' alumnos','d')+rsc('Compensados',conComp+' alumnos','p')+rsc('Al dia',(lista.length-conDeuda-conComp)+' alumnos','s');
   var h='<table><thead><tr><th>Alumno</th><th>Curso</th>';
   CUOTAS.forEach(function(c){h+='<th style="font-size:10px;text-align:center;min-width:52px">C'+c.num+'<br><span style="font-weight:400">'+c.mes.slice(0,3)+'</span></th>';});
   h+='<th>Deuda real</th><th style="width:80px">WA</th></tr></thead><tbody>';
