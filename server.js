@@ -859,6 +859,72 @@ function programarBackup() {
   }, msHasta);
 }
 
+// ================================================================
+// ADMINISTRACIÓN — AUTH Y ESTADÍSTICAS
+// ================================================================
+const ADMIN_EMAIL = 'jzitelli@gmail.com';
+let adminPassword = 'Stefano2008';
+let recoveryCode = null;
+let recoveryExpiry = null;
+
+app.post('/api/admin/login', (req, res) => {
+  const { password } = req.body;
+  res.json({ ok: password === adminPassword });
+});
+
+app.post('/api/admin/recuperar', async (req, res) => {
+  recoveryCode = Math.floor(100000 + Math.random() * 900000).toString();
+  recoveryExpiry = Date.now() + 15 * 60 * 1000;
+  console.log(`=== CÓDIGO DE RECUPERACIÓN ADMIN: ${recoveryCode} (válido 15 min) ===`);
+
+  // Enviar email via EmailJS free API
+  try {
+    await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        service_id: 'service_gmail',
+        template_id: 'template_recovery',
+        user_id: 'placeholder',
+        template_params: { to_email: ADMIN_EMAIL, code: recoveryCode }
+      })
+    });
+  } catch(e) { console.log('Email no enviado:', e.message); }
+
+  res.json({ ok: true, mensaje: `Código enviado a ${ADMIN_EMAIL.slice(0,2)}***@gmail.com. Si no llega, revisá los logs de Render.` });
+});
+
+app.post('/api/admin/verificar-codigo', (req, res) => {
+  const { codigo, nuevaClave } = req.body;
+  if (!recoveryCode || Date.now() > recoveryExpiry)
+    return res.json({ ok: false, error: 'El código expiró. Solicitá uno nuevo.' });
+  if (codigo !== recoveryCode)
+    return res.json({ ok: false, error: 'Código incorrecto.' });
+  adminPassword = nuevaClave;
+  recoveryCode = null;
+  recoveryExpiry = null;
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/stats', async (req, res) => {
+  const totalAlumnos = await q1('SELECT COUNT(*) as n FROM alumnos WHERE activo=TRUE');
+  const totalPagos = await q1('SELECT COUNT(*) as n, COALESCE(SUM(monto),0) as total FROM pagos');
+  const porMedio = await q('SELECT medio, COUNT(*) as cantidad, SUM(monto) as total FROM pagos GROUP BY medio ORDER BY total DESC');
+  const deudores = await q1('SELECT COUNT(DISTINCT alumno_id) as n FROM cuotas WHERE estado=$1', ['pendiente']);
+  const alDia = parseInt(totalAlumnos?.n||0) - parseInt(deudores?.n||0);
+  const porCurso = await q(`SELECT a.curso, COUNT(DISTINCT a.id) as alumnos, COALESCE(SUM(p.monto),0) as cobrado 
+    FROM alumnos a LEFT JOIN pagos p ON a.id=p.alumno_id WHERE a.activo=TRUE GROUP BY a.curso ORDER BY cobrado DESC`);
+  res.json({
+    totalAlumnos: parseInt(totalAlumnos?.n||0),
+    totalPagos: parseInt(totalPagos?.n||0),
+    totalCobrado: parseFloat(totalPagos?.total||0),
+    conDeuda: parseInt(deudores?.n||0),
+    alDia,
+    porMedio,
+    porCurso
+  });
+});
+
 inicializarDB().then(() => {
   app.listen(PORT, () => {
     console.log(`Servidor en puerto ${PORT}`);
