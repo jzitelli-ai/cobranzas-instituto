@@ -130,6 +130,41 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
 <body>
 <div class="spinner" id="spinner"><div class="spin"></div><div class="spin-txt" id="spin-txt">Cargando...</div></div>
 <div id="print-area" style="display:none"></div>
+
+<!-- PANTALLA DE LOGIN -->
+<div id="login-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center">
+  <div style="width:360px;background:#fff;border-radius:16px;padding:32px;box-shadow:0 8px 32px rgba(0,0,0,.12);text-align:center">
+    <div style="margin-bottom:16px">
+      <div style="width:70px;height:70px;border-radius:50%;background:var(--pl,#e3f2fd);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:32px">🏫</div>
+      <div style="font-weight:700;font-size:18px;color:var(--t)">Cobranzas Instituto</div>
+      <div style="font-size:12px;color:var(--m);margin-top:4px">Cultural Cerrillos</div>
+    </div>
+    <div id="login-form">
+      <div class="fg" style="text-align:left">
+        <label>Clave de acceso</label>
+        <input type="password" id="login-pwd" placeholder="Ingresá la clave" onkeydown="if(event.key==='Enter')loginSistema()" style="font-size:15px;letter-spacing:4px">
+      </div>
+      <div id="login-err" style="color:var(--d);font-size:12px;display:none;margin-bottom:8px"></div>
+      <button class="btn bpb" onclick="loginSistema()" style="width:100%;justify-content:center;padding:10px;font-size:14px;margin-top:4px">Ingresar</button>
+      <button onclick="mostrarRecuperarSistema()" style="background:none;border:none;color:var(--p);cursor:pointer;font-size:12px;text-decoration:underline;margin-top:12px;display:block;width:100%">Olvidé mi clave</button>
+    </div>
+    <div id="login-recuperar" style="display:none;text-align:left">
+      <div style="font-weight:600;font-size:13px;margin-bottom:8px">Recuperar clave</div>
+      <div id="login-rec-paso1">
+        <div class="alert ai" style="font-size:12px;margin-bottom:12px">Se enviará un código a j***@gmail.com</div>
+        <button class="btn bpb" onclick="solicitarCodigoSistema()" style="width:100%;justify-content:center">Enviar código</button>
+        <button onclick="document.getElementById('login-recuperar').style.display='none';document.getElementById('login-form').style.display='block'" style="background:none;border:none;color:var(--m);cursor:pointer;font-size:12px;margin-top:8px;display:block;width:100%">Volver</button>
+      </div>
+      <div id="login-rec-paso2" style="display:none">
+        <div class="fg"><label>Código recibido</label><input type="text" id="login-rec-codigo" placeholder="123456" maxlength="6"></div>
+        <div class="fg"><label>Nueva clave</label><input type="password" id="login-rec-nueva"></div>
+        <div class="fg"><label>Confirmar clave</label><input type="password" id="login-rec-confirmar"></div>
+        <div id="login-rec-err" style="color:var(--d);font-size:12px;display:none;margin-bottom:8px"></div>
+        <button class="btn bpb" onclick="verificarCodigoSistema()" style="width:100%;justify-content:center">Cambiar clave</button>
+      </div>
+    </div>
+  </div>
+</div>
 <div class="app">
 <aside class="sidebar">
   <div class="slogo"><h1>Cobranzas<br>Instituto 2026</h1><p>Sistema de gestion</p></div>
@@ -2209,7 +2244,71 @@ function toast(msg,tipo){
   clearTimeout(toastTimer);toastTimer=setTimeout(function(){el.classList.remove('show');},3500);
 }
 document.querySelectorAll('.modal-bg').forEach(function(m){m.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});});
-window.addEventListener('load',init);
+
+// LOGIN DEL SISTEMA
+var _sistemaAutenticado = sessionStorage.getItem('auth') === '1';
+
+function mostrarRecuperarSistema() {
+  document.getElementById('login-form').style.display='none';
+  document.getElementById('login-recuperar').style.display='block';
+  document.getElementById('login-rec-paso1').style.display='block';
+  document.getElementById('login-rec-paso2').style.display='none';
+}
+
+async function loginSistema() {
+  var pwd=document.getElementById('login-pwd').value;
+  if(!pwd)return;
+  try{
+    var r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pwd})});
+    var data=await r.json();
+    if(data.ok){
+      _sistemaAutenticado=true;
+      sessionStorage.setItem('auth','1');
+      document.getElementById('login-screen').style.display='none';
+      init();
+    } else {
+      var err=document.getElementById('login-err');
+      err.textContent='Clave incorrecta';err.style.display='block';
+      document.getElementById('login-pwd').value='';
+      document.getElementById('login-pwd').focus();
+    }
+  }catch(e){document.getElementById('login-err').textContent='Error de conexión';document.getElementById('login-err').style.display='block';}
+}
+
+async function solicitarCodigoSistema() {
+  await fetch('/api/login/recuperar',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  document.getElementById('login-rec-paso1').style.display='none';
+  document.getElementById('login-rec-paso2').style.display='block';
+  alert('Código generado. Revisá los logs de Render (Dashboard → Logs) para obtenerlo.');
+}
+
+async function verificarCodigoSistema() {
+  var codigo=document.getElementById('login-rec-codigo').value.trim();
+  var nueva=document.getElementById('login-rec-nueva').value;
+  var confirmar=document.getElementById('login-rec-confirmar').value;
+  var err=document.getElementById('login-rec-err');
+  if(!codigo||!nueva){err.textContent='Completá todos los campos';err.style.display='block';return;}
+  if(nueva!==confirmar){err.textContent='Las claves no coinciden';err.style.display='block';return;}
+  var r=await fetch('/api/login/verificar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({codigo,nuevaClave:nueva})});
+  var data=await r.json();
+  if(data.ok){
+    document.getElementById('login-recuperar').style.display='none';
+    document.getElementById('login-form').style.display='block';
+    alert('Clave actualizada. Podés ingresar con la nueva clave.');
+  } else {
+    err.textContent=data.error||'Error';err.style.display='block';
+  }
+}
+
+window.addEventListener('load', function(){
+  if(_sistemaAutenticado){
+    document.getElementById('login-screen').style.display='none';
+    init();
+  } else {
+    document.getElementById('login-screen').style.display='flex';
+    setTimeout(function(){document.getElementById('login-pwd').focus();},200);
+  }
+});
 </script>
 </body>
 </html>
