@@ -872,6 +872,37 @@ function programarBackup() {
 }
 
 // ================================================================
+// LOGIN DEL SISTEMA
+// ================================================================
+let systemPassword = '1997';
+let systemRecoveryCode = null;
+let systemRecoveryExpiry = null;
+
+app.post('/api/login', (req, res) => {
+  const { password } = req.body;
+  res.json({ ok: password === systemPassword });
+});
+
+app.post('/api/login/recuperar', async (req, res) => {
+  systemRecoveryCode = Math.floor(100000 + Math.random() * 900000).toString();
+  systemRecoveryExpiry = Date.now() + 15 * 60 * 1000;
+  console.log(`=== CÓDIGO RECUPERACIÓN SISTEMA: ${systemRecoveryCode} (válido 15 min) ===`);
+  res.json({ ok: true });
+});
+
+app.post('/api/login/verificar', (req, res) => {
+  const { codigo, nuevaClave } = req.body;
+  if (!systemRecoveryCode || Date.now() > systemRecoveryExpiry)
+    return res.json({ ok: false, error: 'El código expiró. Solicitá uno nuevo.' });
+  if (codigo !== systemRecoveryCode)
+    return res.json({ ok: false, error: 'Código incorrecto.' });
+  systemPassword = nuevaClave;
+  systemRecoveryCode = null;
+  systemRecoveryExpiry = null;
+  res.json({ ok: true });
+});
+
+// ================================================================
 // ADMINISTRACIÓN — AUTH Y ESTADÍSTICAS
 // ================================================================
 const ADMIN_EMAIL = 'jzitelli@gmail.com';
