@@ -597,6 +597,36 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
   </div>
 </div>
 
+<!-- MODAL BONIFICAR -->
+<div class="modal-bg" id="m-bonificar" style="z-index:600">
+  <div class="modal" style="width:420px;z-index:601">
+    <div class="modal-title">Bonificar cuota</div>
+    <div class="alert ai" style="font-size:12px" id="bonif-info"></div>
+    <div class="fg">
+      <label>Tipo de bonificación</label>
+      <select id="bonif-tipo" onchange="bonifCambiarTipo()" style="font-size:13px">
+        <option value="gratis">Gratis ($0)</option>
+        <option value="monto">Monto personalizado</option>
+      </select>
+    </div>
+    <div id="bonif-monto-div" style="display:none">
+      <div class="fg">
+        <label>Monto a cobrar ($)</label>
+        <input type="number" id="bonif-monto" placeholder="0" min="0">
+      </div>
+    </div>
+    <div class="fg">
+      <label>Motivo (opcional)</label>
+      <input type="text" id="bonif-motivo" placeholder="Ej: Beca, acuerdo especial...">
+    </div>
+    <div class="alert aw" style="font-size:11px" id="bonif-aviso">La cuota quedará marcada como pagada en $0.</div>
+    <div class="modal-btns">
+      <button class="btn bob" onclick="cerrarM('m-bonificar')">Cancelar</button>
+      <button class="btn bpb" style="background:#FF9800;border-color:#FF9800" onclick="confirmarBonificar()">Confirmar bonificación</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL REIMPUTAR -->
 <div class="modal-bg" id="m-reimputar" style="z-index:600">
   <div class="modal" style="width:420px;z-index:601">
@@ -1814,6 +1844,7 @@ async function abrirDetalleAlumno(id){
       bg='var(--dl)';estadoHtml='<span style="color:var(--d);font-weight:600">Pendiente</span>';
       var precioCuota=(MESES_TODO_EL_MES.indexOf(c.num)>=0||dia<=10)?parseFloat(a.precio_bonificado)||0:parseFloat(a.precio_normal)||0;
       montoTxt=pesos(precioCuota);fechaCorta='—';
+      accion='<button class="btn bob" style="padding:2px 7px;font-size:10px;background:#FF9800;color:#fff;border-color:#FF9800" onclick="event.stopPropagation();abrirBonificar('+a.id+','+c.num+','+precioCuota+')">Bonificar</button>';
     }
     cuotasHtml+='<tr style="background:'+bg+'">'+
       '<td style="padding:6px 10px;font-weight:600">'+c.num+'</td>'+
@@ -1939,6 +1970,61 @@ async function abrirDetalleAlumno(id){
     cuotasHtml +
     cuentaCorriente;
   abrirM('m-det-alumno');
+}
+
+// BONIFICAR CUOTA
+var _bonifAlumnoId = null;
+var _bonifCuota = null;
+var _bonifPrecioNormal = 0;
+
+function abrirBonificar(alumnoId, numCuota, precioNormal) {
+  _bonifAlumnoId = alumnoId;
+  _bonifCuota = numCuota;
+  _bonifPrecioNormal = precioNormal;
+  var a = _reporte.find(function(x){ return x.id === alumnoId; });
+  document.getElementById('bonif-info').textContent = (a ? a.nombre : '') + ' — Cuota ' + numCuota + ' (' + CUOTAS[numCuota-1].mes + ' 2026) — Precio normal: ' + pesos(precioNormal);
+  document.getElementById('bonif-tipo').value = 'gratis';
+  document.getElementById('bonif-monto').value = '';
+  document.getElementById('bonif-motivo').value = '';
+  document.getElementById('bonif-monto-div').style.display = 'none';
+  document.getElementById('bonif-aviso').textContent = 'La cuota quedará marcada como pagada en $0.';
+  abrirM('m-bonificar');
+}
+
+function bonifCambiarTipo() {
+  var tipo = document.getElementById('bonif-tipo').value;
+  var montoDiv = document.getElementById('bonif-monto-div');
+  var aviso = document.getElementById('bonif-aviso');
+  if (tipo === 'gratis') {
+    montoDiv.style.display = 'none';
+    aviso.textContent = 'La cuota quedará marcada como pagada en $0.';
+  } else {
+    montoDiv.style.display = 'block';
+    aviso.textContent = 'La cuota quedará marcada como pagada con el monto ingresado.';
+    document.getElementById('bonif-monto').focus();
+  }
+}
+
+async function confirmarBonificar() {
+  var tipo = document.getElementById('bonif-tipo').value;
+  var motivo = document.getElementById('bonif-motivo').value.trim();
+  var monto = tipo === 'gratis' ? 0 : parseFloat(document.getElementById('bonif-monto').value) || 0;
+  if (tipo === 'monto' && monto <= 0) { toast('Ingresá un monto válido', 'e'); return; }
+  if (tipo === 'monto' && monto >= _bonifPrecioNormal) {
+    if (!confirm('El monto ingresado (' + pesos(monto) + ') es igual o mayor al precio normal. ¿Querés continuar?')) return;
+  }
+  var r = await api('POST', '/api/bonificar', {
+    alumnoId: _bonifAlumnoId,
+    numCuota: _bonifCuota,
+    monto,
+    motivo
+  });
+  if (!r || !r.ok) { toast('Error: ' + (r ? r.error : ''), 'e'); return; }
+  cerrarM('m-bonificar');
+  cerrarM('m-det-alumno');
+  await cargarReporte();
+  _pagos = await api('GET', '/api/pagos');
+  toast('Cuota bonificada correctamente', 's');
 }
 
 // REIMPUTAR
