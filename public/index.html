@@ -832,6 +832,7 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
 <script>
 var CUOTAS=[{num:1,mes:'Marzo'},{num:2,mes:'Abril'},{num:3,mes:'Mayo'},{num:4,mes:'Junio'},{num:5,mes:'Julio'},{num:6,mes:'Agosto'},{num:7,mes:'Septiembre'},{num:8,mes:'Octubre'},{num:9,mes:'Noviembre'},{num:10,mes:'Diciembre'}];
 var MESES_TODO_EL_MES=[1,5];
+var MESES_NOMBRE_ALL=['Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var _alumnos=[],_cursos=[],_pagos=[],_reporte=[];
 var alumnoActual=null,bancoData=null;
 
@@ -1930,7 +1931,16 @@ function filtrarReporte(){
     // Botón WhatsApp
     if(a.deudaReal>0){
       var tel=(a.telefono||'').replace(/[^0-9]/g,'');
-      var msg=encodeURIComponent('Hola! Le recordamos que tiene una deuda pendiente de '+pesos(a.deudaReal)+' correspondiente al Instituto Cultural Cerrillos. Por favor comuniquese para regularizar su situacion. Gracias!');
+      var dia=new Date().getDate();
+      var lineasPend=[];
+      MESES_NOMBRE_ALL.forEach(function(mes,i){
+        var n=i+1;
+        if(a.estadoCuotas&&a.estadoCuotas[n]==='pendiente'){
+          var precio=(MESES_TODO_EL_MES.indexOf(n)>=0||dia<=10)?parseFloat(a.precio_bonificado):parseFloat(a.precio_normal);
+          lineasPend.push(mes+': '+pesos(precio));
+        }
+      });
+      var msg=encodeURIComponent('Hola! Le recordamos que tiene las siguientes cuotas pendientes en el Instituto Cultural Cerrillos:\n'+lineasPend.join('\n')+'\nTotal: '+pesos(a.deudaReal)+'\nPor favor comuniquese para regularizar su situacion. Gracias!');
       var waLink=tel?'https://wa.me/549'+tel+'?text='+msg:'https://wa.me/?text='+msg;
       h+='<td style="text-align:center"><a href="'+waLink+'" target="_blank" onclick="event.stopPropagation()" style="background:#25D366;color:#fff;border-radius:6px;padding:3px 7px;font-size:11px;font-weight:700;text-decoration:none;display:inline-block">WA</a></td>';
     } else {
@@ -1951,7 +1961,16 @@ async function abrirDetalleAlumno(id){
   var montos=a.montosPago||{};
   var dia=new Date().getDate();
   var tel=(a.telefono||'').replace(/[^0-9]/g,'');
-  var msg=encodeURIComponent('Hola! Le recordamos que tiene una deuda pendiente de '+pesos(a.deudaReal)+' correspondiente al Instituto Cultural Cerrillos. Por favor comuniquese para regularizar su situacion. Gracias!');
+  var dia2=new Date().getDate();
+  var lineasPend2=[];
+  MESES_NOMBRE_ALL.forEach(function(mes,i){
+    var n=i+1;
+    if(est[n]==='pendiente'){
+      var precio=(MESES_TODO_EL_MES.indexOf(n)>=0||dia2<=10)?parseFloat(a.precio_bonificado):parseFloat(a.precio_normal);
+      lineasPend2.push(mes+': '+pesos(precio));
+    }
+  });
+  var msg=encodeURIComponent('Hola! Le recordamos que tiene las siguientes cuotas pendientes en el Instituto Cultural Cerrillos:\n'+(lineasPend2.length?lineasPend2.join('\n'):'cuotas pendientes')+'\nTotal: '+pesos(a.deudaReal)+'\nPor favor comuniquese para regularizar su situacion. Gracias!');
   var waLink=tel?'https://wa.me/549'+tel+'?text='+msg:'';
 
   var cuotasHtml='<table style="width:100%;font-size:12.5px;border-collapse:collapse"><thead><tr>'+
