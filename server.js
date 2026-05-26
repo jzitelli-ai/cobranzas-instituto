@@ -37,8 +37,10 @@ function getPrecio(alumno, numCuota, dia) {
   return esBonif ? parseFloat(alumno.precio_bonificado) : parseFloat(alumno.precio_normal);
 }
 
-async function cuota10Gratis(alumnoId, alumno) {
-  const cuotas19 = await q('SELECT * FROM cuotas WHERE alumno_id=$1 AND numero_cuota<=9', [alumnoId]);
+async function cuota10Gratis(alumnoId, alumno, cuotasPrec) {
+  const cuotas19 = cuotasPrec
+    ? cuotasPrec.filter(c=>c.numero_cuota<=9)
+    : await q('SELECT * FROM cuotas WHERE alumno_id=$1 AND numero_cuota<=9', [alumnoId]);
   if (cuotas19.length < 9) return false;
   return cuotas19.every(c => c.estado === 'pagada' && (MESES_TODO_EL_MES.includes(c.numero_cuota) || parseFloat(c.monto_pagado) <= parseFloat(alumno.precio_bonificado)));
 }
@@ -467,11 +469,15 @@ app.post('/api/backfill-pagos', async (req,res) => {
 app.get('/api/reporte', async (req,res) => {
   const alumnos=await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
   const mesActual=new Date().getMonth(), dia=new Date().getDate();
+  // Cargar TODAS las cuotas y pagos de una sola vez
+  const todasCuotas=await q('SELECT * FROM cuotas WHERE alumno_id=ANY($1) ORDER BY numero_cuota',[alumnos.map(a=>a.id)]);
+  const todosPagos=await q('SELECT alumno_id,COALESCE(SUM(monto),0) as total FROM pagos WHERE alumno_id=ANY($1) GROUP BY alumno_id',[alumnos.map(a=>a.id)]);
+  const mapPagos={};
+  todosPagos.forEach(p=>{ mapPagos[p.alumno_id]=parseFloat(p.total||0); });
   const resultado=[];
   for(const a of alumnos) {
-    const cuotas=await q('SELECT * FROM cuotas WHERE alumno_id=$1 ORDER BY numero_cuota',[a.id]);
-    const totPag=await q1('SELECT COALESCE(SUM(monto),0) as total FROM pagos WHERE alumno_id=$1',[a.id]);
-    const totalPagado=parseFloat(totPag?.total||0);
+    const cuotas=todasCuotas.filter(c=>c.alumno_id===a.id);
+    const totalPagado=mapPagos[a.id]||0;
     const estadoCuotas={},fechasPago={},montosPago={};
     for(let i=0;i<10;i++){
       const numC=i+1;
@@ -482,7 +488,7 @@ app.get('/api/reporte', async (req,res) => {
       if(cuota.fecha_pago&&cuota.fecha_pago!=='')fechasPago[numC]=String(cuota.fecha_pago).slice(0,10);
       if(parseFloat(cuota.monto_pagado)>0)montosPago[numC]=parseFloat(cuota.monto_pagado);
     }
-    const c10g=await cuota10Gratis(a.id,a);
+    const c10g=await cuota10Gratis(a.id,a,cuotas);
     if(c10g&&estadoCuotas[10]==='pendiente')estadoCuotas[10]='gratis';
     const cuotasGen=Object.entries(estadoCuotas).filter(([,v])=>v!=='futura');
     const totalDebido=cuotasGen.reduce((s,[k])=>{const n=parseInt(k);return s+(n===10&&c10g?0:getPrecio(a,n,dia));},0);
@@ -1112,30 +1118,32 @@ app.post('/api/admin/verificar-codigo', (req, res) => {
 });
 
 app.get('/api/admin/stats', async (req, res) => {
-  const totalAlumnos = await q1('SELECT COUNT(*) as n FROM alumnos WHERE activo=TRUE');
-  const totalPagos = await q1('SELECT COUNT(*) as n, COALESCE(SUM(monto),0) as total FROM pagos');
-  const porMedio = await q('SELECT medio, COUNT(*) as cantidad, SUM(monto) as total FROM pagos GROUP BY medio ORDER BY total DESC');
-  const deudores = await q1('SELECT COUNT(DISTINCT alumno_id) as n FROM cuotas WHERE estado=$1', ['pendiente']);
+  const [totalAlumnos, totalPagos, porMedio, deudores, porCurso] = await Promise.all([
+    q1('SELECT COUNT(*) as n FROM alumnos WHERE activo=TRUE'),
+    q1('SELECT COUNT(*) as n, COALESCE(SUM(monto),0) as total FROM pagos'),
+    q('SELECT medio, COUNT(*) as cantidad, SUM(monto) as total FROM pagos GROUP BY medio ORDER BY total DESC'),
+    q1('SELECT COUNT(DISTINCT alumno_id) as n FROM cuotas WHERE estado=$1', ['pendiente']),
+    q(`SELECT a.curso, COUNT(DISTINCT a.id) as alumnos, COALESCE(SUM(p.monto),0) as cobrado FROM alumnos a LEFT JOIN pagos p ON a.id=p.alumno_id WHERE a.activo=TRUE GROUP BY a.curso ORDER BY cobrado DESC`)
+  ]);
   const alDia = parseInt(totalAlumnos?.n||0) - parseInt(deudores?.n||0);
-  const porCurso = await q(`SELECT a.curso, COUNT(DISTINCT a.id) as alumnos, COALESCE(SUM(p.monto),0) as cobrado FROM alumnos a LEFT JOIN pagos p ON a.id=p.alumno_id WHERE a.activo=TRUE GROUP BY a.curso ORDER BY cobrado DESC`);
 
-  // Calcular deuda real total
+  // Calcular deuda total con consultas masivas
   const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE');
+  const todasCuotas = await q('SELECT * FROM cuotas WHERE alumno_id=ANY($1)', [alumnos.map(a=>a.id)]);
+  const todosPagos = await q('SELECT alumno_id, COALESCE(SUM(monto),0) as total FROM pagos WHERE alumno_id=ANY($1) GROUP BY alumno_id', [alumnos.map(a=>a.id)]);
+  const mapPagos = {};
+  todosPagos.forEach(p => { mapPagos[p.alumno_id] = parseFloat(p.total||0); });
   const hoy = new Date();
   const mesActual = hoy.getMonth();
   const dia = hoy.getDate();
-  const MESES_IDX = [2,3,4,5,6,7,8,9,10,11];
-  const MESES_TODO_EL_MES = [1,5];
   let totalDeuda = 0;
   for (const a of alumnos) {
-    const cuotas = await q('SELECT * FROM cuotas WHERE alumno_id=$1', [a.id]);
-    const totalPagadoA = parseFloat((await q1('SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE alumno_id=$1',[a.id]))?.t||0);
+    const cuotas = todasCuotas.filter(c => c.alumno_id === a.id);
+    const totalPagadoA = mapPagos[a.id] || 0;
     let totalDebido = 0;
     for (let i = 0; i < 10; i++) {
       if (MESES_IDX[i] > mesActual) continue;
-      const numC = i+1;
-      const esBonif = MESES_TODO_EL_MES.includes(numC) || dia <= 10;
-      totalDebido += esBonif ? parseFloat(a.precio_bonificado) : parseFloat(a.precio_normal);
+      totalDebido += getPrecio(a, i+1, dia);
     }
     const saldo = totalPagadoA - totalDebido;
     if (saldo < 0) totalDeuda += Math.abs(saldo);
