@@ -130,6 +130,72 @@ async function cargarDatosIniciales() {
 }
 
 // RUTAS
+// Migrar datos a Supabase
+app.post('/api/migrar-a-supabase', async (req, res) => {
+  const { supabaseUrl } = req.body;
+  if (!supabaseUrl) return res.json({ ok: false, error: 'Falta supabaseUrl' });
+
+  try {
+    const { Pool: PgPool } = require('pg');
+    const dest = new PgPool({ connectionString: supabaseUrl, ssl: { rejectUnauthorized: false } });
+
+    // Crear tablas en destino
+    await dest.query(`
+      CREATE TABLE IF NOT EXISTS cursos (id SERIAL PRIMARY KEY, nombre TEXT NOT NULL, activo BOOLEAN DEFAULT TRUE);
+      CREATE TABLE IF NOT EXISTS alumnos (id SERIAL PRIMARY KEY, nombre TEXT NOT NULL, curso TEXT NOT NULL, cuits TEXT DEFAULT '', precio_normal NUMERIC DEFAULT 0, precio_bonificado NUMERIC DEFAULT 0, activo BOOLEAN DEFAULT TRUE, telefono TEXT DEFAULT '');
+      CREATE TABLE IF NOT EXISTS cuotas (id SERIAL PRIMARY KEY, alumno_id INTEGER NOT NULL, numero_cuota INTEGER NOT NULL, estado TEXT DEFAULT 'pendiente', fecha_pago TEXT DEFAULT '', monto_pagado NUMERIC DEFAULT 0, compensada BOOLEAN DEFAULT FALSE, UNIQUE(alumno_id, numero_cuota));
+      CREATE TABLE IF NOT EXISTS pagos (id SERIAL PRIMARY KEY, fecha TEXT NOT NULL, alumno_id INTEGER NOT NULL, alumno_nombre TEXT NOT NULL, curso TEXT NOT NULL, monto NUMERIC NOT NULL, concepto TEXT NOT NULL, medio TEXT NOT NULL, origen TEXT NOT NULL, saldo_favor NUMERIC DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS aranceles (id SERIAL PRIMARY KEY, desde TEXT NOT NULL, descripcion TEXT DEFAULT '', creado TEXT DEFAULT '');
+      CREATE TABLE IF NOT EXISTS aranceles_precios (id SERIAL PRIMARY KEY, arancel_id INTEGER NOT NULL, alumno_id INTEGER NOT NULL, precio_normal NUMERIC DEFAULT 0, precio_bonificado NUMERIC DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT);
+    `);
+
+    // Exportar datos del origen
+    const cursos = await q('SELECT * FROM cursos ORDER BY id');
+    const alumnos = await q('SELECT * FROM alumnos ORDER BY id');
+    const cuotas = await q('SELECT * FROM cuotas ORDER BY id');
+    const pagos = await q('SELECT * FROM pagos ORDER BY id');
+
+    // Limpiar destino
+    await dest.query('TRUNCATE pagos, cuotas, alumnos, cursos, config RESTART IDENTITY CASCADE');
+
+    // Insertar cursos
+    for (const c of cursos) {
+      await dest.query('INSERT INTO cursos (id, nombre, activo) VALUES ($1,$2,$3)', [c.id, c.nombre, c.activo]);
+    }
+    await dest.query(`SELECT setval('cursos_id_seq', (SELECT MAX(id) FROM cursos))`);
+
+    // Insertar alumnos
+    for (const a of alumnos) {
+      await dest.query('INSERT INTO alumnos (id,nombre,curso,cuits,precio_normal,precio_bonificado,activo,telefono) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+        [a.id,a.nombre,a.curso,a.cuits,a.precio_normal,a.precio_bonificado,a.activo,a.telefono]);
+    }
+    await dest.query(`SELECT setval('alumnos_id_seq', (SELECT MAX(id) FROM alumnos))`);
+
+    // Insertar cuotas
+    for (const c of cuotas) {
+      await dest.query('INSERT INTO cuotas (id,alumno_id,numero_cuota,estado,fecha_pago,monto_pagado,compensada) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+        [c.id,c.alumno_id,c.numero_cuota,c.estado,c.fecha_pago,c.monto_pagado,c.compensada]);
+    }
+    await dest.query(`SELECT setval('cuotas_id_seq', (SELECT MAX(id) FROM cuotas))`);
+
+    // Insertar pagos
+    for (const p of pagos) {
+      await dest.query('INSERT INTO pagos (id,fecha,alumno_id,alumno_nombre,curso,monto,concepto,medio,origen,saldo_favor) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+        [p.id,p.fecha,p.alumno_id,p.alumno_nombre,p.curso,p.monto,p.concepto,p.medio,p.origen,p.saldo_favor]);
+    }
+    await dest.query(`SELECT setval('pagos_id_seq', (SELECT MAX(id) FROM pagos))`);
+
+    // Marcar como iniciado
+    await dest.query("INSERT INTO config (clave,valor) VALUES ('iniciado','true') ON CONFLICT DO NOTHING");
+
+    await dest.end();
+    res.json({ ok: true, cursos: cursos.length, alumnos: alumnos.length, cuotas: cuotas.length, pagos: pagos.length });
+  } catch(e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 // Exportar todos los datos para migración
 app.get('/api/exportar/todo', async (req,res) => {
   const alumnos = await q('SELECT * FROM alumnos ORDER BY id');
