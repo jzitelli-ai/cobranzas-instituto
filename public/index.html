@@ -604,13 +604,14 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
       <div class="fg" style="grid-column:1/-1"><label>Nombre y apellido</label><input type="text" id="ma-nombre" placeholder="APELLIDO NOMBRE"></div>
     </div>
     <div class="r2">
-      <div class="fg"><label>Curso</label><select id="ma-curso"></select></div>
+      <div class="fg"><label>Curso</label><select id="ma-curso" onchange="autocompletarPrecioCurso()"></select></div>
       <div class="fg"><label>Precio normal ($)</label><input type="number" id="ma-pnormal" placeholder="0"></div>
     </div>
     <div class="r2">
       <div class="fg"><label>Precio bonificado ($)</label><input type="number" id="ma-pbonif" placeholder="0"></div>
       <div class="fg"><label>CUITs (separados por coma)</label><input type="text" id="ma-cuits" inputmode="numeric" placeholder="20123456789"><div style="font-size:10px;color:var(--m);margin-top:3px">Solo números sin puntos ni guiones. Ej: 27056276675</div></div>
     </div>
+    <div id="ma-precio-info" style="font-size:11px;color:var(--s);margin-bottom:6px;display:none">✓ Precio autocargado desde la tabla de aranceles vigente. Modificalo si tiene precio especial.</div>
     <div class="fg"><label>Telefono WhatsApp (sin 0 ni 15, ej: 3874123456)</label><input type="text" id="ma-tel" inputmode="numeric" placeholder="3874123456"></div>
     <div class="modal-btns">
       <button class="btn bob" onclick="cerrarM('m-alum')">Cancelar</button>
@@ -867,6 +868,7 @@ async function init(){
     _alumnos=await api('GET','/api/alumnos');
     _pagos=await api('GET','/api/pagos');
     poblarSelects();
+    await cargarPreciosCursosVigente();
     await actualizarDashboard();
     hideSpinner();
   }catch(e){hideSpinner();}
@@ -928,6 +930,35 @@ async function actualizarDashboard(){
 }
 
 function sc(l,v,c){return '<div class="sc"><div class="sc-l">'+l+'</div><div class="sc-v '+c+'">'+v+'</div></div>';}
+
+var _preciosPorCurso = {};
+
+async function cargarPreciosCursosVigente(){
+  try {
+    var aranceles=await api('GET','/api/aranceles');
+    if(!aranceles||!aranceles.length) return;
+    var hoy=new Date().toISOString().slice(0,10);
+    var vigente=aranceles.find(function(a){return a.desde<=hoy;});
+    if(!vigente) return;
+    var cursos=await api('GET','/api/aranceles/'+vigente.id+'/cursos');
+    _preciosPorCurso={};
+    cursos.forEach(function(c){_preciosPorCurso[c.curso]={precio_normal:c.precio_normal,precio_bonificado:c.precio_bonificado};});
+  } catch(e){}
+}
+
+function autocompletarPrecioCurso(){
+  var curso=document.getElementById('ma-curso').value;
+  var info=document.getElementById('ma-precio-info');
+  if(curso&&_preciosPorCurso[curso]&&curso!=='FAMILIA'){
+    document.getElementById('ma-pnormal').value=_preciosPorCurso[curso].precio_normal;
+    document.getElementById('ma-pbonif').value=_preciosPorCurso[curso].precio_bonificado;
+    if(info) info.style.display='block';
+  } else {
+    document.getElementById('ma-pnormal').value='';
+    document.getElementById('ma-pbonif').value='';
+    if(info) info.style.display='none';
+  }
+}
 
 async function cargarAlumnos(){
   _alumnos=await api('GET','/api/alumnos');
@@ -2272,25 +2303,73 @@ async function crearVigencia(){
 
 async function verPreciosVig(id){
   var v=_aranceles.find(function(x){return x.id===id;});
+  var cursos=await api('GET','/api/aranceles/'+id+'/cursos');
   var precios=await api('GET','/api/aranceles/'+id+'/precios');
-  // Agrupar por curso
-  var porCurso={};
+  // Contar alumnos por curso y detectar especiales
+  var conteo={};
+  var especiales=[];
   precios.forEach(function(p){
     var c=p.curso||'Sin curso';
-    if(!porCurso[c])porCurso[c]=[];
-    porCurso[c].push(p);
+    if(!conteo[c]) conteo[c]=0;
+    conteo[c]++;
+    if(p.precio_especial) especiales.push(p);
   });
-  var h='<div style="font-size:12px;color:var(--m);margin-bottom:12px">Vigente desde <strong>'+v.desde+'</strong>'+(v.descripcion?' — '+v.descripcion:'')+'</div>';
-  Object.keys(porCurso).sort().forEach(function(curso){
-    h+='<div style="font-weight:700;font-size:11px;color:var(--m);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 4px;padding-bottom:4px;border-bottom:1px solid var(--b)">'+curso+'</div>';
-    h+='<table style="width:100%"><thead><tr><th>Alumno</th><th style="text-align:right">Normal</th><th style="text-align:right">Bonificado</th></tr></thead><tbody>';
-    porCurso[curso].forEach(function(p){
-      h+='<tr><td style="font-size:12px">'+p.nombre+'</td>'+
+  var h='<div style="font-size:12px;color:var(--m);margin-bottom:14px">Vigente desde <strong>'+v.desde+'</strong>'+(v.descripcion?' — '+v.descripcion:'')+'</div>';
+  // Tabla por curso
+  h+='<table style="width:100%"><thead><tr><th>Curso</th><th style="text-align:right">P. Normal</th><th style="text-align:right">P. Bonificado</th><th style="text-align:center">Alumnos</th></tr></thead><tbody>';
+  if(cursos.length){
+    cursos.forEach(function(c){
+      var cant=conteo[c.curso]||0;
+      h+='<tr>'+
+        '<td style="font-weight:600;font-size:13px">'+c.curso+'</td>'+
+        '<td style="text-align:right">$'+Number(c.precio_normal).toLocaleString('es-AR')+'</td>'+
+        '<td style="text-align:right;color:var(--s);font-weight:600">$'+Number(c.precio_bonificado).toLocaleString('es-AR')+'</td>'+
+        '<td style="text-align:center;color:var(--m);font-size:12px">'+cant+'</td>'+
+      '</tr>';
+    });
+    // FAMILIA (precio individual)
+    var famAlumnos=precios.filter(function(p){return p.curso==='FAMILIA';});
+    if(famAlumnos.length){
+      h+='<tr><td colspan="4" style="padding-top:8px;font-size:11px;color:var(--m);font-style:italic">FAMILIA — precio individual por grupo familiar</td></tr>';
+      famAlumnos.forEach(function(p){
+        h+='<tr style="background:var(--gl)">'+
+          '<td style="font-size:12px;padding-left:16px">'+p.nombre+'</td>'+
+          '<td style="text-align:right;font-size:12px">$'+Number(p.precio_normal).toLocaleString('es-AR')+'</td>'+
+          '<td style="text-align:right;font-size:12px;color:var(--s);font-weight:600">$'+Number(p.precio_bonificado).toLocaleString('es-AR')+'</td>'+
+          '<td></td></tr>';
+      });
+    }
+  } else {
+    // Sin precios por curso — mostrar por alumno agrupado
+    var porCurso={};
+    precios.forEach(function(p){
+      var c=p.curso||'Sin curso';
+      if(!porCurso[c])porCurso[c]=[];
+      porCurso[c].push(p);
+    });
+    Object.keys(porCurso).sort().forEach(function(curso){
+      var pp=porCurso[curso][0];
+      h+='<tr>'+
+        '<td style="font-weight:600">'+curso+'</td>'+
+        '<td style="text-align:right">$'+Number(pp.precio_normal).toLocaleString('es-AR')+'</td>'+
+        '<td style="text-align:right;color:var(--s);font-weight:600">$'+Number(pp.precio_bonificado).toLocaleString('es-AR')+'</td>'+
+        '<td style="text-align:center;color:var(--m);font-size:12px">'+porCurso[curso].length+'</td>'+
+      '</tr>';
+    });
+  }
+  h+='</tbody></table>';
+  // Precios especiales (no familia)
+  var espNofam=especiales.filter(function(p){return p.curso!=='FAMILIA';});
+  if(espNofam.length){
+    h+='<div style="margin-top:14px;font-size:11px;font-weight:700;color:var(--w);text-transform:uppercase">★ Precios especiales</div>';
+    h+='<table style="width:100%;margin-top:6px"><tbody>';
+    espNofam.forEach(function(p){
+      h+='<tr><td style="font-size:12px">'+p.nombre+'</td><td style="font-size:10px;color:var(--m)">'+p.curso+'</td>'+
         '<td style="text-align:right;font-size:12px">$'+Number(p.precio_normal).toLocaleString('es-AR')+'</td>'+
         '<td style="text-align:right;font-size:12px;color:var(--s);font-weight:600">$'+Number(p.precio_bonificado).toLocaleString('es-AR')+'</td></tr>';
     });
     h+='</tbody></table>';
-  });
+  }
   document.getElementById('ver-vig-body').innerHTML=h;
   abrirM('m-ver-vig');
 }
