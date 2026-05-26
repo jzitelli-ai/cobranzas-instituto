@@ -10,11 +10,21 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static('public'));
 
+// MODO DEMO — debe estar antes de todo
+const DEMO_MODE = process.env.DEMO_MODE === 'true';
+const DEMO_MAX_ALUMNOS = 5;
+const DB_SCHEMA = DEMO_MODE ? 'demo' : 'public';
+if (DEMO_MODE) console.log('🎯 MODO DEMO ACTIVO — schema: demo, máximo 5 alumnos');
+
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
 async function q(sql, params = []) {
   const client = await pool.connect();
-  try { const res = await client.query(sql, params); return res.rows; } finally { client.release(); }
+  try {
+    if (DEMO_MODE) await client.query('SET search_path TO demo');
+    const res = await client.query(sql, params);
+    return res.rows;
+  } finally { client.release(); }
 }
 async function q1(sql, params = []) { const rows = await q(sql, params); return rows[0] || null; }
 
@@ -52,6 +62,11 @@ function parsearMonto(valor) {
 }
 
 async function inicializarDB() {
+  // Crear schema demo si corresponde
+  if (DEMO_MODE) {
+    const client = await pool.connect();
+    try { await client.query('CREATE SCHEMA IF NOT EXISTS demo'); } finally { client.release(); }
+  }
   await q(`
     CREATE TABLE IF NOT EXISTS cursos (id SERIAL PRIMARY KEY, nombre TEXT NOT NULL, activo BOOLEAN DEFAULT TRUE);
     CREATE TABLE IF NOT EXISTS alumnos (id SERIAL PRIMARY KEY, nombre TEXT NOT NULL, curso TEXT NOT NULL, cuits TEXT DEFAULT '', precio_normal NUMERIC DEFAULT 0, precio_bonificado NUMERIC DEFAULT 0, activo BOOLEAN DEFAULT TRUE, telefono TEXT DEFAULT '');
@@ -62,7 +77,10 @@ async function inicializarDB() {
     CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT);
   `);
   const iniciado = await q1("SELECT valor FROM config WHERE clave='iniciado'");
-  if (!iniciado) await cargarDatosIniciales();
+  if (!iniciado) {
+    if (!DEMO_MODE) await cargarDatosIniciales();
+    else await q("INSERT INTO config (clave,valor) VALUES ('iniciado','demo') ON CONFLICT DO NOTHING");
+  }
 }
 
 async function generarCuotas(alumnoId) {
@@ -112,12 +130,34 @@ async function cargarDatosIniciales() {
 }
 
 // RUTAS
+// Exportar todos los datos para migración
+app.get('/api/exportar/todo', async (req,res) => {
+  const alumnos = await q('SELECT * FROM alumnos ORDER BY id');
+  const cuotas = await q('SELECT * FROM cuotas ORDER BY id');
+  const pagos = await q('SELECT * FROM pagos ORDER BY id');
+  const cursos = await q('SELECT * FROM cursos ORDER BY id');
+  const aranceles = await q('SELECT * FROM aranceles ORDER BY id');
+  const aranceles_precios = await q('SELECT * FROM aranceles_precios ORDER BY id');
+  res.json({ alumnos, cuotas, pagos, cursos, aranceles, aranceles_precios, exportado: new Date().toISOString() });
+});
+
+app.get('/api/demo-info', (req,res) => {
+  res.json({ demo: DEMO_MODE, maxAlumnos: DEMO_MAX_ALUMNOS });
+});
+
 app.get('/api/cursos', async (req,res) => { res.json(await q('SELECT * FROM cursos WHERE activo=TRUE ORDER BY nombre')); });
 app.post('/api/cursos', async (req,res) => { const r=await q('INSERT INTO cursos (nombre) VALUES ($1) RETURNING id',[req.body.nombre.trim().toUpperCase()]); res.json({ok:true,id:r[0].id}); });
 app.delete('/api/cursos/:id', async (req,res) => { await q('UPDATE cursos SET activo=FALSE WHERE id=$1',[req.params.id]); res.json({ok:true}); });
 
 app.get('/api/alumnos', async (req,res) => { res.json(await q('SELECT * FROM alumnos ORDER BY nombre')); });
 app.post('/api/alumnos', async (req,res) => {
+  // Límite demo
+  if (DEMO_MODE) {
+    const count = await q1('SELECT COUNT(*) as n FROM alumnos WHERE activo=TRUE');
+    if (parseInt(count?.n||0) >= DEMO_MAX_ALUMNOS) {
+      return res.json({ ok: false, error: `Versión demo limitada a ${DEMO_MAX_ALUMNOS} alumnos` });
+    }
+  }
   const {nombre,curso,cuits,precio_normal,precio_bonificado,telefono}=req.body;
   const r=await q('INSERT INTO alumnos (nombre,curso,cuits,precio_normal,precio_bonificado,telefono) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',[nombre.trim().toUpperCase(),curso,cuits||'',precio_normal||0,precio_bonificado||0,telefono||'']);
   await generarCuotas(r[0].id); res.json({ok:true,id:r[0].id});
@@ -895,9 +935,8 @@ function programarBackup() {
 }
 
 // ================================================================
-// LOGIN DEL SISTEMA
+// MODO DEMO — variables ya declaradas al inicio
 // ================================================================
-let systemPassword = '1997';
 let systemRecoveryCode = null;
 let systemRecoveryExpiry = null;
 
@@ -929,7 +968,8 @@ app.post('/api/login/verificar', (req, res) => {
 // ADMINISTRACIÓN — AUTH Y ESTADÍSTICAS
 // ================================================================
 const ADMIN_EMAIL = 'jzitelli@gmail.com';
-let adminPassword = 'Stefano2008';
+let adminPassword = process.env.ADMIN_PASSWORD || (DEMO_MODE ? 'DEMO2024' : 'Stefano2008');
+let systemPassword = process.env.SYSTEM_PASSWORD || (DEMO_MODE ? 'DEMO' : '1997');
 let recoveryCode = null;
 let recoveryExpiry = null;
 
