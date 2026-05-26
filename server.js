@@ -1146,9 +1146,32 @@ app.get('/api/admin/stats', async (req, res) => {
 
 app.get('*', (req,res) => { res.sendFile(path.join(__dirname,'public','index.html')); });
 
-inicializarDB().then(() => {
+async function inicializarConRetry(intentos=5, delay=5000) {
+  for (let i = 1; i <= intentos; i++) {
+    try {
+      console.log(`Intento ${i} de conexión a la DB...`);
+      await inicializarDB();
+      console.log('DB conectada OK');
+      return;
+    } catch(err) {
+      console.error(`Error intento ${i}:`, err.message);
+      if (i === intentos) { console.error('No se pudo conectar a la DB'); process.exit(1); }
+      console.log(`Reintentando en ${delay/1000}s...`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+}
+
+function keepAliveDB() {
+  setInterval(async () => {
+    try { await q('SELECT 1'); } catch(e) {}
+  }, 4 * 60 * 1000); // cada 4 minutos
+}
+
+inicializarConRetry().then(() => {
   app.listen(PORT, () => {
     console.log(`Servidor en puerto ${PORT}`);
     programarBackup();
+    keepAliveDB();
   });
-}).catch(err => { console.error('Error DB:',err); process.exit(1); });
+});
