@@ -782,15 +782,45 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
 
 <!-- MODAL EDITAR VIGENCIA -->
 <div class="modal-bg" id="m-edit-vig">
-  <div class="modal" style="width:680px">
+  <div class="modal" style="width:820px">
     <div class="modal-title" id="edit-vig-tit">Editar aranceles</div>
-    <div class="alert ai" style="font-size:11px">Modifica los precios y confirma. Si la vigencia ya esta activa, los precios de los alumnos se actualizan automaticamente.</div>
-    <div class="twrap" style="max-height:400px;overflow-y:auto">
-      <table id="edit-vig-table"></table>
+    <div style="font-weight:700;font-size:12px;color:var(--m);text-transform:uppercase;margin-bottom:6px">Precios por curso</div>
+    <div style="font-size:11px;color:var(--m);margin-bottom:8px">Editá el precio y hacé clic en "Aplicar" para actualizar todos los alumnos del curso (excepto precio especial).</div>
+    <div style="max-height:200px;overflow-y:auto;margin-bottom:16px">
+      <table id="edit-vig-cursos" style="width:100%"></table>
+    </div>
+    <div style="font-weight:700;font-size:12px;color:var(--m);text-transform:uppercase;margin-bottom:6px">Precios individuales <span style="font-weight:400;font-size:11px;text-transform:none">— marcá ★ para fijar precio especial (no se actualiza con el curso)</span></div>
+    <div class="twrap" style="max-height:280px;overflow-y:auto">
+      <table id="edit-vig-table" style="width:100%"></table>
     </div>
     <div class="modal-btns">
       <button class="btn bob" onclick="cerrarM('m-edit-vig')">Cancelar</button>
-      <button class="btn bpb" onclick="guardarEditVig()">Guardar cambios</button>
+      <button class="btn bpb" onclick="guardarEditVig()">Guardar cambios individuales</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL APLICAR PRECIO CURSO -->
+<div class="modal-bg" id="m-aplica-curso" style="z-index:900">
+  <div class="modal" style="width:400px;z-index:901">
+    <div class="modal-title">Aplicar precio — <span id="aplica-curso-nombre"></span></div>
+    <div style="font-size:13px;margin-bottom:12px">Normal: <strong id="aplica-pn"></strong> · Bonificado: <strong id="aplica-pb"></strong></div>
+    <div class="fg">
+      <label>¿Desde qué cuota aplicar?</label>
+      <select id="aplica-desde" style="padding:8px;border:1px solid var(--b);border-radius:6px;width:100%">
+        <option value="futuras">Solo cuotas pendientes (desde la próxima)</option>
+        <option value="4">Cuota 4 (Julio) en adelante</option>
+        <option value="5">Cuota 5 (Agosto) en adelante</option>
+        <option value="6">Cuota 6 (Septiembre) en adelante</option>
+        <option value="7">Cuota 7 (Octubre) en adelante</option>
+        <option value="8">Cuota 8 (Noviembre) en adelante</option>
+        <option value="ninguna">Solo actualizar precio, sin recalcular cuotas</option>
+      </select>
+    </div>
+    <div class="alert aw" style="font-size:11px;margin-top:8px">Solo afecta alumnos sin precio especial. Las cuotas ya pagadas no se modifican.</div>
+    <div class="modal-btns">
+      <button class="btn bob" onclick="cerrarM('m-aplica-curso')">Cancelar</button>
+      <button class="btn bpb" onclick="confirmarAplicarCurso()">Confirmar</button>
     </div>
   </div>
 </div>
@@ -2183,7 +2213,7 @@ async function exportarPagos(){
 }
 
 // ARANCELES
-var _aranceles=[], editVigId=null;
+var _aranceles=[], editVigId=null, _aplicarCursoData={};
 
 async function cargarAranceles(){
   _aranceles=await api('GET','/api/aranceles');
@@ -2269,20 +2299,68 @@ async function abrirEditVig(id){
   editVigId=id;
   var v=_aranceles.find(function(x){return x.id===id;});
   document.getElementById('edit-vig-tit').textContent='Editar aranceles — '+v.desde+(v.descripcion?' ('+v.descripcion+')':'');
+  // Cargar precios por curso
+  var cursos=await api('GET','/api/aranceles/'+id+'/cursos');
   var precios=await api('GET','/api/aranceles/'+id+'/precios');
-  var h='<thead><tr><th>Alumno</th><th>Curso</th><th>P. Normal ($)</th><th>P. Bonificado ($)</th></tr></thead><tbody>';
-  precios.forEach(function(p){
-    h+='<tr><td style="font-size:12px;font-weight:500">'+p.nombre+'</td>'+
-      '<td style="font-size:10.5px;color:var(--m)">'+p.curso+'</td>'+
-      '<td><input type="number" data-id="'+p.alumno_id+'" data-f="precio_normal" value="'+p.precio_normal+'" step="500" style="width:120px;padding:5px;border:1px solid var(--b);border-radius:4px;font-size:12px"></td>'+
-      '<td><input type="number" data-id="'+p.alumno_id+'" data-f="precio_bonificado" value="'+p.precio_bonificado+'" step="500" style="width:120px;padding:5px;border:1px solid var(--b);border-radius:4px;font-size:12px"></td></tr>';
+  // Tabla por curso
+  var hCursos='<thead><tr><th>Curso</th><th>P. Normal ($)</th><th>P. Bonificado ($)</th><th></th></tr></thead><tbody>';
+  cursos.forEach(function(c){
+    hCursos+='<tr>'+
+      '<td style="font-weight:600;font-size:12px">'+c.curso+'</td>'+
+      '<td><input type="number" data-curso="'+c.curso+'" data-f="precio_normal" value="'+c.precio_normal+'" step="500" style="width:110px;padding:5px;border:1px solid var(--b);border-radius:4px;font-size:12px"></td>'+
+      '<td><input type="number" data-curso="'+c.curso+'" data-f="precio_bonificado" value="'+c.precio_bonificado+'" step="500" style="width:110px;padding:5px;border:1px solid var(--b);border-radius:4px;font-size:12px"></td>'+
+      '<td><button class="btn bob" style="font-size:11px;padding:3px 8px" onclick="aplicarPrecioCurso(\''+c.curso+'\')">Aplicar</button></td>'+
+    '</tr>';
   });
-  h+='</tbody>';
-  document.getElementById('edit-vig-table').innerHTML=h;
+  hCursos+='</tbody>';
+  document.getElementById('edit-vig-cursos').innerHTML=hCursos;
+  // Tabla por alumno (excepciones)
+  var hAlumnos='<thead><tr><th>Alumno</th><th>Curso</th><th>P. Normal ($)</th><th>P. Bonificado ($)</th><th>Especial</th></tr></thead><tbody>';
+  precios.forEach(function(p){
+    var esp=p.precio_especial;
+    hAlumnos+='<tr style="'+(esp?'background:var(--wl)':'')+'">'+ 
+      '<td style="font-size:11px;font-weight:500">'+p.nombre+'</td>'+
+      '<td style="font-size:10px;color:var(--m)">'+p.curso+'</td>'+
+      '<td><input type="number" data-id="'+p.alumno_id+'" data-f="precio_normal" value="'+p.precio_normal+'" step="500" style="width:100px;padding:4px;border:1px solid var(--b);border-radius:4px;font-size:11px"></td>'+
+      '<td><input type="number" data-id="'+p.alumno_id+'" data-f="precio_bonificado" value="'+p.precio_bonificado+'" step="500" style="width:100px;padding:4px;border:1px solid var(--b);border-radius:4px;font-size:11px"></td>'+
+      '<td style="text-align:center"><input type="checkbox" data-id="'+p.alumno_id+'" class="chk-especial" '+(esp?'checked':'')+' title="Precio especial (no se actualiza con el curso)"></td>'+
+    '</tr>';
+  });
+  hAlumnos+='</tbody>';
+  document.getElementById('edit-vig-table').innerHTML=hAlumnos;
   abrirM('m-edit-vig');
 }
 
+async function aplicarPrecioCurso(curso){
+  var pnInput=document.querySelector('#edit-vig-cursos input[data-curso="'+curso+'"][data-f="precio_normal"]');
+  var pbInput=document.querySelector('#edit-vig-cursos input[data-curso="'+curso+'"][data-f="precio_bonificado"]');
+  if(!pnInput||!pbInput) return;
+  var pn=parseFloat(pnInput.value)||0;
+  var pb=parseFloat(pbInput.value)||0;
+  // Preguntar desde qué cuota aplicar
+  document.getElementById('aplica-curso-nombre').textContent=curso;
+  document.getElementById('aplica-pn').textContent='$'+pn.toLocaleString('es-AR');
+  document.getElementById('aplica-pb').textContent='$'+pb.toLocaleString('es-AR');
+  _aplicarCursoData={curso,precio_normal:pn,precio_bonificado:pb};
+  abrirM('m-aplica-curso');
+}
+
+async function confirmarAplicarCurso(){
+  var desdeCuota=document.getElementById('aplica-desde').value;
+  var r=await api('PUT','/api/aranceles/'+editVigId+'/cursos',{
+    curso:_aplicarCursoData.curso,
+    precio_normal:_aplicarCursoData.precio_normal,
+    precio_bonificado:_aplicarCursoData.precio_bonificado,
+    desde_cuota:desdeCuota
+  });
+  cerrarM('m-aplica-curso');
+  cerrarM('m-edit-vig');
+  _alumnos=await api('GET','/api/alumnos');
+  toast('Precios actualizados para '+r.afectados+' alumnos de '+_aplicarCursoData.curso,'s');
+}
+
 async function guardarEditVig(){
+  // Guardar precios individuales
   var inputs=document.querySelectorAll('#edit-vig-table input[type=number]');
   var mapa={};
   inputs.forEach(function(inp){
@@ -2291,10 +2369,21 @@ async function guardarEditVig(){
     if(!mapa[id]) mapa[id]={alumno_id:parseInt(id)};
     mapa[id][f]=parseFloat(inp.value)||0;
   });
+  // Guardar checkboxes precio especial
+  var chks=document.querySelectorAll('#edit-vig-table .chk-especial');
+  chks.forEach(function(chk){
+    var id=chk.dataset.id;
+    if(mapa[id]) mapa[id].precio_especial=chk.checked;
+  });
   var precios=Object.values(mapa);
   await api('PUT','/api/aranceles/'+editVigId+'/precios',{precios});
+  // Actualizar precio_especial de cada alumno
+  for(var p of precios){
+    if(p.precio_especial!==undefined){
+      await api('PUT','/api/alumnos/'+p.alumno_id+'/precio-especial',{precio_especial:p.precio_especial,precio_normal:p.precio_normal,precio_bonificado:p.precio_bonificado});
+    }
+  }
   cerrarM('m-edit-vig');
-  // Recargar alumnos por si cambiaron precios
   _alumnos=await api('GET','/api/alumnos');
   toast('Precios actualizados','s');
 }
