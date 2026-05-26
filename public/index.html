@@ -131,7 +131,9 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
 <div class="spinner" id="spinner"><div class="spin"></div><div class="spin-txt" id="spin-txt">Cargando...</div></div>
 <div id="print-area" style="display:none"></div>
 
-<!-- PANTALLA DE LOGIN -->
+<div id="demo-banner" style="display:none;background:#FF9800;color:#fff;text-align:center;padding:8px;font-size:13px;font-weight:600;position:fixed;top:0;left:0;right:0;z-index:8000">
+  🎯 VERSIÓN DEMO — Máximo 5 alumnos · Para la versión completa contactanos
+</div>
 <div id="login-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center">
   <div style="width:360px;background:#fff;border-radius:16px;padding:32px;box-shadow:0 8px 32px rgba(0,0,0,.12);text-align:center">
     <div style="margin-bottom:16px">
@@ -525,6 +527,14 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
           </div>
         </div>
         <div id="admin-stats" style="padding:16px"></div>
+        <div style="padding:0 16px 16px">
+          <div style="font-weight:700;font-size:13px;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;padding-top:8px;border-top:1px solid var(--b)">Tabla de aranceles</div>
+          <div class="alert ai" style="font-size:11px;margin-bottom:12px">El precio bonificado se aplica si el pago es antes del día 10, excepto en Marzo y Julio que rigen todo el mes.</div>
+          <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+            <button class="btn bpb" onclick="nuevaVigencia()" style="font-size:12px">+ Nueva vigencia</button>
+          </div>
+          <div id="tabla-vig-admin"></div>
+        </div>
       </div>
     </div>
 
@@ -571,7 +581,7 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
       </div>
     </div>
 
-    <div id="s-aranceles" class="section">
+    <div id="s-aranceles" class="section" style="display:none">
       <div class="card">
         <div class="ctitle">Tabla de aranceles por vigencia</div>
         <div class="alert ai">El precio bonificado se aplica si el pago es antes del dia 10, excepto en Marzo (cuota 1) y Julio (cuota 5) donde rige todo el mes. Si todas las cuotas 1-9 fueron pagadas con descuento, la cuota 10 (Diciembre) tambien es bonificada.</div>
@@ -746,6 +756,7 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
 <div class="modal-bg" id="m-vig">
   <div class="modal">
     <div class="modal-title">Nueva tabla de aranceles</div>
+    <div id="vig-actual-info" style="display:none;background:var(--gl);padding:8px 12px;border-radius:6px;font-size:12px;color:var(--m);margin-bottom:8px"></div>
     <div class="alert aw" style="font-size:12px">Se clonan los precios actuales de todos los alumnos. Podes editarlos despues.</div>
     <div class="r2">
       <div class="fg"><label>Vigente desde</label><input type="date" id="vig-desde"></div>
@@ -805,6 +816,12 @@ function iniciales(n){return (n||'').split(/[\s,]+/).filter(Boolean).slice(0,2).
 async function init(){
   showSpinner('Cargando datos...');
   try{
+    // Verificar modo demo
+    var demoInfo = await api('GET', '/api/demo-info');
+    if (demoInfo && demoInfo.demo) {
+      document.getElementById('demo-banner').style.display = 'block';
+      document.querySelector('.main') && (document.querySelector('.main').style.marginTop = '36px');
+    }
     _cursos=await api('GET','/api/cursos');
     _alumnos=await api('GET','/api/alumnos');
     _pagos=await api('GET','/api/pagos');
@@ -925,7 +942,8 @@ async function guardarAlumno(){
   var cuits=document.getElementById('ma-cuits').value.trim();
   var tel=document.getElementById('ma-tel').value.trim();
   if(!nombre||!curso){toast('Completa nombre y curso','e');return;}
-  await api('POST','/api/alumnos',{nombre,curso,cuits,precio_normal:pn,precio_bonificado:pb,telefono:tel});
+  var r=await api('POST','/api/alumnos',{nombre,curso,cuits,precio_normal:pn,precio_bonificado:pb,telefono:tel});
+  if(!r||!r.ok){toast(r&&r.error?r.error:'Error al guardar','e');return;}
   cerrarM('m-alum');cargarAlumnos();toast('Alumno agregado','s');
 }
 
@@ -1581,17 +1599,8 @@ async function cargarStatsAdmin() {
 
   document.getElementById('admin-stats').innerHTML = html;
 
-  // Cargar aranceles dentro del panel admin
+  // Cargar aranceles en el panel admin
   await cargarAranceles();
-  var arDiv = document.getElementById('s-aranceles');
-  if (arDiv) {
-    var clone = arDiv.cloneNode(true);
-    clone.id = 'admin-aranceles-section';
-    clone.classList.remove('section');
-    clone.style.display = 'block';
-    clone.style.marginTop = '20px';
-    document.getElementById('admin-stats').appendChild(clone);
-  }
 }
 
 // SALDOS SIN IMPUTAR
@@ -2161,11 +2170,27 @@ function renderVigencias(){
       '</td></tr>';
   });
   h+='</tbody></table>';
-  document.getElementById('tabla-vig').innerHTML=h;
+  var t1=document.getElementById('tabla-vig');
+  var t2=document.getElementById('tabla-vig-admin');
+  if(t1)t1.innerHTML=h;
+  if(t2)t2.innerHTML=h;
 }
 
 function nuevaVigencia(){
-  document.getElementById('vig-desde').value=new Date().toISOString().slice(0,10);
+  // Precargar la fecha de hoy y la descripción de la vigencia activa
+  var hoy=new Date().toISOString().slice(0,10);
+  document.getElementById('vig-desde').value=hoy;
+  // Mostrar vigencia actual en el modal
+  var vigActual=_aranceles.find(function(v){return v.desde<=hoy;});
+  var infoEl=document.getElementById('vig-actual-info');
+  if(infoEl){
+    if(vigActual){
+      infoEl.textContent='Vigencia actual: '+vigActual.desde+(vigActual.descripcion?' — '+vigActual.descripcion:'');
+      infoEl.style.display='block';
+    } else {
+      infoEl.style.display='none';
+    }
+  }
   document.getElementById('vig-desc').value='';
   abrirM('m-vig');
 }
