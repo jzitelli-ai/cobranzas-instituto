@@ -1511,9 +1511,30 @@ async function backfillPagos() {
 
 // ADMINISTRACIÓN
 var _adminAutenticado = false;
+var _adminLoginTime = 0;
+var _ADMIN_TIMEOUT = 5 * 60 * 1000; // 5 minutos en ms
+var _adminTimeoutTimer = null;
+
+function _resetAdminTimeout() {
+  clearTimeout(_adminTimeoutTimer);
+  _adminTimeoutTimer = setTimeout(function(){
+    if (_adminAutenticado) {
+      _adminAutenticado = false;
+      _adminLoginTime = 0;
+      // Si el usuario está en el panel admin, volver a pedir clave
+      if (document.getElementById('s-admin') && document.getElementById('s-admin').classList.contains('active')) {
+        toast('Sesión de administración expirada. Ingresá la clave nuevamente.', 'w');
+        setTimeout(function(){ abrirAdmin(); }, 1200);
+      }
+    }
+  }, _ADMIN_TIMEOUT);
+}
 
 function abrirAdmin() {
-  if (_adminAutenticado) { nav('admin'); cargarStatsAdmin(); return; }
+  if (_adminAutenticado && (Date.now() - _adminLoginTime < _ADMIN_TIMEOUT)) {
+    nav('admin'); cargarStatsAdmin(); return;
+  }
+  _adminAutenticado = false;
   document.getElementById('admin-pwd').value='';
   document.getElementById('admin-login-err').style.display='none';
   abrirM('m-admin-login');
@@ -1526,6 +1547,8 @@ async function loginAdmin() {
   var r = await api('POST', '/api/admin/login', { password: pwd });
   if (r && r.ok) {
     _adminAutenticado = true;
+    _adminLoginTime = Date.now();
+    _resetAdminTimeout();
     cerrarM('m-admin-login');
     nav('admin');
     cargarStatsAdmin();
@@ -2176,7 +2199,7 @@ function renderVigencias(){
     h+='<tr><td style="font-weight:600">'+v.desde+'</td><td>'+(v.descripcion||'—')+'</td>'+
       '<td><span class="badge '+(act?'bs':'bp')+'">'+(act?'Activa':'Futura')+'</span></td>'+
       '<td style="white-space:nowrap">'+
-        (act?'<button class="btn bob" style="font-size:11px;padding:4px 9px;background:var(--gl)" onclick="verPreciosVig('+v.id+')">👁 Ver precios</button> ':'')+
+        '<button class="btn bob" style="font-size:11px;padding:4px 9px;background:var(--gl)" onclick="verPreciosVig('+v.id+')">👁 Ver precios</button> '+
         '<button class="btn bob" style="font-size:11px;padding:4px 9px" onclick="abrirEditVig('+v.id+')">Editar precios</button> '+
         (_aranceles.length>1?'<button class="btn bob" style="font-size:11px;padding:4px 9px;color:var(--d)" onclick="eliminarVig('+v.id+')">Eliminar</button>':'')+
       '</td></tr>';
