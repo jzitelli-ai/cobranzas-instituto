@@ -74,7 +74,9 @@ async function inicializarDB() {
     CREATE TABLE IF NOT EXISTS pagos (id SERIAL PRIMARY KEY, fecha TEXT NOT NULL, alumno_id INTEGER NOT NULL, alumno_nombre TEXT NOT NULL, curso TEXT NOT NULL, monto NUMERIC NOT NULL, concepto TEXT NOT NULL, medio TEXT NOT NULL, origen TEXT NOT NULL, saldo_favor NUMERIC DEFAULT 0);
     CREATE TABLE IF NOT EXISTS aranceles (id SERIAL PRIMARY KEY, desde TEXT NOT NULL, descripcion TEXT DEFAULT '', creado TEXT DEFAULT '');
     CREATE TABLE IF NOT EXISTS aranceles_precios (id SERIAL PRIMARY KEY, arancel_id INTEGER NOT NULL, alumno_id INTEGER NOT NULL, precio_normal NUMERIC DEFAULT 0, precio_bonificado NUMERIC DEFAULT 0);
+    CREATE TABLE IF NOT EXISTS aranceles_cursos (id SERIAL PRIMARY KEY, arancel_id INTEGER NOT NULL, curso TEXT NOT NULL, precio_normal NUMERIC DEFAULT 0, precio_bonificado NUMERIC DEFAULT 0, UNIQUE(arancel_id, curso));
     CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT);
+    ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS precio_especial BOOLEAN DEFAULT FALSE;
   `);
   const iniciado = await q1("SELECT valor FROM config WHERE clave='iniciado'");
   if (!iniciado) {
@@ -534,11 +536,27 @@ app.get('/api/aranceles', async (req,res) => { res.json(await q('SELECT * FROM a
 app.post('/api/aranceles', async (req,res) => {
   const {desde,descripcion}=req.body;
   const r=await q('INSERT INTO aranceles (desde,descripcion,creado) VALUES ($1,$2,$3) RETURNING id',[desde,descripcion||'',new Date().toISOString()]);
-  const id=r[0].id; const alumnos=await q('SELECT * FROM alumnos');
+  const id=r[0].id;
+  const alumnos=await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
   for(const a of alumnos) await q('INSERT INTO aranceles_precios (arancel_id,alumno_id,precio_normal,precio_bonificado) VALUES ($1,$2,$3,$4)',[id,a.id,a.precio_normal,a.precio_bonificado]);
+  // Clonar precios por curso del arancel anterior, o calcular del promedio
+  const prevArancel=await q1('SELECT id FROM aranceles WHERE id!=$1 ORDER BY desde DESC LIMIT 1',[id]);
+  if(prevArancel) {
+    const prevCursos=await q('SELECT * FROM aranceles_cursos WHERE arancel_id=$1',[prevArancel.id]);
+    for(const c of prevCursos) await q('INSERT INTO aranceles_cursos (arancel_id,curso,precio_normal,precio_bonificado) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING',[id,c.curso,c.precio_normal,c.precio_bonificado]);
+  } else {
+    const cursos=await q("SELECT DISTINCT curso FROM alumnos WHERE activo=TRUE AND curso!='' ORDER BY curso");
+    for(const c of cursos) {
+      const precios=await q('SELECT precio_normal,precio_bonificado FROM alumnos WHERE curso=$1 AND activo=TRUE AND (precio_especial=FALSE OR precio_especial IS NULL)',[c.curso]);
+      if(!precios.length) continue;
+      const pn=Math.round(precios.reduce((s,p)=>s+Number(p.precio_normal),0)/precios.length);
+      const pb=Math.round(precios.reduce((s,p)=>s+Number(p.precio_bonificado),0)/precios.length);
+      await q('INSERT INTO aranceles_cursos (arancel_id,curso,precio_normal,precio_bonificado) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING',[id,c.curso,pn,pb]);
+    }
+  }
   res.json({ok:true,id});
 });
-app.get('/api/aranceles/:id/precios', async (req,res) => { res.json(await q('SELECT ap.*,a.nombre,a.curso FROM aranceles_precios ap JOIN alumnos a ON ap.alumno_id=a.id WHERE ap.arancel_id=$1 ORDER BY a.nombre',[req.params.id])); });
+app.get('/api/aranceles/:id/precios', async (req,res) => { res.json(await q('SELECT ap.*,a.nombre,a.curso,a.precio_especial FROM aranceles_precios ap JOIN alumnos a ON ap.alumno_id=a.id WHERE ap.arancel_id=$1 ORDER BY a.curso,a.nombre',[req.params.id])); });
 app.put('/api/aranceles/:id/precios', async (req,res) => {
   const {precios}=req.body; const hoy=new Date().toISOString().slice(0,10);
   const arancel=await q1('SELECT * FROM aranceles WHERE id=$1',[req.params.id]);
@@ -548,8 +566,35 @@ app.put('/api/aranceles/:id/precios', async (req,res) => {
   }
   res.json({ok:true});
 });
+// Precios por curso
+app.get('/api/aranceles/:id/cursos', async (req,res) => {
+  res.json(await q('SELECT * FROM aranceles_cursos WHERE arancel_id=$1 ORDER BY curso',[req.params.id]));
+});
+app.put('/api/aranceles/:id/cursos', async (req,res) => {
+  const {curso,precio_normal,precio_bonificado,desde_cuota}=req.body;
+  const arancel=await q1('SELECT * FROM aranceles WHERE id=$1',[req.params.id]);
+  if(!arancel) return res.json({ok:false});
+  await q('INSERT INTO aranceles_cursos (arancel_id,curso,precio_normal,precio_bonificado) VALUES ($1,$2,$3,$4) ON CONFLICT (arancel_id,curso) DO UPDATE SET precio_normal=$3,precio_bonificado=$4',[req.params.id,curso,precio_normal,precio_bonificado]);
+  const alumnos=await q('SELECT id FROM alumnos WHERE curso=$1 AND activo=TRUE AND (precio_especial=FALSE OR precio_especial IS NULL)',[curso]);
+  for(const a of alumnos) {
+    await q('UPDATE alumnos SET precio_normal=$1,precio_bonificado=$2 WHERE id=$3',[precio_normal,precio_bonificado,a.id]);
+    await q('UPDATE aranceles_precios SET precio_normal=$1,precio_bonificado=$2 WHERE arancel_id=$3 AND alumno_id=$4',[precio_normal,precio_bonificado,req.params.id,a.id]);
+    if(desde_cuota && desde_cuota!=='ninguna') {
+      const desdeCuota=desde_cuota==='futuras'?(new Date().getMonth()+1):parseInt(desde_cuota);
+      await q('UPDATE cuotas SET monto_pagado=$1 WHERE alumno_id=$2 AND estado=$3 AND numero_cuota>=$4',[precio_normal,a.id,'pendiente',desdeCuota]);
+    }
+  }
+  res.json({ok:true,afectados:alumnos.length});
+});
+// Precio especial por alumno
+app.put('/api/alumnos/:id/precio-especial', async (req,res) => {
+  const {precio_especial,precio_normal,precio_bonificado}=req.body;
+  await q('UPDATE alumnos SET precio_especial=$1,precio_normal=$2,precio_bonificado=$3 WHERE id=$4',[precio_especial,precio_normal,precio_bonificado,req.params.id]);
+  res.json({ok:true});
+});
 app.delete('/api/aranceles/:id', async (req,res) => {
   await q('DELETE FROM aranceles_precios WHERE arancel_id=$1',[req.params.id]);
+  await q('DELETE FROM aranceles_cursos WHERE arancel_id=$1',[req.params.id]);
   await q('DELETE FROM aranceles WHERE id=$1',[req.params.id]); res.json({ok:true});
 });
 
