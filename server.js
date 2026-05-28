@@ -372,9 +372,16 @@ async function aplicarPagoConSaldo(alumnoId, alumno, monto, fecha, origen) {
     const esGratis = c.numero_cuota === 10 && await cuota10Gratis(alumnoId, alumno);
     const precio = esGratis ? 0 : getPrecio(alumno, c.numero_cuota, dia);
     if (precio === 0 || restante >= precio) {
+      // Pago completo de la cuota
       await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', ['pagada', fecha, precio, c.id]);
       conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota-1]} 2026)${esGratis?' (GRATIS)':''}`);
       restante -= precio;
+    } else if (restante > 0 && restante < precio) {
+      // Pago parcial — deja la cuota pendiente con el monto parcial registrado
+      const saldoPendiente = precio - restante;
+      await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', ['pendiente', fecha, restante, c.id]);
+      conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota-1]} 2026) — pago parcial $${restante.toLocaleString('es-AR')}, saldo pendiente $${saldoPendiente.toLocaleString('es-AR')}`);
+      restante = 0;
     }
   }
 
@@ -389,6 +396,11 @@ async function aplicarPagoConSaldo(alumnoId, alumno, monto, fecha, origen) {
         await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', ['pagada', fecha, precio, c.id]);
         conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota-1]} 2026) [credito]`);
         restante -= precio;
+      } else if (restante > 0 && restante < precio) {
+        const saldoPendiente = precio - restante;
+        await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', ['pendiente', fecha, restante, c.id]);
+        conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota-1]} 2026) — pago parcial $${restante.toLocaleString('es-AR')}, saldo pendiente $${saldoPendiente.toLocaleString('es-AR')}`);
+        restante = 0;
       }
     }
   }
