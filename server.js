@@ -1090,6 +1090,22 @@ let systemPassword = process.env.SYSTEM_PASSWORD || (DEMO_MODE ? 'DEMO' : '1997'
 let recoveryCode = null;
 let recoveryExpiry = null;
 
+app.post('/api/admin/cambiar-clave', (req,res) => {
+  const {claveActual, nuevaClave} = req.body;
+  if (claveActual !== adminPassword) return res.json({ok:false, error:'Clave actual incorrecta.'});
+  if (!nuevaClave || nuevaClave.length < 4) return res.json({ok:false, error:'La nueva clave debe tener al menos 4 caracteres.'});
+  adminPassword = nuevaClave;
+  res.json({ok:true});
+});
+
+app.post('/api/sistema/cambiar-clave', (req,res) => {
+  const {claveActual, nuevaClave} = req.body;
+  if (claveActual !== systemPassword) return res.json({ok:false, error:'Clave actual incorrecta.'});
+  if (!nuevaClave || nuevaClave.length < 4) return res.json({ok:false, error:'La nueva clave debe tener al menos 4 caracteres.'});
+  systemPassword = nuevaClave;
+  res.json({ok:true});
+});
+
 app.post('/api/admin/login', (req, res) => {
   const { password } = req.body;
   res.json({ ok: password === adminPassword });
