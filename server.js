@@ -506,7 +506,7 @@ app.get('/api/reporte', async (req,res) => {
     const totalDebido=cuotasGen.reduce((s,[k])=>{const n=parseInt(k);return s+(n===10&&c10g?0:getPrecio(a,n,dia));},0);
     let saldo=totalPagado-totalDebido;
     if(saldo>0){let d=saldo;for(let i=0;i<10;i++){const n=i+1;if(estadoCuotas[n]==='pendiente'&&d>0){const p=n===10&&c10g?0:getPrecio(a,n,dia);if(p>0&&d>=p){estadoCuotas[n]='compensada';d-=p;}}}}
-    const deudaReal=Object.entries(estadoCuotas).reduce((s,[k,v])=>{if(v!=='pendiente')return s;const n=parseInt(k);return s+(n===10&&c10g?0:getPrecio(a,n,dia));},0);
+    const deudaReal=Object.entries(estadoCuotas).reduce((s,[k,v])=>{if(v!=='pendiente')return s;const n=parseInt(k);const precio=n===10&&c10g?0:getPrecio(a,n,dia);const pagado=montosPago[n]||0;return s+(precio-pagado);},0);
     resultado.push({id:a.id,nombre:a.nombre,curso:a.curso,precio_normal:parseFloat(a.precio_normal),precio_bonificado:parseFloat(a.precio_bonificado),cuits:a.cuits,telefono:a.telefono||'',activo:a.activo,estadoCuotas,fechasPago,montosPago,deudaReal,totalPagado,cuota10Gratis:c10g});
   }
   res.json(resultado);
