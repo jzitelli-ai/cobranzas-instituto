@@ -1479,20 +1479,35 @@ function filtrarHistorial(){
     var origenBadge = esI
       ? '<span class="badge bp" style="font-size:9px;margin-left:4px">Importado</span>'
       : esM ? '' : '<span class="badge bs" style="font-size:9px;margin-left:4px">Banco</span>';
-    return '<div class="hist-entry">'+
+    return '<div class="hist-entry" style="cursor:pointer" onclick="abrirDetalleDesdeHistorial('+p.alumno_id+',event)">'+
       '<div class="hist-icon '+iconClass+'">'+icon+'</div>'+
       '<div class="hist-info">'+
         '<div class="hn">'+p.alumno_nombre+' <span class="badge bp" style="margin-left:4px;font-size:9px">'+p.curso+'</span>'+origenBadge+'</div>'+
         '<div class="hd">'+p.fecha+' · '+p.concepto+' · Recibo #'+p.id+'</div>'+
       '</div>'+
       '<div class="hm">+'+pesos(p.monto)+'</div>'+
-      '<div style="display:flex;gap:5px;margin-left:10px;flex-shrink:0">'+
+      '<div style="display:flex;gap:5px;margin-left:10px;flex-shrink:0" onclick="event.stopPropagation()">'+
         '<button class="btn bob" style="padding:2px 8px;font-size:10.5px" onclick=\'reimprimirRecibo('+JSON.stringify(p)+')\'>Reimprimir</button>'+
         '<button class="btn bob" style="padding:2px 8px;font-size:10.5px" onclick=\'abrirEditPago('+JSON.stringify(p)+')\'>Editar</button>'+
         '<button class="btn bob" style="padding:2px 8px;font-size:10.5px;color:var(--d)" onclick="abrirEliminarPago('+p.id+','+p.alumno_id+')">Eliminar</button>'+
       '</div>'+
     '</div>';
   }).join('');
+}
+
+async function abrirDetalleDesdeHistorial(alumnoId, event){
+  // No abrir si el click fue en un botón
+  if(event && event.target && (event.target.tagName==='BUTTON'||event.target.closest('button'))) return;
+  // Buscar en reporte si ya está cargado
+  if(_reporte && _reporte.length){
+    var a=_reporte.find(function(x){return x.id===alumnoId;});
+    if(a){ abrirDetalleAlumno(alumnoId); return; }
+  }
+  // Si no, cargar reporte primero
+  showSpinner('Cargando detalle...');
+  _reporte = await api('GET','/api/reporte');
+  hideSpinner();
+  abrirDetalleAlumno(alumnoId);
 }
 
 // EDITAR / ELIMINAR PAGOS
