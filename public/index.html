@@ -535,6 +535,37 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
           </div>
           <div id="tabla-vig-admin"></div>
         </div>
+        <div style="padding:0 16px 24px">
+          <div style="font-weight:700;font-size:13px;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;padding-top:8px;border-top:1px solid var(--b)">Cambio de claves</div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <button class="btn bob" onclick="abrirCambiarClave('sistema')" style="font-size:12px">🔑 Cambiar clave del sistema</button>
+            <button class="btn bob" onclick="abrirCambiarClave('admin')" style="font-size:12px">🔐 Cambiar clave de administración</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL LOGIN ADMIN -->
+    <div class="modal-bg" id="m-cambiar-clave" style="z-index:700">
+      <div class="modal" style="width:360px;z-index:701">
+        <div class="modal-title" id="cambiar-clave-tit">Cambiar clave</div>
+        <div class="fg">
+          <label>Clave actual</label>
+          <input type="password" id="cc-actual" placeholder="Ingresá la clave actual" onkeydown="if(event.key==='Enter')cambiarClave()">
+        </div>
+        <div class="fg">
+          <label>Nueva clave</label>
+          <input type="password" id="cc-nueva" placeholder="Nueva clave" onkeydown="if(event.key==='Enter')cambiarClave()">
+        </div>
+        <div class="fg">
+          <label>Confirmar nueva clave</label>
+          <input type="password" id="cc-confirmar" placeholder="Repetí la nueva clave" onkeydown="if(event.key==='Enter')cambiarClave()">
+        </div>
+        <div id="cc-err" style="display:none;color:var(--d);font-size:12px;margin-bottom:8px"></div>
+        <div class="modal-btns">
+          <button class="btn bob" onclick="cerrarM('m-cambiar-clave')">Cancelar</button>
+          <button class="btn bpb" onclick="cambiarClave()">Cambiar clave</button>
+        </div>
       </div>
     </div>
 
@@ -1569,6 +1600,33 @@ async function backfillPagos() {
   if (!r || !r.ok) { toast('Error al sincronizar', 'e'); return; }
   cargarHistorial();
   toast('Sincronizacion completa — ' + r.insertados + ' registros generados', 's');
+}
+
+// CAMBIO DE CLAVES
+var _cambiarClaveTipo = '';
+function abrirCambiarClave(tipo){
+  _cambiarClaveTipo = tipo;
+  document.getElementById('cambiar-clave-tit').textContent = tipo==='admin' ? '🔐 Cambiar clave de administración' : '🔑 Cambiar clave del sistema';
+  document.getElementById('cc-actual').value='';
+  document.getElementById('cc-nueva').value='';
+  document.getElementById('cc-confirmar').value='';
+  document.getElementById('cc-err').style.display='none';
+  abrirM('m-cambiar-clave');
+  setTimeout(function(){ document.getElementById('cc-actual').focus(); }, 200);
+}
+async function cambiarClave(){
+  var actual=document.getElementById('cc-actual').value;
+  var nueva=document.getElementById('cc-nueva').value;
+  var confirmar=document.getElementById('cc-confirmar').value;
+  var err=document.getElementById('cc-err');
+  err.style.display='none';
+  if(!actual||!nueva||!confirmar){ err.textContent='Completá todos los campos.'; err.style.display='block'; return; }
+  if(nueva!==confirmar){ err.textContent='Las claves nuevas no coinciden.'; err.style.display='block'; return; }
+  if(nueva.length<4){ err.textContent='La clave debe tener al menos 4 caracteres.'; err.style.display='block'; return; }
+  var ruta=_cambiarClaveTipo==='admin'?'/api/admin/cambiar-clave':'/api/sistema/cambiar-clave';
+  var r=await api('POST',ruta,{claveActual:actual,nuevaClave:nueva});
+  if(r&&r.ok){ cerrarM('m-cambiar-clave'); toast('Clave actualizada correctamente','s'); }
+  else { err.textContent=r&&r.error?r.error:'Clave actual incorrecta.'; err.style.display='block'; document.getElementById('cc-actual').value=''; document.getElementById('cc-actual').focus(); }
 }
 
 // ADMINISTRACIÓN
