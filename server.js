@@ -263,13 +263,11 @@ app.delete('/api/pagos/:id', async (req,res) => {
 });
 
 app.post('/api/cobro', async (req,res) => {
-  const {alumnoId,monto,medio,origen,cuotasSeleccionadas,fechaManual}=req.body;
+  const {alumnoId,monto,medio,origen,cuotasSeleccionadas}=req.body;
   const alumno=await q1('SELECT * FROM alumnos WHERE id=$1',[alumnoId]);
   if(!alumno) return res.json({ok:false,error:'Alumno no encontrado'});
-  // Usar fecha manual si viene del cliente, si no usar fecha actual
-  const fechaBase=fechaManual?new Date(fechaManual+'T12:00:00'):new Date();
-  const dia=fechaBase.getDate();
-  const fecha=fechaBase.toLocaleDateString('es-AR')+' '+fechaBase.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+  const dia=new Date().getDate();
+  const fecha=new Date().toLocaleDateString('es-AR')+' '+new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
   const conceptos=[];
 
   if(cuotasSeleccionadas&&cuotasSeleccionadas.length>0) {
@@ -421,7 +419,7 @@ app.post('/api/banco', async (req,res) => {
     });
   });
   const dia=new Date().getDate(), fecha=new Date().toLocaleDateString('es-AR');
-  let aplicados=0,duplicados=0; const noEncontrados=[],sinCuit=[];
+  let aplicados=0; const duplicados=[],noEncontrados=[],sinCuit=[];
   for(const fila of filas) {
     const cuit=normalizarCuit(fila[colCuit]); const monto=parsearMonto(fila[colMonto]);
     const descrip=fila['DESCRIP']||fila['descrip']||fila['DESCRIPCION']||fila['DETALLE']||'';
@@ -442,7 +440,14 @@ app.post('/api/banco', async (req,res) => {
       "SELECT id, fecha, origen FROM pagos WHERE alumno_id=$1 AND monto=$2",
       [alumno.id, monto]
     );
-    if (yaExiste) { duplicados++; continue; }
+    if (yaExiste) {
+      let fr=fila['FECHA']||fila['fecha']||fila['Fecha']||'',fs='';
+      if(typeof fr==='number'){const d=new Date(Math.round((fr-25569)*86400*1000));fs=d.toLocaleDateString('es-AR');}
+      else if(fr instanceof Date){fs=fr.toLocaleDateString('es-AR');}
+      else{fs=String(fr).slice(0,10);}
+      duplicados.push({alumno:alumno.nombre,curso:alumno.curso,cuit,monto,fecha:fs,pagoExistente:{id:yaExiste.id,fecha:yaExiste.fecha,origen:yaExiste.origen}});
+      continue;
+    }
 
     // Usar la fecha del archivo bancario, no la de importación
     let fechaPago = fecha;
@@ -508,7 +513,7 @@ app.get('/api/reporte', async (req,res) => {
     const totalDebido=cuotasGen.reduce((s,[k])=>{const n=parseInt(k);return s+(n===10&&c10g?0:getPrecio(a,n,dia));},0);
     let saldo=totalPagado-totalDebido;
     if(saldo>0){let d=saldo;for(let i=0;i<10;i++){const n=i+1;if(estadoCuotas[n]==='pendiente'&&d>0){const p=n===10&&c10g?0:getPrecio(a,n,dia);if(p>0&&d>=p){estadoCuotas[n]='compensada';d-=p;}}}}
-    const deudaReal=Object.entries(estadoCuotas).reduce((s,[k,v])=>{if(v!=='pendiente')return s;const n=parseInt(k);const precio=n===10&&c10g?0:getPrecio(a,n,dia);const pagado=montosPago[n]||0;return s+(precio-pagado);},0);
+    const deudaReal=Object.entries(estadoCuotas).reduce((s,[k,v])=>{if(v!=='pendiente')return s;const n=parseInt(k);return s+(n===10&&c10g?0:getPrecio(a,n,dia));},0);
     resultado.push({id:a.id,nombre:a.nombre,curso:a.curso,precio_normal:parseFloat(a.precio_normal),precio_bonificado:parseFloat(a.precio_bonificado),cuits:a.cuits,telefono:a.telefono||'',activo:a.activo,estadoCuotas,fechasPago,montosPago,deudaReal,totalPagado,cuota10Gratis:c10g});
   }
   res.json(resultado);
