@@ -362,46 +362,69 @@ app.post('/api/reprocesar-historicos', async (req,res) => {
 // Función central: aplica un monto a cuotas pendientes de más antigua a más nueva
 // Si sobra saldo, lo aplica a la siguiente cuota que venza
 async function aplicarPagoConSaldo(alumnoId, alumno, monto, fecha, origen) {
+  // Determinar dia y mes de la transferencia para aplicar a la cuota correcta
   const dia = parseInt((fecha||'').split('/')[0]) || new Date().getDate();
-  const pendientes = await q('SELECT * FROM cuotas WHERE alumno_id=$1 AND estado=$2 ORDER BY numero_cuota', [alumnoId, 'pendiente']);
-  let restante = monto;
-  const conceptos = [];
 
-  for (const c of pendientes) {
-    if (restante <= 0) break;
-    const esGratis = c.numero_cuota === 10 && await cuota10Gratis(alumnoId, alumno);
-    const precio = esGratis ? 0 : getPrecio(alumno, c.numero_cuota, dia);
-    if (precio === 0 || restante >= precio) {
-      // Pago completo de la cuota
-      await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', ['pagada', fecha, precio, c.id]);
-      conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota-1]} 2026)${esGratis?' (GRATIS)':''}`);
-      restante -= precio;
-    } else if (restante > 0 && restante < precio) {
-      // Pago parcial — deja la cuota pendiente con el monto parcial registrado
-      const saldoPendiente = precio - restante;
-      await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', ['pendiente', fecha, restante, c.id]);
-      conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota-1]} 2026) — pago parcial $${restante.toLocaleString('es-AR')}, saldo pendiente $${saldoPendiente.toLocaleString('es-AR')}`);
-      restante = 0;
+  // Detectar mes de la fecha para saber cuál es la cuota objetivo
+  // fecha puede venir como "dd/mm/yyyy" o "yyyy-mm-dd"
+  let mesFecha = null;
+  if (fecha) {
+    let partes = fecha.includes('/') ? fecha.split('/') : fecha.split('-');
+    if (fecha.includes('/')) {
+      // dd/mm/yyyy
+      mesFecha = parseInt(partes[1]);
+    } else {
+      // yyyy-mm-dd
+      mesFecha = parseInt(partes[1]);
+    }
+  }
+  // Cuota objetivo: el numero de cuota que corresponde al mes de la transferencia
+  // MESES_IDX = [2,3,4,5,6,7,8,9,10,11] => cuota 1=marzo(2), cuota 2=abril(3), etc.
+  let cuotaObjetivo = null;
+  if (mesFecha) {
+    const idx = MESES_IDX.indexOf(mesFecha - 1); // mesFecha es 1-based, MESES_IDX tiene mes 0-based
+    // Correccion: MESES_IDX tiene [2,3,4,...] que son indices de mes 0-based (marzo=2, abril=3)
+    // fecha mes 3 (marzo) => MESES_IDX[0]=2 => no coincide directo
+    // Mejor: buscar cuota cuyo MESES_IDX[i] === mesFecha-1
+    for (let i = 0; i < MESES_IDX.length; i++) {
+      if (MESES_IDX[i] === mesFecha - 1) { cuotaObjetivo = i + 1; break; }
     }
   }
 
-  // Si sobra saldo, aplicar a la siguiente cuota pendiente (crédito adelantado)
-  if (restante > 0) {
-    const siguientes = await q('SELECT * FROM cuotas WHERE alumno_id=$1 AND estado=$2 ORDER BY numero_cuota', [alumnoId, 'pendiente']);
-    for (const c of siguientes) {
-      if (restante <= 0) break;
-      const esGratis = c.numero_cuota === 10 && await cuota10Gratis(alumnoId, alumno);
-      const precio = esGratis ? 0 : getPrecio(alumno, c.numero_cuota, dia);
-      if (precio === 0 || restante >= precio) {
-        await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', ['pagada', fecha, precio, c.id]);
-        conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota-1]} 2026) [credito]`);
-        restante -= precio;
-      } else if (restante > 0 && restante < precio) {
-        const saldoPendiente = precio - restante;
-        await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', ['pendiente', fecha, restante, c.id]);
-        conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota-1]} 2026) — pago parcial $${restante.toLocaleString('es-AR')}, saldo pendiente $${saldoPendiente.toLocaleString('es-AR')}`);
-        restante = 0;
-      }
+  const todasPendientes = await q('SELECT * FROM cuotas WHERE alumno_id=$1 AND estado=$2 ORDER BY numero_cuota', [alumnoId, 'pendiente']);
+  let restante = monto;
+  const conceptos = [];
+
+  // Ordenar pendientes: siempre en orden ascendente (cuota 1, 2, 3...)
+  // La cuota objetivo define hasta dónde aplicar en primera pasada.
+  // Si hay cuotas anteriores a la objetivo pendientes, se pagan primero.
+  // Cuotas posteriores a la objetivo se pagan solo si sobra saldo.
+  let ordenadas = todasPendientes;
+  if (cuotaObjetivo) {
+    const hastaObjetivo = todasPendientes.filter(c => c.numero_cuota <= cuotaObjetivo);
+    const despues       = todasPendientes.filter(c => c.numero_cuota > cuotaObjetivo);
+    ordenadas = [...hastaObjetivo, ...despues];
+  }
+
+  for (const c of ordenadas) {
+    if (restante <= 0) break;
+    const esGratis = c.numero_cuota === 10 && await cuota10Gratis(alumnoId, alumno);
+    const precio = esGratis ? 0 : getPrecio(alumno, c.numero_cuota, dia);
+    const yaAbonado = parseFloat(c.monto_pagado) || 0;
+    const saldoCuota = precio - yaAbonado; // lo que falta para completar esta cuota
+    if (saldoCuota <= 0) continue; // ya estaba pagada parcialmente con saldo completo
+    if (precio === 0 || restante >= saldoCuota) {
+      // Pago completo de la cuota
+      await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', ['pagada', fecha, precio, c.id]);
+      conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota-1]} 2026)${esGratis?' (GRATIS)':''}${c.numero_cuota < (cuotaObjetivo||1) ? ' [cuota anterior]' : ''}`);
+      restante -= saldoCuota;
+    } else {
+      // Pago parcial
+      const nuevoAbonado = yaAbonado + restante;
+      const saldoPendiente = precio - nuevoAbonado;
+      await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', ['pendiente', fecha, nuevoAbonado, c.id]);
+      conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota-1]} 2026) — pago parcial $${nuevoAbonado.toLocaleString('es-AR')}, saldo pendiente $${saldoPendiente.toLocaleString('es-AR')}`);
+      restante = 0;
     }
   }
 
