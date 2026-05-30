@@ -263,11 +263,13 @@ app.delete('/api/pagos/:id', async (req,res) => {
 });
 
 app.post('/api/cobro', async (req,res) => {
-  const {alumnoId,monto,medio,origen,cuotasSeleccionadas}=req.body;
+  const {alumnoId,monto,medio,origen,cuotasSeleccionadas,fechaManual}=req.body;
   const alumno=await q1('SELECT * FROM alumnos WHERE id=$1',[alumnoId]);
   if(!alumno) return res.json({ok:false,error:'Alumno no encontrado'});
-  const dia=new Date().getDate();
-  const fecha=new Date().toLocaleDateString('es-AR')+' '+new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+  // Usar fecha manual si viene del cliente, si no usar fecha actual
+  const fechaBase=fechaManual?new Date(fechaManual+'T12:00:00'):new Date();
+  const dia=fechaBase.getDate();
+  const fecha=fechaBase.toLocaleDateString('es-AR')+' '+fechaBase.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
   const conceptos=[];
 
   if(cuotasSeleccionadas&&cuotasSeleccionadas.length>0) {
