@@ -457,12 +457,24 @@ app.post('/api/banco', async (req,res) => {
       noEncontrados.push({cuit,monto,fecha:fs,detalle:String(fila[colCuit]||'').slice(0,80),descrip:String(descrip).trim()});
       continue;
     }
-    // Anti-duplicado: verificar si ya existe un pago del mismo alumno con el mismo monto
-    // independientemente de la fecha o el origen (Excel, banco, manual)
-    const yaExiste = await q1(
-      "SELECT id, fecha, origen FROM pagos WHERE alumno_id=$1 AND monto=$2",
-      [alumno.id, monto]
-    );
+    // Extraer mes de la fecha del archivo para el anti-duplicado
+    const fechaRawDup = fila['FECHA']||fila['fecha']||fila['Fecha']||'';
+    let mesFechaDup = null;
+    if (fechaRawDup) {
+      if (typeof fechaRawDup === 'number') {
+        const d = new Date(Math.round((fechaRawDup-25569)*86400*1000));
+        mesFechaDup = d.getMonth()+1;
+      } else if (fechaRawDup instanceof Date) {
+        mesFechaDup = fechaRawDup.getMonth()+1;
+      } else {
+        const s = String(fechaRawDup);
+        mesFechaDup = s.includes('/') ? parseInt(s.split('/')[1]) : parseInt(s.split('-')[1]);
+      }
+    }
+    // Anti-duplicado: mismo alumno, mismo monto Y mismo mes — evita confundir cuotas de distintos meses
+    const yaExiste = mesFechaDup
+      ? await q1("SELECT id, fecha, origen FROM pagos WHERE alumno_id=$1 AND monto=$2 AND SUBSTRING(fecha,4,2)=$3", [alumno.id, monto, String(mesFechaDup).padStart(2,'0')])
+      : await q1("SELECT id, fecha, origen FROM pagos WHERE alumno_id=$1 AND monto=$2", [alumno.id, monto]);
     if (yaExiste) {
       let fr=fila['FECHA']||fila['fecha']||fila['Fecha']||'',fs='';
       if(typeof fr==='number'){const d=new Date(Math.round((fr-25569)*86400*1000));fs=d.toLocaleDateString('es-AR');}
