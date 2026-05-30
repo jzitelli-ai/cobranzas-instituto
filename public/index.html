@@ -1320,7 +1320,70 @@ function leerBanco(file){
     try{
       var wb=XLSX.read(e.target.result,{type:'array'});
       var ws=wb.Sheets[wb.SheetNames[0]];
-      // Leer con headers (primera fila)
+
+      // --- DETECCION AUTOMATICA: formato extracto bancario (Macro/BNA etc.) ---
+      // Buscar fila con headers buscando "Descripción" y "Caja de Ahorro"
+      var rawRows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      var headerRow=-1, colFecha=-1, colDesc=-1, colMonto=-1;
+      for(var i=0;i<rawRows.length;i++){
+        var row=rawRows[i];
+        for(var j=0;j<row.length;j++){
+          var v=String(row[j]||'').toLowerCase();
+          if(v==='fecha') colFecha=j;
+          if(v.indexOf('descripci')>=0) colDesc=j;
+          if(v.indexOf('caja de ahorro')>=0||v.indexOf('haber')>=0) colMonto=j;
+        }
+        if(colFecha>=0 && colDesc>=0 && colMonto>=0){headerRow=i;break;}
+      }
+
+      if(headerRow>=0){
+        // Formato bancario detectado — extraer CUIT desde descripción
+        var procesadas=[];
+        var cuitRegex=/(?:var|cuo)\s*\/\s*(\d{8,11})/i;
+        for(var i=headerRow+1;i<rawRows.length;i++){
+          var row=rawRows[i];
+          var fecha=row[colFecha], desc=String(row[colDesc]||''), monto=row[colMonto];
+          if(!fecha||!desc||!monto) continue;
+          if(typeof monto!=='number'||monto<=0) continue;
+          if(desc.toLowerCase().indexOf('recibida')<0) continue;
+          var cuitMatch=cuitRegex.exec(desc);
+          var cuit=cuitMatch?cuitMatch[1]:'';
+          // Formatear fecha
+          var fechaStr='';
+          if(typeof fecha==='number'){
+            var d=new Date(Math.round((fecha-25569)*86400*1000));
+            fechaStr=d.toLocaleDateString('es-AR');
+          } else { fechaStr=String(fecha).slice(0,10); }
+          // Extraer nombre del remitente desde descripción
+          var nombreMatch=desc.match(/De\s+([^/\-]+?)\s*\/|De\s+(.+?)\s*-\s*var/i);
+          var nombre=nombreMatch?(nombreMatch[1]||nombreMatch[2]||'').trim():'';
+          procesadas.push({'CUIT':cuit,'FECHA':fechaStr,'IMPORTE':monto,'DESCRIPCION':nombre});
+        }
+        if(procesadas.length>0){
+          bancoData=procesadas;
+          document.getElementById('banco-msg').innerHTML=
+            'Archivo: <strong>'+file.name+'</strong> — <span style="color:var(--s);font-weight:600">✓ Formato bancario detectado automáticamente</span> — '+procesadas.length+' transferencias recibidas extraídas';
+          // Preview
+          var h='<table style="font-size:11px"><thead><tr><th>CUIT</th><th>FECHA</th><th>IMPORTE</th><th>DESCRIPCION</th></tr></thead><tbody>';
+          procesadas.slice(0,5).forEach(function(row){
+            h+='<tr><td>'+row.CUIT+'</td><td>'+row.FECHA+'</td><td>$'+row.IMPORTE.toLocaleString('es-AR')+'</td><td>'+row.DESCRIPCION+'</td></tr>';
+          });
+          h+='</tbody></table>';
+          document.getElementById('banco-prev').innerHTML=h;
+          // Pre-setear columnas
+          ['bc-cuit','bc-monto'].forEach(function(id){
+            var s=document.getElementById(id);s.innerHTML='';
+            ['CUIT','FECHA','IMPORTE','DESCRIPCION'].forEach(function(c){s.innerHTML+='<option value="'+c+'">'+c+'</option>';});
+          });
+          document.getElementById('bc-cuit').value='CUIT';
+          document.getElementById('bc-monto').value='IMPORTE';
+          // Agregar FECHA al map de filas para que el servidor la use
+          bstep(2);
+          return;
+        }
+      }
+
+      // --- Formato estandar (con columnas ya mapeadas) ---
       bancoData=XLSX.utils.sheet_to_json(ws,{defval:''});
       if(!bancoData||bancoData.length===0){toast('Archivo vacío o sin datos','e');return;}
 
@@ -1349,12 +1412,11 @@ function leerBanco(file){
         cols.forEach(function(c){s.innerHTML+='<option value="'+c+'">'+c+'</option>';});
       });
 
-      // Auto-detectar: CUIT = col con nombre CUIT o que tenga números de 11 dígitos
-      // Monto = col IMPORTE o con valores numéricos altos
+      // Auto-detectar columnas
       cols.forEach(function(c){
         var cl=c.toUpperCase();
         if(cl==='CUIT'||cl.indexOf('CUIT')>=0) document.getElementById('bc-cuit').value=c;
-        if(cl==='IMPORTE'||cl==='MONTO'||cl==='HABER'||cl==='IMPORTE') document.getElementById('bc-monto').value=c;
+        if(cl==='IMPORTE'||cl==='MONTO'||cl==='HABER') document.getElementById('bc-monto').value=c;
       });
 
       bstep(2);
