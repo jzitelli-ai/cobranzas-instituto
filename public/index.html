@@ -529,11 +529,17 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
         <div id="admin-stats" style="padding:16px"></div>
         <div style="padding:0 16px 16px">
           <div style="font-weight:700;font-size:13px;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;padding-top:8px;border-top:1px solid var(--b)">Tabla de aranceles</div>
-          <div class="alert ai" style="font-size:11px;margin-bottom:12px">El precio bonificado se aplica si el pago es antes del día 10, excepto en Marzo y Julio que rigen todo el mes.</div>
+          <div class="alert ai" style="font-size:11px;margin-bottom:12px">El precio bonificado se aplica según las fechas de vencimiento configuradas por cuota.</div>
           <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
             <button class="btn bpb" onclick="nuevaVigencia()" style="font-size:12px">+ Nueva vigencia</button>
           </div>
           <div id="tabla-vig-admin"></div>
+        </div>
+        <div style="padding:0 16px 24px">
+          <div style="font-weight:700;font-size:13px;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;padding-top:8px;border-top:1px solid var(--b)">Fechas de vencimiento bonificado</div>
+          <div class="alert ai" style="font-size:11px;margin-bottom:12px">Hasta la fecha indicada se aplica el precio bonificado. Pasada esa fecha se cobra el precio normal.</div>
+          <div id="venc-tabla" style="margin-bottom:12px"></div>
+          <button class="btn bpb" onclick="guardarVencimientos()" style="font-size:12px">💾 Guardar fechas</button>
         </div>
         <div style="padding:0 16px 24px">
           <div style="font-weight:700;font-size:13px;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;padding-top:8px;border-top:1px solid var(--b)">Cambio de claves</div>
@@ -1781,6 +1787,37 @@ async function verificarCodigo() {
   }
 }
 
+async function cargarVencimientos(){
+  var r = await api('GET','/api/vencimientos');
+  if(!r||!r.ok) return;
+  var meses=['Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var h='<table style="width:100%;font-size:12px;border-collapse:collapse">';
+  h+='<thead><tr><th style="text-align:left;padding:6px 8px;background:var(--gl);border:1px solid var(--b)">Cuota</th><th style="text-align:left;padding:6px 8px;background:var(--gl);border:1px solid var(--b)">Mes</th><th style="text-align:left;padding:6px 8px;background:var(--gl);border:1px solid var(--b)">Vence bonificado</th></tr></thead><tbody>';
+  r.vencimientos.forEach(function(v,i){
+    var iso=v.split('/').reverse().join('-');
+    h+='<tr>';
+    h+='<td style="padding:6px 8px;border:1px solid var(--b);font-weight:600">C'+(i+1)+'</td>';
+    h+='<td style="padding:6px 8px;border:1px solid var(--b);color:var(--m)">'+meses[i]+'</td>';
+    h+='<td style="padding:6px 8px;border:1px solid var(--b)"><input type="date" id="venc-'+(i+1)+'" value="'+iso+'" style="font-size:12px;border:1px solid var(--b);border-radius:4px;padding:3px 6px"></td>';
+    h+='</tr>';
+  });
+  h+='</tbody></table>';
+  document.getElementById('venc-tabla').innerHTML=h;
+}
+
+async function guardarVencimientos(){
+  var vencimientos=[];
+  for(var i=1;i<=10;i++){
+    var inp=document.getElementById('venc-'+i);
+    if(!inp||!inp.value){toast('Completa todas las fechas','e');return;}
+    var p=inp.value.split('-');
+    vencimientos.push(p[2]+'/'+p[1]+'/'+p[0]);
+  }
+  var r=await api('POST','/api/vencimientos',{vencimientos});
+  if(r&&r.ok){toast('Fechas guardadas','s');}
+  else{toast('Error al guardar','e');}
+}
+
 async function cargarStatsAdmin() {
   var r = await api('GET', '/api/admin/stats');
   if (!r) return;
@@ -1814,6 +1851,8 @@ async function cargarStatsAdmin() {
 
   document.getElementById('admin-stats').innerHTML = html;
 
+  // Cargar vencimientos y aranceles en el panel admin
+  cargarVencimientos();
   // Cargar aranceles en el panel admin
   await cargarAranceles();
 }
