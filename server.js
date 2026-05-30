@@ -86,6 +86,16 @@ async function cuota10Gratis(alumnoId, alumno, cuotasPrec) {
   return cuotas19.every(c => c.estado === 'pagada' && (MESES_TODO_EL_MES.includes(c.numero_cuota) || parseFloat(c.monto_pagado) <= parseFloat(alumno.precio_bonificado)));
 }
 
+function normalizarFechaAR(f) {
+  if (!f) return '';
+  const s = String(f).trim();
+  const partes = s.split('/');
+  if (partes.length === 3) {
+    return partes[0].padStart(2,'0')+'/'+partes[1].padStart(2,'0')+'/'+partes[2];
+  }
+  return s;
+}
+
 function normalizarCuit(valor) {
   if (!valor && valor !== 0) return null;
   const s = String(valor).replace(/[^0-9]/g, '');
@@ -523,7 +533,7 @@ app.post('/api/banco', async (req,res) => {
       } else if (fechaRawDup instanceof Date) {
         mesFechaDup = fechaRawDup.getMonth()+1;
       } else {
-        const s = String(fechaRawDup);
+        const s = normalizarFechaAR(String(fechaRawDup));
         mesFechaDup = s.includes('/') ? parseInt(s.split('/')[1]) : parseInt(s.split('-')[1]);
       }
     }
@@ -533,9 +543,9 @@ app.post('/api/banco', async (req,res) => {
       : await q1("SELECT id, fecha, origen FROM pagos WHERE alumno_id=$1 AND monto=$2", [alumno.id, monto]);
     if (yaExiste) {
       let fr=fila['FECHA']||fila['fecha']||fila['Fecha']||'',fs='';
-      if(typeof fr==='number'){const d=new Date(Math.round((fr-25569)*86400*1000));fs=d.toLocaleDateString('es-AR');}
-      else if(fr instanceof Date){fs=fr.toLocaleDateString('es-AR');}
-      else{fs=String(fr).slice(0,10);}
+      if(typeof fr==='number'){const d=new Date(Math.round((fr-25569)*86400*1000));fs=normalizarFechaAR(d.toLocaleDateString('es-AR'));}
+      else if(fr instanceof Date){fs=normalizarFechaAR(fr.toLocaleDateString('es-AR'));}
+      else{fs=normalizarFechaAR(String(fr).slice(0,10));}
       duplicados.push({alumno:alumno.nombre,curso:alumno.curso,cuit,monto,fecha:fs,pagoExistente:{id:yaExiste.id,fecha:yaExiste.fecha,origen:yaExiste.origen}});
       continue;
     }
@@ -546,9 +556,9 @@ app.post('/api/banco', async (req,res) => {
     if (fechaRaw) {
       if (typeof fechaRaw === 'number') {
         const d = new Date(Math.round((fechaRaw - 25569) * 86400 * 1000));
-        fechaPago = d.toLocaleDateString('es-AR');
+        fechaPago = normalizarFechaAR(d.toLocaleDateString('es-AR'));
       } else if (fechaRaw instanceof Date) {
-        fechaPago = fechaRaw.toLocaleDateString('es-AR');
+        fechaPago = normalizarFechaAR(fechaRaw.toLocaleDateString('es-AR'));
       } else if (String(fechaRaw).length >= 8) {
         fechaPago = String(fechaRaw).slice(0, 10);
       }
