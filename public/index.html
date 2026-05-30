@@ -296,12 +296,7 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
               <div class="fg"><label>Medio de pago</label>
                 <select id="cob-medio"><option>Efectivo</option><option>Debito</option><option>Credito</option><option>Cheque</option><option>Transferencia</option></select>
               </div>
-              <div class="fg"><label>Fecha del pago</label>
-                <input type="date" id="cob-fecha" style="font-size:13px">
-              </div>
-            </div>
-            <div class="r2">
-              <div class="fg"><label>Observaciones</label><input type="text" id="cob-obs" style="width:100%"></div>
+              <div class="fg"><label>Observaciones</label><input type="text" id="cob-obs"></div>
             </div>
             <button class="btn bsb" onclick="confirmarCobro()" style="width:100%;justify-content:center;padding:9px">
               <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Confirmar y emitir recibo
@@ -1125,9 +1120,6 @@ async function selAlumno(id){
   renderCuotas(a,cuotas||[]);
   actualizarTotal();
   document.getElementById('paso3').style.display='block';
-  // Inicializar fecha con hoy
-  var hoyStr=new Date().toISOString().slice(0,10);
-  document.getElementById('cob-fecha').value=hoyStr;
 }
 
 function getPrecio(alumno, numCuota, cuotasPagadas) {
@@ -1230,7 +1222,6 @@ async function confirmarCobro(){
   if(total===0){toast('Selecciona al menos una cuota','e');return;}
   var medio=document.getElementById('cob-medio').value;
   var obs=document.getElementById('cob-obs').value;
-  var fechaManual=document.getElementById('cob-fecha').value||new Date().toISOString().slice(0,10);
 
   // Verificar duplicado — mismo alumno, mismo monto, mismas cuotas en los últimos pagos
   if(_pagos){
@@ -1245,7 +1236,7 @@ async function confirmarCobro(){
     }
   }
 
-  var r=await api('POST','/api/cobro',{alumnoId:alumnoActual.id,monto:total,medio,origen:'Manual · '+medio+(obs?' · '+obs:''),cuotasSeleccionadas:cuotasSel,fechaManual:fechaManual});
+  var r=await api('POST','/api/cobro',{alumnoId:alumnoActual.id,monto:total,medio,origen:'Manual · '+medio+(obs?' · '+obs:''),cuotasSeleccionadas:cuotasSel});
   if(!r.ok){toast('Error al registrar','e');return;}
   document.getElementById('r-num').textContent=r.pagoId;
   document.getElementById('r-fecha').textContent=r.fecha;
@@ -1379,7 +1370,7 @@ async function procesarBanco(){
     '<div class="is ok"><div class="n">'+r.aplicados+'</div><div class="l">Pagos aplicados</div></div>'+
     '<div class="is ww"><div class="n">'+r.noEncontrados.length+'</div><div class="l">CUITs no encontrados</div></div>'+
     '<div class="is ii"><div class="n">'+(r.sinCuit||[]).length+'</div><div class="l">Sin CUIT</div></div>'+
-    '<div class="is" style="background:var(--gl)"><div class="n" style="color:var(--m)">'+(r.duplicados||0)+'</div><div class="l">Ya importados</div></div>';
+    '<div class="is" style="background:var(--gl)"><div class="n" style="color:var(--m)">'+(r.duplicados?r.duplicados.length:0)+'</div><div class="l">Ya importados</div></div>';
 
   var noEncDiv = document.getElementById('imp-noenc');
   var tablaDiv = document.getElementById('imp-tabla');
@@ -1420,11 +1411,57 @@ async function procesarBanco(){
     noEncDiv.style.display='none';
   }
 
+  // Mostrar duplicados
+  if(r.duplicados && r.duplicados.length>0){
+    _duplicadosData = r.duplicados;
+    var hd='<div style="margin-top:14px">';
+    hd+='<div style="font-weight:700;font-size:11px;color:var(--m);margin-bottom:6px">Pagos ya registrados (no duplicados):</div>';
+    hd+='<table style="font-size:11.5px;width:100%"><thead><tr><th>Alumno</th><th>Curso</th><th>Monto</th><th>Fecha banco</th><th>Pago existente</th></tr></thead><tbody>';
+    r.duplicados.forEach(function(x){
+      hd+='<tr>'+
+        '<td style="font-weight:600">'+x.alumno+'</td>'+
+        '<td style="color:var(--m)">'+(x.curso||'--')+'</td>'+
+        '<td style="color:var(--m)">$'+(x.monto||0).toLocaleString('es-AR')+'</td>'+
+        '<td style="color:var(--m)">'+(x.fecha||'--')+'</td>'+
+        '<td style="font-size:10.5px;color:var(--m)">'+(x.pagoExistente?x.pagoExistente.fecha+' - '+x.pagoExistente.origen:'--')+'</td>'+
+        '</tr>';
+    });
+    hd+='</tbody></table>';
+    var totalDup = r.duplicados.reduce(function(s,x){return s+(x.monto||0);},0);
+    hd+='<div style="margin-top:6px;font-size:11px;color:var(--m);font-weight:600">Total: $'+totalDup.toLocaleString('es-AR')+'</div>';
+    hd+='<button class="btn bob" style="font-size:11px;margin-top:8px" onclick="exportarDuplicados()">Exportar a Excel</button>';
+    hd+='</div>';
+    document.getElementById('imp-tabla').innerHTML += hd;
+    noEncDiv.style.display='block';
+  }
+
   _pagos=await api('GET','/api/pagos');
   bstep(3);
   var msg = r.aplicados+' de '+r.totalFilas+' pagos aplicados';
-  if(r.duplicados>0) msg += ' · '+r.duplicados+' ya existían (no duplicados)';
+  if(r.duplicados&&r.duplicados.length>0) msg += ' - '+r.duplicados.length+' ya existian (no duplicados)';
   toast(msg,'s');
+}
+
+var _duplicadosData = [];
+
+function exportarDuplicados() {
+  if(!_duplicadosData||!_duplicadosData.length){toast('Sin datos para exportar','e');return;}
+  var rows = _duplicadosData.map(function(x){
+    return {
+      'Alumno': x.alumno,
+      'Curso': x.curso||'',
+      'CUIT': String(x.cuit),
+      'Monto': x.monto,
+      'Fecha banco': x.fecha||'',
+      'Fecha pago existente': x.pagoExistente?x.pagoExistente.fecha:'',
+      'Origen pago existente': x.pagoExistente?x.pagoExistente.origen:''
+    };
+  });
+  var ws = XLSX.utils.json_to_sheet(rows);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Ya importados');
+  XLSX.writeFile(wb, 'duplicados_banco_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  toast('Exportado correctamente','s');
 }
 
 function exportarNoEncontrados() {
