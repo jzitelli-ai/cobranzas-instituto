@@ -496,6 +496,66 @@ async function aplicarPagoConSaldo(alumnoId, alumno, monto, fecha, origen, venci
   return { conceptos, saldoRestante: restante };
 }
 
+// --- PREVIEW: analiza sin impactar ---
+app.post('/api/banco/preview', async (req,res) => {
+  const {filas,colCuit,colMonto}=req.body;
+  const alumnos=await q('SELECT * FROM alumnos WHERE activo=TRUE');
+  const cuitMap={};
+  alumnos.forEach(a=>{
+    if(a.cuits) a.cuits.split(',').forEach(c=>{
+      const clean=c.trim().replace(/[^0-9]/g,'');
+      if(clean.length>=7) cuitMap[clean]=a;
+    });
+  });
+  let nuevos=0, totalNuevo=0; 
+  const duplicados=[],noEncontrados=[],sinCuit=[];
+
+  for(const fila of filas){
+    const cuit=normalizarCuit(fila[colCuit]); 
+    const monto=parsearMonto(fila[colMonto]);
+    const descrip=fila['DESCRIPCION']||fila['DESCRIP']||fila['descrip']||'';
+    if(!cuit){sinCuit.push({detalle:String(fila[colCuit]||'').slice(0,80),monto});continue;}
+    if(monto<=0)continue;
+    const alumno=cuitMap[cuit];
+
+    // Extraer fecha
+    const fechaRawDup=fila['FECHA']||fila['fecha']||fila['Fecha']||'';
+    let mesFechaDup=null, fechaStr='';
+    if(fechaRawDup){
+      if(typeof fechaRawDup==='number'){
+        const d=new Date(Math.round((fechaRawDup-25569)*86400*1000));
+        mesFechaDup=d.getMonth()+1;
+        fechaStr=normalizarFechaAR(d.toLocaleDateString('es-AR'));
+      } else if(fechaRawDup instanceof Date){
+        mesFechaDup=fechaRawDup.getMonth()+1;
+        fechaStr=normalizarFechaAR(fechaRawDup.toLocaleDateString('es-AR'));
+      } else {
+        const s=normalizarFechaAR(String(fechaRawDup));
+        mesFechaDup=s.includes('/')?parseInt(s.split('/')[1]):parseInt(s.split('-')[1]);
+        fechaStr=s;
+      }
+    }
+
+    if(!alumno){
+      noEncontrados.push({cuit,fecha:fechaStr,monto,descrip:String(descrip).trim().slice(0,60)});
+      continue;
+    }
+
+    // Verificar si ya existe
+    const yaExiste=mesFechaDup
+      ?await q1("SELECT id,fecha,origen FROM pagos WHERE alumno_id=$1 AND monto=$2 AND SUBSTRING(fecha,4,2)=$3",[alumno.id,monto,String(mesFechaDup).padStart(2,'0')])
+      :await q1("SELECT id,fecha,origen FROM pagos WHERE alumno_id=$1 AND monto=$2",[alumno.id,monto]);
+
+    if(yaExiste){
+      duplicados.push({alumno:alumno.nombre,curso:alumno.curso,cuit,monto,fecha:fechaStr,pagoExistente:{id:yaExiste.id,fecha:yaExiste.fecha,origen:yaExiste.origen}});
+    } else {
+      nuevos++;
+      totalNuevo+=monto;
+    }
+  }
+  res.json({ok:true,nuevos,totalNuevo,duplicados,noEncontrados,sinCuit,totalFilas:filas.length});
+});
+
 app.post('/api/banco', async (req,res) => {
   const {filas,colCuit,colMonto}=req.body;
   const alumnos=await q('SELECT * FROM alumnos WHERE activo=TRUE');
