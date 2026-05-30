@@ -296,7 +296,12 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
               <div class="fg"><label>Medio de pago</label>
                 <select id="cob-medio"><option>Efectivo</option><option>Debito</option><option>Credito</option><option>Cheque</option><option>Transferencia</option></select>
               </div>
-              <div class="fg"><label>Observaciones</label><input type="text" id="cob-obs"></div>
+              <div class="fg"><label>Fecha del pago</label>
+                <input type="date" id="cob-fecha" style="font-size:13px">
+              </div>
+            </div>
+            <div class="r2">
+              <div class="fg"><label>Observaciones</label><input type="text" id="cob-obs" style="width:100%"></div>
             </div>
             <button class="btn bsb" onclick="confirmarCobro()" style="width:100%;justify-content:center;padding:9px">
               <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Confirmar y emitir recibo
@@ -1120,6 +1125,9 @@ async function selAlumno(id){
   renderCuotas(a,cuotas||[]);
   actualizarTotal();
   document.getElementById('paso3').style.display='block';
+  // Inicializar fecha con hoy
+  var hoyStr=new Date().toISOString().slice(0,10);
+  document.getElementById('cob-fecha').value=hoyStr;
 }
 
 function getPrecio(alumno, numCuota, cuotasPagadas) {
@@ -1222,6 +1230,7 @@ async function confirmarCobro(){
   if(total===0){toast('Selecciona al menos una cuota','e');return;}
   var medio=document.getElementById('cob-medio').value;
   var obs=document.getElementById('cob-obs').value;
+  var fechaManual=document.getElementById('cob-fecha').value||new Date().toISOString().slice(0,10);
 
   // Verificar duplicado — mismo alumno, mismo monto, mismas cuotas en los últimos pagos
   if(_pagos){
@@ -1236,7 +1245,7 @@ async function confirmarCobro(){
     }
   }
 
-  var r=await api('POST','/api/cobro',{alumnoId:alumnoActual.id,monto:total,medio,origen:'Manual · '+medio+(obs?' · '+obs:''),cuotasSeleccionadas:cuotasSel});
+  var r=await api('POST','/api/cobro',{alumnoId:alumnoActual.id,monto:total,medio,origen:'Manual · '+medio+(obs?' · '+obs:''),cuotasSeleccionadas:cuotasSel,fechaManual:fechaManual});
   if(!r.ok){toast('Error al registrar','e');return;}
   document.getElementById('r-num').textContent=r.pagoId;
   document.getElementById('r-fecha').textContent=r.fecha;
