@@ -29,8 +29,49 @@ async function q(sql, params = []) {
 async function q1(sql, params = []) { const rows = await q(sql, params); return rows[0] || null; }
 
 const MESES_TODO_EL_MES = [1, 5];
+
+// Fechas de vencimiento bonificado por cuota (dia/mes) — se pueden editar desde el panel admin
+const VENCIMIENTOS_DEFAULT = [
+  '31/03/2026', // C1
+  '09/04/2026', // C2
+  '11/05/2026', // C3
+  '10/06/2026', // C4
+  '30/07/2026', // C5
+  '10/08/2026', // C6
+  '10/09/2026', // C7
+  '08/10/2026', // C8
+  '10/11/2026', // C9
+  '10/12/2026', // C10
+];
+
+async function getVencimientos() {
+  const row = await q1("SELECT valor FROM config WHERE clave='vencimientos_bonif'");
+  if (row) { try { return JSON.parse(row.valor); } catch(e) {} }
+  return VENCIMIENTOS_DEFAULT;
+}
 const MESES_NOMBRE_ALL = ['Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const MESES_IDX = [2,3,4,5,6,7,8,9,10,11];
+
+async function getPrecioConVenc(alumno, numCuota, fechaPago, vencimientos) {
+  // fechaPago: 'dd/mm/yyyy' o 'yyyy-mm-dd'
+  if (MESES_TODO_EL_MES.includes(numCuota)) return parseFloat(alumno.precio_bonificado);
+  const venc = vencimientos[numCuota - 1];
+  if (!venc || !fechaPago) return parseFloat(alumno.precio_normal);
+  // Parsear fecha de pago
+  let dp;
+  if (String(fechaPago).includes('/')) {
+    const [d,m,y] = String(fechaPago).split('/');
+    dp = new Date(parseInt(y), parseInt(m)-1, parseInt(d));
+  } else {
+    const [y,m,d] = String(fechaPago).split('-');
+    dp = new Date(parseInt(y), parseInt(m)-1, parseInt(d));
+  }
+  // Parsear vencimiento
+  const [dv,mv,yv] = venc.split('/');
+  const dVenc = new Date(parseInt(yv), parseInt(mv)-1, parseInt(dv));
+  const esBonif = dp <= dVenc;
+  return esBonif ? parseFloat(alumno.precio_bonificado) : parseFloat(alumno.precio_normal);
+}
 
 function getPrecio(alumno, numCuota, dia) {
   const esBonif = MESES_TODO_EL_MES.includes(numCuota) || dia <= 10;
@@ -216,6 +257,19 @@ app.get('/api/demo-info', (req,res) => {
 });
 
 app.get('/api/cursos', async (req,res) => { res.json(await q('SELECT * FROM cursos WHERE activo=TRUE ORDER BY nombre')); });
+// --- Vencimientos bonificado ---
+app.get('/api/vencimientos', async (req,res) => {
+  const v = await getVencimientos();
+  res.json({ok:true, vencimientos:v});
+});
+
+app.post('/api/vencimientos', async (req,res) => {
+  const {vencimientos} = req.body;
+  if (!Array.isArray(vencimientos) || vencimientos.length !== 10) return res.json({ok:false,error:'Array de 10 fechas requerido'});
+  await q("INSERT INTO config (clave,valor) VALUES ('vencimientos_bonif',$1) ON CONFLICT (clave) DO UPDATE SET valor=$1", [JSON.stringify(vencimientos)]);
+  res.json({ok:true});
+});
+
 app.post('/api/cursos', async (req,res) => { const r=await q('INSERT INTO cursos (nombre) VALUES ($1) RETURNING id',[req.body.nombre.trim().toUpperCase()]); res.json({ok:true,id:r[0].id}); });
 app.delete('/api/cursos/:id', async (req,res) => { await q('UPDATE cursos SET activo=FALSE WHERE id=$1',[req.params.id]); res.json({ok:true}); });
 
@@ -361,7 +415,8 @@ app.post('/api/reprocesar-historicos', async (req,res) => {
 
 // Función central: aplica un monto a cuotas pendientes de más antigua a más nueva
 // Si sobra saldo, lo aplica a la siguiente cuota que venza
-async function aplicarPagoConSaldo(alumnoId, alumno, monto, fecha, origen) {
+async function aplicarPagoConSaldo(alumnoId, alumno, monto, fecha, origen, vencimientos=null) {
+  if (!vencimientos) vencimientos = await getVencimientos();
   // Determinar dia y mes de la transferencia para aplicar a la cuota correcta
   const dia = parseInt((fecha||'').split('/')[0]) || new Date().getDate();
 
@@ -409,7 +464,7 @@ async function aplicarPagoConSaldo(alumnoId, alumno, monto, fecha, origen) {
   for (const c of ordenadas) {
     if (restante <= 0) break;
     const esGratis = c.numero_cuota === 10 && await cuota10Gratis(alumnoId, alumno);
-    const precio = esGratis ? 0 : getPrecio(alumno, c.numero_cuota, dia);
+    const precio = esGratis ? 0 : await getPrecioConVenc(alumno, c.numero_cuota, fecha, vencimientos);
     const yaAbonado = parseFloat(c.monto_pagado) || 0;
     const saldoCuota = precio - yaAbonado; // lo que falta para completar esta cuota
     if (saldoCuota <= 0) continue; // ya estaba pagada parcialmente con saldo completo
@@ -442,6 +497,7 @@ app.post('/api/banco', async (req,res) => {
     });
   });
   const dia=new Date().getDate(), fecha=new Date().toLocaleDateString('es-AR');
+  const vencimientosBanco = await getVencimientos();
   let aplicados=0; const duplicados=[],noEncontrados=[],sinCuit=[];
   for(const fila of filas) {
     const cuit=normalizarCuit(fila[colCuit]); const monto=parsearMonto(fila[colMonto]);
@@ -498,7 +554,7 @@ app.post('/api/banco', async (req,res) => {
       }
     }
 
-    const {conceptos} = await aplicarPagoConSaldo(alumno.id, alumno, monto, fechaPago, `Banco (CUIT ${cuit})`);
+    const {conceptos} = await aplicarPagoConSaldo(alumno.id, alumno, monto, fechaPago, `Banco (CUIT ${cuit})`, vencimientosBanco);
     await q('INSERT INTO pagos (fecha,alumno_id,alumno_nombre,curso,monto,concepto,medio,origen) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
       [fechaPago,alumno.id,alumno.nombre,alumno.curso,monto,conceptos.join(', ')||'Transferencia bancaria','Transferencia',`Banco (CUIT ${cuit})`]);
     aplicados++;
