@@ -1997,7 +1997,7 @@ function abrirDetalleCurso(curso) {
   _detalleCursoData.forEach(function(a){
     var est = a.estadoCuotas || {};
     var hayDeuda = a.deudaReal > 0;
-    h += '<tr style="cursor:pointer;border-bottom:1px solid var(--b)" onclick="cerrarM('m-det-curso');abrirDetalleAlumno('+a.id+')">';
+    h += '<tr style="cursor:pointer;border-bottom:1px solid var(--b)" onclick="cerrarM(\'m-det-curso\');abrirDetalleAlumno('+a.id+')">';
     h += '<td style="padding:6px 8px;font-weight:500">'+a.nombre+'</td>';
     h += '<td style="padding:6px 8px;text-align:center">';
     if(hayDeuda) h += '<span class="badge bd" style="font-size:10px">Debe</span>';
