@@ -49,6 +49,11 @@ async function getVencimientos() {
   if (row) { try { return JSON.parse(row.valor); } catch(e) {} }
   return VENCIMIENTOS_DEFAULT;
 }
+
+async function getMoraPorcentaje() {
+  const row = await q1("SELECT valor FROM config WHERE clave='mora_porcentaje'");
+  return row ? parseFloat(row.valor) || 0 : 0;
+}
 const MESES_NOMBRE_ALL = ['Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const MESES_IDX = [2,3,4,5,6,7,8,9,10,11];
 
@@ -267,6 +272,33 @@ app.get('/api/demo-info', (req,res) => {
 });
 
 app.get('/api/cursos', async (req,res) => { res.json(await q('SELECT * FROM cursos WHERE activo=TRUE ORDER BY nombre')); });
+// --- Mora ---
+app.get('/api/mora', async (req,res) => {
+  const pct = await getMoraPorcentaje();
+  res.json({ok:true, porcentaje:pct});
+});
+
+app.post('/api/mora', async (req,res) => {
+  const {porcentaje} = req.body;
+  const pct = parseFloat(porcentaje);
+  if (isNaN(pct) || pct < 0 || pct > 100) return res.json({ok:false,error:'Porcentaje inválido'});
+  await q("INSERT INTO config (clave,valor) VALUES ('mora_porcentaje',$1) ON CONFLICT (clave) DO UPDATE SET valor=$1", [String(pct)]);
+  res.json({ok:true});
+});
+
+// --- Bonificar mora ---
+app.post('/api/bonificar-mora', async (req,res) => {
+  const {alumnoId, moraMonto, motivo} = req.body;
+  const alumno = await q1('SELECT * FROM alumnos WHERE id=$1', [alumnoId]);
+  if (!alumno) return res.json({ok:false, error:'Alumno no encontrado'});
+  const fecha = new Date().toLocaleDateString('es-AR');
+  const concepto = 'Bonificación de mora'+(motivo?' — '+motivo:'');
+  // Registrar como pago especial de mora bonificada en pagos
+  await q('INSERT INTO pagos (fecha,alumno_id,alumno_nombre,curso,monto,concepto,medio,origen) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+    [fecha, alumnoId, alumno.nombre, alumno.curso, 0, concepto, 'Bonificación', 'Admin']);
+  res.json({ok:true});
+});
+
 // --- Vencimientos bonificado ---
 app.get('/api/vencimientos', async (req,res) => {
   const v = await getVencimientos();
@@ -674,8 +706,18 @@ app.get('/api/reporte', async (req,res) => {
     const totalDebido=cuotasGen.reduce((s,[k])=>{const n=parseInt(k);return s+(n===10&&c10g?0:getPrecio(a,n,dia));},0);
     let saldo=totalPagado-totalDebido;
     if(saldo>0){let d=saldo;for(let i=0;i<10;i++){const n=i+1;if(estadoCuotas[n]==='pendiente'&&d>0){const p=n===10&&c10g?0:getPrecio(a,n,dia);if(p>0&&d>=p){estadoCuotas[n]='compensada';d-=p;}}}}
-    const deudaReal=Object.entries(estadoCuotas).reduce((s,[k,v])=>{if(v!=='pendiente')return s;const n=parseInt(k);return s+(n===10&&c10g?0:getPrecio(a,n,dia));},0);
-    resultado.push({id:a.id,nombre:a.nombre,curso:a.curso,precio_normal:parseFloat(a.precio_normal),precio_bonificado:parseFloat(a.precio_bonificado),cuits:a.cuits,telefono:a.telefono||'',activo:a.activo,estadoCuotas,fechasPago,montosPago,deudaReal,totalPagado,cuota10Gratis:c10g});
+    const deudaReal=Object.entries(estadoCuotas).reduce((s,[k,v])=>{if(v!=='pendiente')return s;const n=parseInt(k);const mp=montosPago[n]||0;const precio=n===10&&c10g?0:getPrecio(a,n,dia);return s+(precio-mp>0?precio-mp:0);},0);
+    // Mora: aplica si hay cuotas pendientes cuyo mes ya paso (mes anterior o antes)
+    // Una cuota "en mora" es la que debio pagarse en el mes anterior o antes y sigue pendiente
+    let cuotasEnMora=0;
+    Object.entries(estadoCuotas).forEach(([k,v])=>{
+      if(v!=='pendiente')return;
+      const n=parseInt(k);
+      // MESES_IDX[n-1] es el mes (0-based) de esa cuota
+      // Si el mes de la cuota es menor al mes actual, ya paso el mes → mora
+      if(MESES_IDX[n-1]<mesActual)cuotasEnMora++;
+    });
+    resultado.push({id:a.id,nombre:a.nombre,curso:a.curso,precio_normal:parseFloat(a.precio_normal),precio_bonificado:parseFloat(a.precio_bonificado),cuits:a.cuits,telefono:a.telefono||'',activo:a.activo,estadoCuotas,fechasPago,montosPago,deudaReal,totalPagado,cuota10Gratis:c10g,tienesMora:cuotasEnMora>0});
   }
   res.json(resultado);
 });
