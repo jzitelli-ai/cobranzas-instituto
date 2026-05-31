@@ -62,18 +62,18 @@ async function getPrecioConVenc(alumno, numCuota, fechaPago, vencimientos) {
   if (MESES_TODO_EL_MES.includes(numCuota)) return parseFloat(alumno.precio_bonificado);
   const venc = vencimientos[numCuota - 1];
   if (!venc || !fechaPago) return parseFloat(alumno.precio_normal);
-  // Parsear fecha de pago
+  // Parsear fecha de pago — usar solo año/mes/dia sin hora para evitar problemas de timezone
   let dp;
   if (String(fechaPago).includes('/')) {
     const [d,m,y] = String(fechaPago).split('/');
-    dp = new Date(parseInt(y), parseInt(m)-1, parseInt(d));
+    dp = new Date(parseInt(y), parseInt(m)-1, parseInt(d), 12, 0, 0);
   } else {
-    const [y,m,d] = String(fechaPago).split('-');
-    dp = new Date(parseInt(y), parseInt(m)-1, parseInt(d));
+    const parts = String(fechaPago).split('-');
+    dp = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]), 12, 0, 0);
   }
-  // Parsear vencimiento
+  // Parsear vencimiento — fijar hora al fin del dia para incluir el dia completo
   const [dv,mv,yv] = venc.split('/');
-  const dVenc = new Date(parseInt(yv), parseInt(mv)-1, parseInt(dv));
+  const dVenc = new Date(parseInt(yv), parseInt(mv)-1, parseInt(dv), 23, 59, 59);
   const esBonif = dp <= dVenc;
   return esBonif ? parseFloat(alumno.precio_bonificado) : parseFloat(alumno.precio_normal);
 }
