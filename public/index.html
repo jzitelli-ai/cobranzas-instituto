@@ -1002,7 +1002,7 @@ async function actualizarDashboard(){
     if(Object.keys(a.estadoCuotas||{}).some(function(k){return a.estadoCuotas[k]==='pendiente';}))grupos[a.curso].deud++;});
   var tbl='<table style="font-size:12px"><thead><tr><th>Curso</th><th>Alumnos</th><th>Con deuda</th><th>Al dia</th><th>Avance</th></tr></thead><tbody>';
   Object.keys(grupos).sort().forEach(function(c){var g=grupos[c],pct=Math.round((g.tot-g.deud)/g.tot*100);
-    tbl+='<tr style="cursor:pointer" onclick="abrirDetalleCurso(''+c+'')" title="Ver detalle del curso">'+
+    tbl+='<tr style="cursor:pointer" onclick="abrirDetalleCurso(\'' + c + '\')" title="Ver detalle del curso">'+
       '<td style="font-weight:600;color:var(--p);text-decoration:underline">'+c+'</td>'+
       '<td>'+g.tot+'</td>'+
       '<td><span class="badge bd">'+g.deud+'</span></td>'+
