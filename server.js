@@ -839,17 +839,16 @@ app.get('/api/reporte', async (req,res) => {
       }
       return s+(precio-mp>0?precio-mp:0);
     },0);
-    // Mora: aplica si hay cuotas pendientes cuyo mes ya paso (mes anterior o antes)
-    // Una cuota "en mora" es la que debio pagarse en el mes anterior o antes y sigue pendiente
-    let cuotasEnMora=0;
-    Object.entries(estadoCuotas).forEach(([k,v])=>{
-      if(v!=='pendiente')return;
+    // Mora: aplica cuando el alumno tiene 3 o mas cuotas impagas (pendientes con monto_pagado=0)
+    // consecutivas o no
+    const cuotasImpagas = Object.entries(estadoCuotas).filter(([k,v])=>{
+      if(v!=='pendiente') return false;
       const n=parseInt(k);
-      // MESES_IDX[n-1] es el mes (0-based) de esa cuota
-      // Si el mes de la cuota es menor al mes actual, ya paso el mes → mora
-      if(MESES_IDX[n-1]<mesActual)cuotasEnMora++;
-    });
-    resultado.push({id:a.id,nombre:a.nombre,curso:a.curso,precio_normal:parseFloat(a.precio_normal),precio_bonificado:parseFloat(a.precio_bonificado),cuits:a.cuits,telefono:a.telefono||'',activo:a.activo,estadoCuotas,fechasPago,montosPago,deudaReal,totalPagado,cuota10Gratis:c10g,tienesMora:cuotasEnMora>0,saldo_favor:parseFloat(a.saldo_favor)||0});
+      const mp=montosPago[n]||0;
+      return mp===0; // cuota completamente impaga (no parcial)
+    }).length;
+    const tienesMoraFlag = cuotasImpagas >= 3;
+    resultado.push({id:a.id,nombre:a.nombre,curso:a.curso,precio_normal:parseFloat(a.precio_normal),precio_bonificado:parseFloat(a.precio_bonificado),cuits:a.cuits,telefono:a.telefono||'',activo:a.activo,estadoCuotas,fechasPago,montosPago,deudaReal,totalPagado,cuota10Gratis:c10g,tienesMora:tienesMoraFlag,saldo_favor:parseFloat(a.saldo_favor)||0});
   }
   res.json(resultado);
 });
