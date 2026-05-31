@@ -1335,7 +1335,11 @@ async function confirmarCobro(){
   toast('Cobro '+pesos(total)+' registrado · Recibo #'+r.pagoId,'s');
   // Usar fechaManual para el recibo (fecha de pago real, no de confección)
   var fechaRecibo=fechaManual?new Date(fechaManual+'T12:00:00').toLocaleDateString('es-AR'):r.fecha;
-  setTimeout(function(){ imprimirReciboDuplicado(r.pagoId, fechaRecibo, alumnoActual.nombre, alumnoActual.curso, r.conceptos.join(', '), medio+(obs?' — '+obs:''), pesos(total)); }, 400);
+  // Limpiar conceptos para el recibo — solo mostrar período
+  var conceptosLimpios = r.conceptos.map(function(c){
+    return c.replace(/ — pago parcial.*$/,'').replace(/ \[cuota anterior\]/,'').replace(/ \[credito\]/,'').replace(/ \(GRATIS\)/,' (GRATIS)');
+  });
+  setTimeout(function(){ imprimirReciboDuplicado(r.pagoId, fechaRecibo, alumnoActual.nombre, alumnoActual.curso, conceptosLimpios.join(', '), medio+(obs?' — '+obs:''), pesos(total)); }, 400);
 }
 
 function imprimirReciboDuplicado(num, fecha, alumno, curso, concepto, medio, total) {
