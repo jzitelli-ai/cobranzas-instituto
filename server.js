@@ -128,7 +128,6 @@ async function inicializarDB() {
   await q(`
     CREATE TABLE IF NOT EXISTS cursos (id SERIAL PRIMARY KEY, nombre TEXT NOT NULL, activo BOOLEAN DEFAULT TRUE);
     CREATE TABLE IF NOT EXISTS alumnos (id SERIAL PRIMARY KEY, nombre TEXT NOT NULL, curso TEXT NOT NULL, cuits TEXT DEFAULT '', precio_normal NUMERIC DEFAULT 0, precio_bonificado NUMERIC DEFAULT 0, activo BOOLEAN DEFAULT TRUE, telefono TEXT DEFAULT '', saldo_favor NUMERIC DEFAULT 0);
-    await q("ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS saldo_favor NUMERIC DEFAULT 0");
     CREATE TABLE IF NOT EXISTS cuotas (id SERIAL PRIMARY KEY, alumno_id INTEGER NOT NULL, numero_cuota INTEGER NOT NULL, estado TEXT DEFAULT 'pendiente', fecha_pago TEXT DEFAULT '', monto_pagado NUMERIC DEFAULT 0, compensada BOOLEAN DEFAULT FALSE, UNIQUE(alumno_id, numero_cuota));
     CREATE TABLE IF NOT EXISTS pagos (id SERIAL PRIMARY KEY, fecha TEXT NOT NULL, alumno_id INTEGER NOT NULL, alumno_nombre TEXT NOT NULL, curso TEXT NOT NULL, monto NUMERIC NOT NULL, concepto TEXT NOT NULL, medio TEXT NOT NULL, origen TEXT NOT NULL, saldo_favor NUMERIC DEFAULT 0);
     CREATE TABLE IF NOT EXISTS aranceles (id SERIAL PRIMARY KEY, desde TEXT NOT NULL, descripcion TEXT DEFAULT '', creado TEXT DEFAULT '');
@@ -137,6 +136,7 @@ async function inicializarDB() {
     CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT);
     ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS precio_especial BOOLEAN DEFAULT FALSE;
   `);
+  await q("ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS saldo_favor NUMERIC DEFAULT 0");
   const iniciado = await q1("SELECT valor FROM config WHERE clave='iniciado'");
   if (!iniciado) {
     if (!DEMO_MODE) await cargarDatosIniciales();
