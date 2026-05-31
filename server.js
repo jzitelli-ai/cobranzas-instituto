@@ -1,1597 +1,3101 @@
-const express = require('express');
-const { Pool } = require('pg');
-const cors = require('cors');
-const path = require('path');
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cobranzas Instituto 2026</title>
+<style>
+:root{--p:#185FA5;--pl:#E6F1FB;--pd:#0C447C;--s:#3B6D11;--sl:#EAF3DE;--w:#BA7517;--wl:#FAEEDA;--d:#A32D2D;--dl:#FCEBEB;--gl:#F1EFE8;--b:rgba(0,0,0,0.11);--bg:#f5f4f1;--c:#fff;--t:#2C2C2A;--m:#888780;--r:10px;--rs:6px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--t);font-size:14px}
+.app{display:flex;min-height:100vh}
+.sidebar{width:220px;background:#16243a;color:#b8ccdf;display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;bottom:0;z-index:100;overflow-y:auto}
+.slogo{padding:16px;border-bottom:1px solid rgba(255,255,255,.07)}
+.slogo h1{font-size:13px;font-weight:700;color:#fff;line-height:1.4}
+.slogo p{font-size:10px;color:rgba(255,255,255,.35);margin-top:2px}
+.snav{padding:8px;flex:1}
+.ni{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--rs);cursor:pointer;font-size:12.5px;color:rgba(255,255,255,.55);transition:all .15s;margin-bottom:1px;border:none;background:none;width:100%;text-align:left}
+.ni:hover{background:rgba(255,255,255,.06);color:#fff}
+.ni.active{background:rgba(24,95,165,.45);color:#fff}
+.ni svg{flex-shrink:0;width:15px;height:15px}
+.ssep{font-size:10px;color:rgba(255,255,255,.25);padding:10px 10px 3px;text-transform:uppercase;letter-spacing:.08em}
+.main{margin-left:220px;flex:1;display:flex;flex-direction:column;min-height:100vh}
+.topbar{background:var(--c);border-bottom:1px solid var(--b);padding:10px 22px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.topbar h2{font-size:14px;font-weight:600}
+.tbar-r{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--m)}
+.content{padding:20px 22px;flex:1}
+.card{background:var(--c);border:1px solid var(--b);border-radius:var(--r);padding:16px 18px;margin-bottom:16px}
+.ctitle{font-size:11px;font-weight:700;color:var(--m);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px}
+.sc{background:var(--c);border:1px solid var(--b);border-radius:var(--r);padding:12px 16px}
+.sc-l{font-size:11px;color:var(--m);margin-bottom:4px}
+.sc-v{font-size:20px;font-weight:700}
+.sc-v.d{color:var(--d)}.sc-v.s{color:var(--s)}.sc-v.p{color:var(--p)}
+.twrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;padding:6px 10px;background:var(--gl);color:var(--m);font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--b);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid var(--b)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--pl)}
+.badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:600}
+.bs{background:var(--sl);color:var(--s)}.bd{background:var(--dl);color:var(--d)}.bp{background:var(--pl);color:var(--pd)}.bw{background:var(--wl);color:var(--w)}
+.fg{margin-bottom:11px}
+label{display:block;font-size:11px;font-weight:700;color:var(--m);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em}
+input,select,textarea{width:100%;padding:7px 10px;border:1px solid var(--b);border-radius:var(--rs);font-size:13px;color:var(--t);background:var(--c);outline:none;transition:border .15s}
+input:focus,select:focus{border-color:var(--p)}
+.r2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.r3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:var(--rs);font-size:12px;font-weight:600;cursor:pointer;border:none;transition:all .15s}
+.bpb{background:var(--p);color:#fff}.bpb:hover{background:var(--pd)}
+.bsb{background:var(--s);color:#fff}.bsb:hover{background:#2a5009}
+.bob{background:transparent;border:1px solid var(--b);color:var(--t)}.bob:hover{background:var(--gl)}
+.bdb{background:var(--d);color:#fff}
+.section{display:none}.section.active{display:block}
+.ac-drop{border:1px solid var(--b);border-top:none;border-radius:0 0 var(--rs) var(--rs);background:var(--c);max-height:220px;overflow-y:auto;display:none;box-shadow:0 4px 16px rgba(0,0,0,.08);position:relative;z-index:20}
+.ac-item{padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--b);font-size:13px}
+.ac-item:last-child{border-bottom:none}.ac-item:hover{background:var(--pl)}
+.ac-sub{font-size:11px;color:var(--m);margin-top:1px}
+.alumno-card{background:var(--pl);border:1px solid #85B7EB;border-radius:var(--rs);padding:12px 14px;margin-bottom:12px}
+.ac-hdr{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.avatar{width:40px;height:40px;border-radius:50%;background:var(--p);color:#fff;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.cuota-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--c);border:1px solid var(--b);border-radius:var(--rs);cursor:pointer;transition:border-color .15s;margin-bottom:5px}
+.cuota-row:hover{border-color:var(--p)}.cuota-row.sel{border-color:var(--p);background:var(--pl)}
+.cuota-row input[type=checkbox]{width:15px;height:15px;cursor:pointer;flex-shrink:0;accent-color:var(--p)}
+.cuota-mes{font-weight:600;font-size:12.5px;flex:1}
+.cuota-precio{font-size:12.5px;font-weight:700}
+.cpb{color:var(--s)}.cpn{color:var(--w)}
+.ctag{font-size:10px;padding:2px 5px;border-radius:8px}
+.ctag-b{background:var(--sl);color:var(--s)}.ctag-n{background:var(--wl);color:var(--w)}.ctag-v{background:var(--dl);color:var(--d)}
+.total-cobro{background:var(--c);border:2px solid var(--p);border-radius:var(--rs);padding:12px 14px;margin:10px 0;display:flex;justify-content:space-between;align-items:center}
+.total-cobro .lbl{font-size:11px;color:var(--m);font-weight:600}
+.total-cobro .monto{font-size:20px;font-weight:700;color:var(--p)}
+.recibo{border:1px dashed var(--b);border-radius:var(--r);padding:16px;background:#fafaf8;font-size:12px;line-height:1.7;display:none}
+.recibo.visible{display:block}
+.rec-h{text-align:center;margin-bottom:12px}
+.rec-h h3{font-size:14px;font-weight:700}
+.rec-row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed #e0ddd7}
+.rec-total{font-weight:700;font-size:13px}
+.hist-entry{padding:9px 12px;border-bottom:1px solid var(--b);display:flex;align-items:center;gap:10px}
+.hist-icon{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.hi-m{background:var(--pl);color:var(--p)}.hi-b{background:var(--sl);color:var(--s)}
+.hist-info{flex:1}.hn{font-weight:600;font-size:12px}.hd{font-size:11px;color:var(--m)}.hm{font-weight:700;font-size:12.5px;color:var(--s)}
+.imp-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:12px 0}
+.is{text-align:center;padding:10px;border-radius:var(--rs);border:1px solid var(--b)}
+.is .n{font-size:24px;font-weight:700}.is .l{font-size:11px;color:var(--m);margin-top:2px}
+.is.ok{background:var(--sl)}.is.ok .n{color:var(--s)}
+.is.ww{background:var(--wl)}.is.ww .n{color:var(--w)}
+.is.ii{background:var(--pl)}.is.ii .n{color:var(--p)}
+.steps{display:flex;margin-bottom:14px}
+.step{flex:1;padding:7px 10px;font-size:11px;font-weight:600;color:var(--m);background:var(--gl);text-align:center;border-right:1px solid var(--b)}
+.step:last-child{border-right:none;border-radius:0 var(--rs) var(--rs) 0}
+.step:first-child{border-radius:var(--rs) 0 0 var(--rs)}
+.step.done{background:var(--sl);color:var(--s)}.step.active{background:var(--p);color:#fff}
+.upload-area{border:2px dashed var(--b);border-radius:var(--r);padding:30px 20px;text-align:center;cursor:pointer;transition:all .15s;background:var(--bg)}
+.upload-area:hover{border-color:var(--p);background:var(--pl)}
+.upload-area p{color:var(--m);font-size:13px;margin-top:6px}
+.prev-scroll{max-height:200px;overflow-y:auto;border:1px solid var(--b);border-radius:var(--rs)}
+.alert{padding:9px 12px;border-radius:var(--rs);font-size:12px;margin-bottom:10px;display:flex;align-items:flex-start;gap:8px}
+.ai{background:var(--pl);color:var(--pd);border:1px solid #85B7EB}
+.as{background:var(--sl);color:var(--s);border:1px solid #97C459}
+.aw{background:var(--wl);color:var(--w);border:1px solid #FAC775}
+.ae{background:var(--dl);color:var(--d);border:1px solid #F09595}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:300;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:var(--c);border-radius:var(--r);padding:20px;width:520px;max-width:95vw;max-height:88vh;overflow-y:auto;box-shadow:0 20px 50px rgba(0,0,0,.2)}
+.modal-title{font-size:14px;font-weight:700;margin-bottom:14px}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+input[type=file]{display:none}
+.toast{position:fixed;bottom:20px;right:20px;z-index:999;padding:11px 14px;border-radius:var(--r);font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,.15);display:flex;align-items:center;gap:9px;max-width:320px;opacity:0;transform:translateY(10px);transition:all .3s}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.ts{background:var(--sl);border:1px solid #97C459;color:var(--s)}
+.toast.ti{background:var(--pl);border:1px solid #85B7EB;color:var(--pd)}
+.toast.te{background:var(--dl);border:1px solid #F09595;color:var(--d)}
+.spinner{display:none;position:fixed;inset:0;background:rgba(255,255,255,.75);z-index:500;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+.spinner.show{display:flex}
+.spin{width:40px;height:40px;border:4px solid var(--b);border-top-color:var(--p);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin-txt{font-size:13px;color:var(--m)}
+mark{background:var(--wl);border-radius:2px;padding:0 1px}
+.comp-cell{text-align:center;background:#FFF3E0;border:1px solid #FFB74D}
+.comp-tag{font-size:9px;color:#E65100;font-weight:700;line-height:1.2}
+.tag-inactivo{background:#eee;color:#999;font-size:10px;padding:1px 5px;border-radius:8px;margin-left:4px}
+@media print{
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  body > *{display:none!important}
+  #print-area{display:block!important;width:100%;margin:0;padding:0}
+  .recibo-mitad{width:190mm;height:135mm;box-sizing:border-box;page-break-inside:avoid;display:flex;align-items:center;justify-content:center;padding:6mm}
+  .recibo-corte{width:190mm;text-align:center;border-top:1px dashed #aaa;padding:2mm 0;font-size:9px;color:#aaa}
+  @page{margin:5mm;size:A4 portrait}
+}
+</style>
+</head>
+<body>
+<div class="spinner" id="spinner"><div class="spin"></div><div class="spin-txt" id="spin-txt">Cargando...</div></div>
+<div id="print-area" style="display:none"></div>
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+<div id="demo-banner" style="display:none;background:#FF9800;color:#fff;text-align:center;padding:8px;font-size:13px;font-weight:600;position:fixed;top:0;left:0;right:0;z-index:8000">
+  🎯 VERSIÓN DEMO — Máximo 5 alumnos · Para la versión completa contactanos
+</div>
+<div id="login-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center">
+  <div style="width:360px;background:#fff;border-radius:16px;padding:32px;box-shadow:0 8px 32px rgba(0,0,0,.12);text-align:center">
+    <div style="margin-bottom:16px">
+      <div style="width:70px;height:70px;border-radius:50%;background:var(--pl,#e3f2fd);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:32px">🏫</div>
+      <div style="font-weight:700;font-size:18px;color:var(--t)">Cobranzas Instituto</div>
+      <div style="font-size:12px;color:var(--m);margin-top:4px">Cultural Cerrillos</div>
+    </div>
+    <div id="login-form">
+      <div class="fg" style="text-align:left">
+        <label>Clave de acceso</label>
+        <input type="password" id="login-pwd" placeholder="Ingresá la clave" onkeydown="if(event.key==='Enter')loginSistema()" style="font-size:15px;letter-spacing:4px">
+      </div>
+      <div id="login-err" style="color:var(--d);font-size:12px;display:none;margin-bottom:8px"></div>
+      <button class="btn bpb" onclick="loginSistema()" style="width:100%;justify-content:center;padding:10px;font-size:14px;margin-top:4px">Ingresar</button>
+      <button onclick="mostrarRecuperarSistema()" style="background:none;border:none;color:var(--p);cursor:pointer;font-size:12px;text-decoration:underline;margin-top:12px;display:block;width:100%">Olvidé mi clave</button>
+    </div>
+    <div id="login-recuperar" style="display:none;text-align:left">
+      <div style="font-weight:600;font-size:13px;margin-bottom:8px">Recuperar clave</div>
+      <div id="login-rec-paso1">
+        <div class="alert ai" style="font-size:12px;margin-bottom:12px">Se enviará un código a j***@gmail.com</div>
+        <button class="btn bpb" onclick="solicitarCodigoSistema()" style="width:100%;justify-content:center">Enviar código</button>
+        <button onclick="document.getElementById('login-recuperar').style.display='none';document.getElementById('login-form').style.display='block'" style="background:none;border:none;color:var(--m);cursor:pointer;font-size:12px;margin-top:8px;display:block;width:100%">Volver</button>
+      </div>
+      <div id="login-rec-paso2" style="display:none">
+        <div class="fg"><label>Código recibido</label><input type="text" id="login-rec-codigo" placeholder="123456" maxlength="6"></div>
+        <div class="fg"><label>Nueva clave</label><input type="password" id="login-rec-nueva"></div>
+        <div class="fg"><label>Confirmar clave</label><input type="password" id="login-rec-confirmar"></div>
+        <div id="login-rec-err" style="color:var(--d);font-size:12px;display:none;margin-bottom:8px"></div>
+        <button class="btn bpb" onclick="verificarCodigoSistema()" style="width:100%;justify-content:center">Cambiar clave</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="app">
+<aside class="sidebar">
+  <div class="slogo"><h1>Cobranzas<br>Instituto 2026</h1><p>Sistema de gestion</p></div>
+  <nav class="snav">
+    <div class="ssep">Principal</div>
+    <button class="ni active" onclick="nav('dashboard')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Resumen
+    </button>
+    <button class="ni" onclick="nav('alumnos')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Alumnos
+    </button>
+    <button class="ni" onclick="nav('cobro')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Cobro manual
+    </button>
+    <button class="ni" onclick="nav('banco')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Importar banco
+    </button>
+    <button class="ni" onclick="nav('historial')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Historial
+    </button>
+    <button class="ni" onclick="nav('reporte')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Reporte de deuda
+    </button>
+    <button class="ni" onclick="nav('reporte-medios')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Reporte por medio
+    </button>
+    <button class="ni" onclick="nav('saldos-pendientes')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Saldos sin imputar
+    </button>
+    <div class="ssep"></div>
+    <button class="ni" onclick="abrirAdmin()" style="color:var(--w)">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Administración
+    </button>
+    <div class="ssep">Configuracion</div>
+    <button class="ni" onclick="nav('cursos')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>Cursos
+    </button>
+    <button class="ni" onclick="nav('aranceles')" style="display:none">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>Tabla de aranceles
+    </button>
+  </nav>
+</aside>
+<main class="main">
+  <div class="topbar">
+    <h2 id="page-title">Resumen</h2>
+    <div class="tbar-r">
+      <span id="save-ind" style="color:var(--s)">✓ Conectado</span>
+      <button class="btn bob" onclick="exportarPagos()" style="font-size:11px;padding:4px 10px">Exportar pagos</button>
+    </div>
+  </div>
+  <div class="content">
 
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.static('public'));
+    <!-- DASHBOARD -->
+    <div id="s-dashboard" class="section active">
+      <div class="stats" id="dash-stats"></div>
+      <div class="r2">
+        <div class="card"><div class="ctitle">Con cuotas pendientes</div><div id="dash-deud"></div></div>
+        <div class="card"><div class="ctitle">Ultimos pagos</div><div id="dash-ult"></div></div>
+      </div>
+      <div class="card"><div class="ctitle">Estado por curso</div><div id="dash-cur"></div></div>
+    </div>
 
-// MODO DEMO — debe estar antes de todo
-const DEMO_MODE = process.env.DEMO_MODE === 'true';
-const DEMO_MAX_ALUMNOS = 5;
-const DB_SCHEMA = DEMO_MODE ? 'demo' : 'public';
-if (DEMO_MODE) console.log('🎯 MODO DEMO ACTIVO — schema: demo, máximo 5 alumnos');
+    <!-- ALUMNOS -->
+    <div id="s-alumnos" class="section">
+      <div class="card" style="padding:0">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--b);display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="alum-q" placeholder="Buscar..." oninput="filtrarAlumnos()" style="flex:1;min-width:160px">
+          <select id="alum-curso" onchange="filtrarAlumnos()" style="width:150px"><option value="">Todos los cursos</option></select>
+          <select id="alum-estado" onchange="filtrarAlumnos()" style="width:130px">
+            <option value="">Todos</option><option value="deuda">Con deuda</option><option value="aldia">Al dia</option><option value="baja">De baja</option>
+          </select>
+          <span id="alum-cnt" style="font-size:11px;color:var(--m)"></span>
+          <button class="btn bpb" onclick="abrirModalNuevoAlumno()" style="font-size:11px">+ Nuevo alumno</button>
+        </div>
+        <div class="twrap"><table id="tabla-alumnos"></table></div>
+      </div>
+    </div>
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    <!-- COBRO -->
+    <div id="s-cobro" class="section">
+      <div class="r2" style="align-items:start">
+        <div>
+          <div class="card">
+            <div class="ctitle">Paso 1 — Seleccionar alumno</div>
+            <div id="cobro-busq">
+              <div class="fg"><label>Buscar por apellido o nombre</label>
+                <input type="text" id="cb-q" placeholder="Ej: Martinez..." oninput="buscarCobro()" autocomplete="off">
+              </div>
+              <div class="ac-drop" id="cb-drop"></div>
+              <div class="fg" style="margin-top:6px"><label>Filtrar por curso</label>
+                <select id="cb-curso" onchange="buscarCobro()"><option value="">Todos los cursos</option></select>
+              </div>
+            </div>
+            <div id="cobro-alumno" style="display:none;margin-top:4px">
+              <div class="alumno-card">
+                <div class="ac-hdr">
+                  <div class="avatar" id="cob-av"></div>
+                  <div style="flex:1">
+                    <div style="font-weight:700;font-size:13.5px" id="cob-nom"></div>
+                    <div style="font-size:11px;color:var(--m)" id="cob-cur"></div>
+                  </div>
+                  <button class="btn bob" style="font-size:10.5px;padding:3px 8px" onclick="cambiarAlumno()">Cambiar</button>
+                </div>
+                <div id="cob-precio-info" style="font-size:11.5px;color:var(--m)"></div>
+              </div>
+              <div class="ctitle" style="margin-top:4px">Paso 2 — Cuotas a pagar</div>
+              <div id="cob-cuotas"></div>
+              <div id="cob-sindeuda" class="alert ai" style="display:none">Sin cuotas pendientes.</div>
+              <div style="margin-top:8px">
+                <button class="btn bob" onclick="toggleExtra()" style="font-size:11px;width:100%;justify-content:center">+ Agregar pago libre</button>
+              </div>
+              <div id="cob-extra" style="display:none;margin-top:8px;padding:10px;background:var(--gl);border-radius:var(--rs)">
+                <div class="r2">
+                  <div class="fg"><label>Concepto</label><input type="text" id="extra-conc" placeholder="Matricula 2026"></div>
+                  <div class="fg"><label>Monto ($)</label><input type="number" id="extra-monto" placeholder="0" oninput="actualizarTotal()"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card" id="paso3" style="display:none">
+            <div class="ctitle">Paso 3 — Confirmar cobro</div>
+            <div class="total-cobro">
+              <div><div class="lbl">Total a cobrar</div><div id="cob-desc" style="font-size:10.5px;color:var(--m);margin-top:2px"></div></div>
+              <div class="monto" id="cob-total">$0</div>
+            </div>
+            <div class="r2">
+              <div class="fg"><label>Medio de pago</label>
+                <select id="cob-medio"><option>Efectivo</option><option>Debito</option><option>Credito</option><option>Cheque</option><option>Transferencia</option></select>
+              </div>
+              <div class="fg"><label>Fecha del pago</label>
+                <input type="date" id="cob-fecha" style="font-size:13px">
+              </div>
+            </div>
+            <div class="r2">
+              <div class="fg"><label>Observaciones</label><input type="text" id="cob-obs" style="width:100%"></div>
+            </div>
+            <button class="btn bsb" onclick="confirmarCobro()" style="width:100%;justify-content:center;padding:9px">
+              <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Confirmar y emitir recibo
+            </button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="ctitle">Comprobante</div>
+          <div id="rec-ph" style="color:var(--m);font-size:12.5px;padding:10px 0">El recibo aparecera aqui despues de confirmar.</div>
+          <div class="recibo" id="recibo">
+            <div class="rec-h">
+              <img src="data:image/png;base64,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" 
+                style="width:90px;height:90px;object-fit:contain;display:block;margin:0 auto 8px;">
+              <h3>RECIBO DE PAGO</h3>
+              <p style="color:var(--m);font-size:10px;margin-top:2px">Cultural Cerrillos — Teaching English with Love</p>
+            </div>
+            <div class="rec-row"><span>N Recibo</span><span id="r-num"></span></div>
+            <div class="rec-row"><span>Fecha</span><span id="r-fecha"></span></div>
+            <div class="rec-row"><span>Alumno</span><span id="r-alumno"></span></div>
+            <div class="rec-row"><span>Curso</span><span id="r-curso"></span></div>
+            <div class="rec-row"><span>Concepto</span><span id="r-conc"></span></div>
+            <div class="rec-row"><span>Medio</span><span id="r-medio"></span></div>
+            <div class="rec-row rec-total"><span>TOTAL</span><span id="r-total"></span></div>
+            <div style="text-align:center;margin-top:12px;font-size:11px;color:var(--m);border-top:1px dashed var(--b);padding-top:8px">Firma y sello ________________________</div>
+          </div>
+          <div id="rec-btns" style="display:none;margin-top:10px;gap:7px">
+            <button class="btn bob" onclick="window.print()" style="font-size:11px">Imprimir</button>
+            <button class="btn bob" onclick="nuevoCobro()" style="font-size:11px">Nuevo cobro</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
-async function q(sql, params = []) {
-  const client = await pool.connect();
+    <!-- BANCO -->
+    <div id="s-banco" class="section">
+      <div class="card">
+        <div class="ctitle">Importar extracto bancario</div>
+        <div class="steps">
+          <div class="step active" id="bst1">1. Subir archivo</div>
+          <div class="step" id="bst2">2. Columnas</div>
+          <div class="step" id="bst3">3. Resultado</div>
+        </div>
+        <div id="bp1">
+          <div class="alert ai">El sistema detectara el CUIT en la columna con <strong>/</strong> y cruzara con los CUITs de cada alumno.</div>
+          <div class="upload-area" onclick="document.getElementById('f-banco').click()">
+            <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="display:block;margin:0 auto;opacity:.35"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            <p><strong>Clic</strong> para subir el XLS del banco</p>
+          </div>
+          <input type="file" id="f-banco" accept=".xls,.xlsx" onchange="cargarBanco(event)">
+        </div>
+        <div id="bp2" style="display:none">
+          <div class="alert as" id="banco-msg"></div>
+          <div class="prev-scroll" id="banco-prev"></div>
+          <div class="r2" style="margin-top:12px">
+            <div class="fg"><label>Columna con CUIT (tiene /)</label><select id="bc-cuit"></select></div>
+            <div class="fg"><label>Columna con importe</label><select id="bc-monto"></select></div>
+          </div>
+          <div style="display:flex;gap:7px">
+            <button class="btn bob" onclick="resetBanco()">Volver</button>
+            <button class="btn bpb" onclick="procesarBanco()">Procesar</button>
+          </div>
+        </div>
+        <div id="bp3" style="display:none">
+          <div class="imp-stats" id="imp-stats"></div>
+          <div id="imp-noenc" style="display:none">
+            <div class="ctitle" style="margin-bottom:5px">CUITs no reconocidos</div>
+            <div class="prev-scroll" id="imp-tabla"></div>
+          </div>
+          <div style="display:flex;gap:7px;margin-top:12px">
+            <button class="btn bob" onclick="resetBanco()">Nueva importacion</button>
+            <button class="btn bob" onclick="nav('historial')">Ver historial</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORIAL -->
+    <div id="s-historial" class="section">
+      <div class="card" style="padding:0">
+        <div style="padding:10px 16px;border-bottom:1px solid var(--b);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <div class="ctitle" style="margin:0">Historial de pagos</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="text" id="hist-q" placeholder="Buscar alumno..." oninput="filtrarHistorial()" style="width:200px;padding:5px 10px;font-size:12px">
+            <select id="hist-origen" onchange="filtrarHistorial()" style="width:150px;padding:5px 10px;font-size:12px">
+              <option value="">Todos los origenes</option>
+              <option value="Manual">Manual</option>
+              <option value="Banco">Banco</option>
+              <option value="Importado">Importado</option>
+            </select>
+            <span id="hist-cnt" style="font-size:11px;color:var(--m)"></span>
+            <button class="btn bob" onclick="migrarFechas()" style="font-size:11px;padding:4px 10px" title="Migra fechas y montos reales del Excel original a las cuotas historicas">
+              Migrar fechas historicas
+            </button>
+          </div>
+        </div>
+        <div style="padding:8px 16px;border-bottom:1px solid var(--b);background:var(--gl);display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn bob" onclick="backfillPagos()" style="font-size:11px;padding:4px 10px">
+            Sincronizar importados
+          </button>
+          <button class="btn bpb" onclick="reprocesarHistoricos()" style="font-size:11px;padding:4px 10px" title="Re-aplica logica de saldo a pagos importados del Excel">
+            ↺ Reprocesar saldos Excel
+          </button>
+          <button class="btn bob" onclick="aplicarSaldosPendientes()" style="font-size:11px;padding:4px 10px" title="Aplica saldo disponible a cuotas pendientes">
+            ⚡ Aplicar saldos pendientes
+          </button>
+          <button class="btn bob" onclick="ejecutarBackup()" style="font-size:11px;padding:4px 10px;background:#25D366;color:#fff;border-color:#25D366" title="Ejecuta backup manual a Google Sheets">
+            ☁ Backup ahora
+          </button>
+        </div>
+        <div id="hist-list"></div>
+        <div id="hist-empty" style="display:none;text-align:center;padding:40px;color:var(--m)">Sin pagos registrados.</div>
+      </div>
+    </div>
+
+    <!-- REPORTE -->
+    <div id="s-reporte" class="section">
+      <div class="card">
+        <div class="ctitle">Reporte de deuda por periodo</div>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
+          <div style="flex:1;min-width:160px"><label>Buscar</label><input type="text" id="rep-q" placeholder="Nombre..." oninput="filtrarReporte()"></div>
+          <div style="width:150px"><label>Curso</label><select id="rep-curso" onchange="filtrarReporte()"><option value="">Todos</option></select></div>
+          <div style="width:150px"><label>Estado</label>
+            <select id="rep-estado" onchange="filtrarReporte()">
+              <option value="">Todos</option>
+              <option value="deuda">Con deuda real</option>
+              <option value="comp">Con cuota compensada</option>
+              <option value="aldia">Al dia</option>
+            </select>
+          </div>
+          <button class="btn bob" onclick="exportarReporte()" style="font-size:11px">Exportar Excel</button>
+        </div>
+        <div id="rep-resumen" style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap"></div>
+        <div class="alert ai" style="font-size:11px;margin-bottom:10px">
+          <span><strong style="color:var(--s)">✓</strong> Pagada &nbsp;|&nbsp; <strong style="color:#E65100">↔ COMP</strong> Compensada por saldo &nbsp;|&nbsp; <strong style="color:#1a7a1a">★ GRATIS</strong> Cuota 10 bonificacion completa &nbsp;|&nbsp; <strong style="color:var(--d)">$</strong> Debe &nbsp;|&nbsp; <strong style="color:var(--m)">—</strong> No generada</span>
+        </div>
+        <div class="twrap"><div id="rep-tabla-wrap"></div></div>
+      </div>
+    </div>
+
+    <!-- CURSOS -->
+    <div id="s-cursos" class="section">
+      <div class="r2" style="align-items:start">
+        <div class="card">
+          <div class="ctitle">Cursos activos</div>
+          <div id="lista-cursos"></div>
+          <div style="margin-top:12px;display:flex;gap:7px">
+            <input type="text" id="nuevo-curso" placeholder="Nombre del nuevo curso" style="flex:1">
+            <button class="btn bpb" onclick="agregarCurso()">+ Agregar</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="ctitle">Informacion</div>
+          <div class="alert ai">Agrega cursos nuevos o da de baja los que ya no se usan. Los alumnos de un curso dado de baja no se eliminan automaticamente.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ARANCELES -->
+    <!-- REPORTE POR MEDIO DE PAGO -->
+    <div id="s-reporte-medios" class="section">
+      <div class="card">
+        <div class="tbar">
+          <div class="ctitle">Reporte por medio de pago</div>
+        </div>
+        <div style="padding:16px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid var(--b)">
+          <div class="fg" style="min-width:140px">
+            <label>Mes</label>
+            <select id="rm-mes" onchange="rmCambioFiltro()" style="font-size:13px">
+              <option value="">-- Elegir mes --</option>
+              <option value="3/2026">Marzo 2026</option>
+              <option value="4/2026">Abril 2026</option>
+              <option value="5/2026">Mayo 2026</option>
+              <option value="6/2026">Junio 2026</option>
+              <option value="7/2026">Julio 2026</option>
+              <option value="8/2026">Agosto 2026</option>
+              <option value="9/2026">Septiembre 2026</option>
+              <option value="10/2026">Octubre 2026</option>
+              <option value="11/2026">Noviembre 2026</option>
+              <option value="12/2026">Diciembre 2026</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:center;padding-bottom:4px;color:var(--m);font-size:12px">— o —</div>
+          <div class="fg" style="min-width:130px">
+            <label>Desde</label>
+            <input type="date" id="rm-desde" onchange="rmCambioFiltro()" style="font-size:13px">
+          </div>
+          <div class="fg" style="min-width:130px">
+            <label>Hasta</label>
+            <input type="date" id="rm-hasta" onchange="rmCambioFiltro()" style="font-size:13px">
+          </div>
+          <div class="fg" style="min-width:140px">
+            <label>Curso</label>
+            <select id="rm-curso" style="font-size:13px">
+              <option value="">Todos los cursos</option>
+            </select>
+          </div>
+          <button class="btn bpb" onclick="generarReporteMedios()" style="padding:6px 14px">Generar</button>
+          <button class="btn bob" onclick="exportarReporteMedios()" style="padding:6px 14px">Exportar Excel</button>
+        </div>
+        <div id="rm-resultado" style="padding:16px"></div>
+      </div>
+    </div>
+
+    <!-- SALDOS SIN IMPUTAR -->
+    <div id="s-saldos-pendientes" class="section">
+      <div class="card">
+        <div class="tbar">
+          <div class="ctitle">Saldos sin imputar</div>
+          <div class="tbar-r">
+            <button class="btn bob" onclick="cargarSaldosPendientes()" style="font-size:11px">↺ Actualizar</button>
+            <button class="btn bob" onclick="exportarSaldosPendientes()" style="font-size:11px">Exportar Excel</button>
+            <button class="btn bpb" onclick="aplicarSaldosPendientes()" style="font-size:11px">⚡ Aplicar todos</button>
+          </div>
+        </div>
+        <div id="sp-resumen" style="padding:12px 16px;border-bottom:1px solid var(--b);display:flex;gap:10px;flex-wrap:wrap"></div>
+        <div id="sp-tabla" style="padding:16px"></div>
+      </div>
+    </div>
+
+    <!-- ADMINISTRACIÓN -->
+    <div id="s-admin" class="section">
+      <div class="card">
+        <div class="tbar">
+          <div class="ctitle">Panel de administración</div>
+          <div class="tbar-r">
+            <button class="btn bob" onclick="cerrarAdmin()" style="font-size:11px">🔒 Cerrar sesión</button>
+            <button class="btn bob" onclick="cargarStatsAdmin()" style="font-size:11px">↺ Actualizar</button>
+          </div>
+        </div>
+        <div id="admin-stats" style="padding:16px"></div>
+        <div style="padding:0 16px 16px">
+          <div style="font-weight:700;font-size:13px;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;padding-top:8px;border-top:1px solid var(--b)">Tabla de aranceles</div>
+          <div class="alert ai" style="font-size:11px;margin-bottom:12px">El precio bonificado se aplica según las fechas de vencimiento configuradas por cuota.</div>
+          <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+            <button class="btn bpb" onclick="nuevaVigencia()" style="font-size:12px">+ Nueva vigencia</button>
+          </div>
+          <div id="tabla-vig-admin"></div>
+        </div>
+        <div style="padding:0 16px 24px">
+          <div style="font-weight:700;font-size:13px;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;padding-top:8px;border-top:1px solid var(--b)">Fechas de vencimiento bonificado</div>
+          <div class="alert ai" style="font-size:11px;margin-bottom:12px">Hasta la fecha indicada se aplica el precio bonificado. Pasada esa fecha se cobra el precio normal.</div>
+          <div id="venc-tabla" style="margin-bottom:12px"></div>
+          <button class="btn bpb" onclick="guardarVencimientos()" style="font-size:12px">💾 Guardar fechas</button>
+        </div>
+        <div style="padding:0 16px 24px">
+          <div style="font-weight:700;font-size:13px;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;padding-top:8px;border-top:1px solid var(--b)">Mora por cuotas vencidas</div>
+          <div class="alert ai" style="font-size:11px;margin-bottom:12px">Se aplica sobre el total de la deuda cuando hay cuotas impagas del mes anterior o antes. Se muestra por separado en el reporte.</div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <label style="font-size:12px;color:var(--m)">Porcentaje de mora:</label>
+            <input type="number" id="mora-pct" min="0" max="100" step="0.5" style="width:80px;padding:5px 8px;border:1px solid var(--b);border-radius:4px;font-size:13px">
+            <span style="font-size:13px;color:var(--m)">%</span>
+            <button class="btn bpb" onclick="guardarMora()" style="font-size:12px">💾 Guardar</button>
+          </div>
+        </div>
+        <div style="padding:0 16px 24px">
+          <div style="font-weight:700;font-size:13px;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;padding-top:8px;border-top:1px solid var(--b)">Cambio de claves</div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <button class="btn bob" onclick="abrirCambiarClave('sistema')" style="font-size:12px">🔑 Cambiar clave del sistema</button>
+            <button class="btn bob" onclick="abrirCambiarClave('admin')" style="font-size:12px">🔐 Cambiar clave de administración</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL LOGIN ADMIN -->
+    <div class="modal-bg" id="m-cambiar-clave" style="z-index:700">
+      <div class="modal" style="width:360px;z-index:701">
+        <div class="modal-title" id="cambiar-clave-tit">Cambiar clave</div>
+        <div class="fg">
+          <label>Clave actual</label>
+          <input type="password" id="cc-actual" placeholder="Ingresá la clave actual" onkeydown="if(event.key==='Enter')cambiarClave()">
+        </div>
+        <div class="fg">
+          <label>Nueva clave</label>
+          <input type="password" id="cc-nueva" placeholder="Nueva clave" onkeydown="if(event.key==='Enter')cambiarClave()">
+        </div>
+        <div class="fg">
+          <label>Confirmar nueva clave</label>
+          <input type="password" id="cc-confirmar" placeholder="Repetí la nueva clave" onkeydown="if(event.key==='Enter')cambiarClave()">
+        </div>
+        <div id="cc-err" style="display:none;color:var(--d);font-size:12px;margin-bottom:8px"></div>
+        <div class="modal-btns">
+          <button class="btn bob" onclick="cerrarM('m-cambiar-clave')">Cancelar</button>
+          <button class="btn bpb" onclick="cambiarClave()">Cambiar clave</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL LOGIN ADMIN -->
+    <div class="modal-bg" id="m-admin-login" style="z-index:700">
+      <div class="modal" style="width:360px;z-index:701">
+        <div class="modal-title">🔒 Acceso administración</div>
+        <div class="fg">
+          <label>Clave de acceso</label>
+          <input type="password" id="admin-pwd" placeholder="Ingresá la clave" onkeydown="if(event.key==='Enter')loginAdmin()">
+        </div>
+        <div id="admin-login-err" style="color:var(--d);font-size:12px;display:none;margin-top:4px"></div>
+        <div class="modal-btns">
+          <button class="btn bob" onclick="cerrarM('m-admin-login');history.back()">Cancelar</button>
+          <button class="btn bpb" onclick="loginAdmin()">Ingresar</button>
+        </div>
+        <div style="text-align:center;margin-top:8px">
+          <button onclick="mostrarRecuperar()" style="background:none;border:none;color:var(--p);cursor:pointer;font-size:12px;text-decoration:underline">Olvidé mi clave</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL RECUPERAR CLAVE -->
+    <div class="modal-bg" id="m-admin-recuperar" style="z-index:710">
+      <div class="modal" style="width:380px;z-index:711">
+        <div class="modal-title">Recuperar clave</div>
+        <div id="rec-paso1">
+          <div class="alert ai" style="font-size:12px">Se enviará un código de 6 dígitos a j***@gmail.com</div>
+          <div class="modal-btns">
+            <button class="btn bob" onclick="cerrarM('m-admin-recuperar')">Cancelar</button>
+            <button class="btn bpb" onclick="solicitarCodigo()">Enviar código</button>
+          </div>
+        </div>
+        <div id="rec-paso2" style="display:none">
+          <div class="fg"><label>Código recibido</label><input type="text" id="rec-codigo" placeholder="123456" maxlength="6"></div>
+          <div class="fg"><label>Nueva clave</label><input type="password" id="rec-nueva-clave" placeholder="Nueva clave"></div>
+          <div class="fg"><label>Confirmar clave</label><input type="password" id="rec-confirmar-clave" placeholder="Repetir clave"></div>
+          <div id="rec-err" style="color:var(--d);font-size:12px;display:none"></div>
+          <div class="modal-btns">
+            <button class="btn bob" onclick="cerrarM('m-admin-recuperar')">Cancelar</button>
+            <button class="btn bpb" onclick="verificarCodigo()">Cambiar clave</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="s-aranceles" class="section" style="display:none">
+      <div class="card">
+        <div class="ctitle">Tabla de aranceles por vigencia</div>
+        <div class="alert ai">El precio bonificado se aplica si el pago es antes del dia 10, excepto en Marzo (cuota 1) y Julio (cuota 5) donde rige todo el mes. Si todas las cuotas 1-9 fueron pagadas con descuento, la cuota 10 (Diciembre) tambien es bonificada.</div>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+          <button class="btn bpb" onclick="nuevaVigencia()">+ Nueva vigencia</button>
+        </div>
+        <div id="tabla-vig"></div>
+      </div>
+    </div>
+
+  </div>
+</main>
+</div>
+
+<!-- MODALES -->
+<div class="modal-bg" id="m-alum">
+  <div class="modal">
+    <div class="modal-title">Nuevo alumno</div>
+    <div class="r2">
+      <div class="fg" style="grid-column:1/-1"><label>Nombre y apellido</label><input type="text" id="ma-nombre" placeholder="APELLIDO NOMBRE"></div>
+    </div>
+    <div class="r2">
+      <div class="fg"><label>Curso</label><select id="ma-curso" onchange="autocompletarPrecioCurso()"></select></div>
+      <div class="fg"><label>Precio normal ($)</label><input type="number" id="ma-pnormal" placeholder="0"></div>
+    </div>
+    <div class="r2">
+      <div class="fg"><label>Precio bonificado ($)</label><input type="number" id="ma-pbonif" placeholder="0"></div>
+      <div class="fg"><label>CUITs (separados por coma)</label><input type="text" id="ma-cuits" inputmode="numeric" placeholder="20123456789"><div style="font-size:10px;color:var(--m);margin-top:3px">Solo números sin puntos ni guiones. Ej: 27056276675</div></div>
+    </div>
+    <div id="ma-precio-info" style="font-size:11px;color:var(--s);margin-bottom:6px;display:none">✓ Precio autocargado desde la tabla de aranceles vigente. Modificalo si tiene precio especial.</div>
+    <div class="fg"><label>Telefono WhatsApp (sin 0 ni 15, ej: 3874123456)</label><input type="text" id="ma-tel" inputmode="numeric" placeholder="3874123456"></div>
+    <div class="modal-btns">
+      <button class="btn bob" onclick="cerrarM('m-alum')">Cancelar</button>
+      <button class="btn bpb" onclick="guardarAlumno()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="m-edit-alum">
+  <div class="modal">
+    <div class="modal-title">Editar alumno</div>
+    <div class="r2">
+      <div class="fg" style="grid-column:1/-1"><label>Nombre y apellido</label><input type="text" id="ea-nombre"></div>
+    </div>
+    <div class="r2">
+      <div class="fg"><label>Curso</label><select id="ea-curso"></select></div>
+      <div class="fg"><label>Precio normal ($)</label><input type="number" id="ea-pnormal"></div>
+    </div>
+    <div class="r2">
+      <div class="fg"><label>Precio bonificado ($)</label><input type="number" id="ea-pbonif"></div>
+      <div class="fg"><label>CUITs (separados por coma)</label><input type="text" id="ea-cuits" inputmode="numeric" placeholder="20123456789"><div style="font-size:10px;color:var(--m);margin-top:3px">Ingresá solo números, sin puntos ni guiones. Ej: 27056276675</div></div>
+    </div>
+    <div class="fg"><label>Telefono WhatsApp (sin 0 ni 15, ej: 3874123456)</label><input type="text" id="ea-tel" inputmode="numeric" placeholder="3874123456"><div style="font-size:10px;color:var(--m);margin-top:3px">Solo números. Ej: 3874123456</div></div>
+    <input type="hidden" id="ea-id">
+    <div class="modal-btns">
+      <button class="btn bob" onclick="cerrarM('m-edit-alum')">Cancelar</button>
+      <button class="btn bpb" onclick="guardarEdicionAlumno()">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL BONIFICAR -->
+<div class="modal-bg" id="m-bonificar" style="z-index:600">
+  <div class="modal" style="width:420px;z-index:601">
+    <div class="modal-title">Bonificar cuota</div>
+    <div class="alert ai" style="font-size:12px" id="bonif-info"></div>
+    <div class="fg">
+      <label>Tipo de bonificación</label>
+      <select id="bonif-tipo" onchange="bonifCambiarTipo()" style="font-size:13px">
+        <option value="gratis">Gratis ($0)</option>
+        <option value="monto">Monto personalizado</option>
+      </select>
+    </div>
+    <div id="bonif-monto-div" style="display:none">
+      <div class="fg">
+        <label>Monto a cobrar ($)</label>
+        <input type="number" id="bonif-monto" placeholder="0" min="0">
+      </div>
+    </div>
+    <div class="fg">
+      <label>Motivo (opcional)</label>
+      <input type="text" id="bonif-motivo" placeholder="Ej: Beca, acuerdo especial...">
+    </div>
+    <div class="alert aw" style="font-size:11px" id="bonif-aviso">La cuota quedará marcada como pagada en $0.</div>
+    <div class="modal-btns">
+      <button class="btn bob" onclick="cerrarM('m-bonificar')">Cancelar</button>
+      <button class="btn bpb" style="background:#FF9800;border-color:#FF9800" onclick="confirmarBonificar()">Confirmar bonificación</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL REIMPUTAR -->
+<div class="modal-bg" id="m-reimputar" style="z-index:600">
+  <div class="modal" style="width:420px;z-index:601">
+    <div class="modal-title">Reimputar cuota</div>
+    <div class="alert ai" style="font-size:12px" id="reim-info"></div>
+    <div class="fg">
+      <label>Mover esta cuota al periodo</label>
+      <select id="reim-destino" style="font-size:13px"></select>
+    </div>
+    <div class="alert aw" style="font-size:11px">
+      La cuota origen quedara como <strong>pendiente</strong> y la destino quedara como <strong>pagada</strong> con los mismos datos.
+    </div>
+    <div class="modal-btns">
+      <button class="btn bob" onclick="cerrarM('m-reimputar')">Cancelar</button>
+      <button class="btn bpb" onclick="confirmarReimputar()">Confirmar reimputacion</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALLE ALUMNO REPORTE -->
+<div class="modal-bg" id="m-det-alumno" style="z-index:400">
+  <div class="modal" style="width:680px;z-index:401">
+    <div class="modal-title">Detalle de pagos</div>
+    <div id="det-body"></div>
+    <div class="modal-btns">
+      <button class="btn bob" onclick="cerrarM('m-det-alumno')">Cerrar</button>
+      <button class="btn bpb" onclick="cerrarM('m-det-alumno');nav('cobro')">Registrar pago</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ELIMINAR PAGO -->
+<!-- MODAL PREVIEW BANCO -->
+<!-- MODAL DETALLE CURSO -->
+<div class="modal-bg" id="m-det-curso" style="z-index:500">
+  <div class="modal" style="width:720px;max-height:85vh;overflow-y:auto">
+    <div class="modal-title" id="det-curso-title">Detalle del curso</div>
+    <div id="det-curso-body"></div>
+    <div class="modal-btns">
+      <button class="btn bob" onclick="cerrarM('m-det-curso')">Cerrar</button>
+      <button class="btn bpb" onclick="exportarDetalleCurso()">📥 Exportar Excel</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="m-banco-preview" style="z-index:600">
+  <div class="modal" style="width:620px">
+    <div class="modal-title">Previsualización — Importar banco</div>
+    <div id="banco-prev-stats" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:14px"></div>
+    <div id="banco-prev-detalle" style="max-height:320px;overflow-y:auto;font-size:12px"></div>
+    <div class="modal-btns">
+      <button class="btn bob" onclick="cerrarM('m-banco-preview')">Cancelar</button>
+      <button class="btn bpb" onclick="confirmarImportarBanco()" id="btn-confirmar-banco">✓ Confirmar e importar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="m-del-pago">
+  <div class="modal" style="width:420px">
+    <div class="modal-title">Eliminar pago</div>
+    <input type="hidden" id="del-pago-id">
+    <input type="hidden" id="del-alumno-id">
+    <div class="alert ae" style="font-size:12px">Esta accion no se puede deshacer. ¿Que queres hacer con las cuotas que este pago cubria?</div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
+      <button class="btn bpb" onclick="confirmarEliminarPago(true)" style="justify-content:center;padding:10px">
+        Eliminar pago y revertir cuotas a pendiente
+      </button>
+      <button class="btn bob" onclick="confirmarEliminarPago(false)" style="justify-content:center;padding:10px">
+        Solo eliminar el registro (dejar cuotas como estan)
+      </button>
+      <button class="btn bob" onclick="cerrarM('m-del-pago')" style="justify-content:center">
+        Cancelar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR PAGO -->
+<div class="modal-bg" id="m-edit-pago">
+  <div class="modal">
+    <div class="modal-title">Editar pago</div>
+    <div class="alert ai" style="font-size:11px" id="ep-alumno"></div>
+    <input type="hidden" id="ep-id">
+    <div class="r2">
+      <div class="fg"><label>Monto ($)</label><input type="number" id="ep-monto" min="0" step="100"></div>
+      <div class="fg"><label>Fecha</label><input type="date" id="ep-fecha"></div>
+    </div>
+    <div class="r2">
+      <div class="fg"><label>Medio de pago</label>
+        <select id="ep-medio">
+          <option>Efectivo</option><option>Debito</option><option>Credito</option><option>Cheque</option><option>Transferencia</option>
+        </select>
+      </div>
+      <div class="fg"><label>Concepto</label><input type="text" id="ep-concepto"></div>
+    </div>
+    <div class="alert aw" style="font-size:11px">
+      Nota: editar el monto o concepto no modifica automaticamente el estado de las cuotas. Para cambiar que cuotas cubre, elimina el pago y volvelo a registrar.
+    </div>
+    <div class="modal-btns">
+      <button class="btn bob" onclick="cerrarM('m-edit-pago')">Cancelar</button>
+      <button class="btn bpb" onclick="guardarEditPago()">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NUEVA VIGENCIA -->
+<div class="modal-bg" id="m-vig">
+  <div class="modal">
+    <div class="modal-title">Nueva tabla de aranceles</div>
+    <div id="vig-actual-info" style="display:none;background:var(--gl);padding:8px 12px;border-radius:6px;font-size:12px;color:var(--m);margin-bottom:8px"></div>
+    <div class="alert aw" style="font-size:12px">Se clonan los precios actuales de todos los alumnos. Podes editarlos despues.</div>
+    <div class="r2">
+      <div class="fg"><label>Vigente desde</label><input type="date" id="vig-desde"></div>
+      <div class="fg"><label>Descripcion (opcional)</label><input type="text" id="vig-desc" placeholder="Ej: Aumento junio"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn bob" onclick="cerrarM('m-vig')">Cancelar</button>
+      <button class="btn bpb" onclick="crearVigencia()">Crear</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL VER PRECIOS VIGENTES -->
+<div class="modal-bg" id="m-ver-vig">
+  <div class="modal" style="width:620px">
+    <div class="modal-title">Tabla de precios vigente</div>
+    <div id="ver-vig-body" style="max-height:500px;overflow-y:auto;padding-right:4px"></div>
+    <div class="modal-btns">
+      <button class="btn bpb" onclick="cerrarM('m-ver-vig')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR VIGENCIA -->
+<div class="modal-bg" id="m-edit-vig">
+  <div class="modal" style="width:820px">
+    <div class="modal-title" id="edit-vig-tit">Editar aranceles</div>
+    <div style="font-weight:700;font-size:12px;color:var(--m);text-transform:uppercase;margin-bottom:6px">Precios por curso</div>
+    <div style="font-size:11px;color:var(--m);margin-bottom:8px">Editá el precio y hacé clic en "Aplicar" para actualizar todos los alumnos del curso (excepto precio especial).</div>
+    <div style="max-height:200px;overflow-y:auto;margin-bottom:16px">
+      <table id="edit-vig-cursos" style="width:100%"></table>
+    </div>
+    <div style="font-weight:700;font-size:12px;color:var(--m);text-transform:uppercase;margin-bottom:6px">Precios individuales <span style="font-weight:400;font-size:11px;text-transform:none">— marcá ★ para fijar precio especial (no se actualiza con el curso)</span></div>
+    <div class="twrap" style="max-height:280px;overflow-y:auto">
+      <table id="edit-vig-table" style="width:100%"></table>
+    </div>
+    <div class="modal-btns">
+      <button class="btn bob" onclick="cerrarM('m-edit-vig')">Cancelar</button>
+      <button class="btn bpb" onclick="guardarEditVig()">Guardar cambios individuales</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL APLICAR PRECIO CURSO -->
+<div class="modal-bg" id="m-aplica-curso" style="z-index:900">
+  <div class="modal" style="width:400px;z-index:901">
+    <div class="modal-title">Aplicar precio — <span id="aplica-curso-nombre"></span></div>
+    <div style="font-size:13px;margin-bottom:12px">Normal: <strong id="aplica-pn"></strong> · Bonificado: <strong id="aplica-pb"></strong></div>
+    <div class="fg">
+      <label>¿Desde qué cuota aplicar?</label>
+      <select id="aplica-desde" style="padding:8px;border:1px solid var(--b);border-radius:6px;width:100%">
+        <option value="futuras">Solo cuotas pendientes (desde la próxima)</option>
+        <option value="4">Cuota 4 (Julio) en adelante</option>
+        <option value="5">Cuota 5 (Agosto) en adelante</option>
+        <option value="6">Cuota 6 (Septiembre) en adelante</option>
+        <option value="7">Cuota 7 (Octubre) en adelante</option>
+        <option value="8">Cuota 8 (Noviembre) en adelante</option>
+        <option value="ninguna">Solo actualizar precio, sin recalcular cuotas</option>
+      </select>
+    </div>
+    <div class="alert aw" style="font-size:11px;margin-top:8px">Solo afecta alumnos sin precio especial. Las cuotas ya pagadas no se modifican.</div>
+    <div class="modal-btns">
+      <button class="btn bob" onclick="cerrarM('m-aplica-curso')">Cancelar</button>
+      <button class="btn bpb" onclick="confirmarAplicarCurso()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+var CUOTAS=[{num:1,mes:'Marzo'},{num:2,mes:'Abril'},{num:3,mes:'Mayo'},{num:4,mes:'Junio'},{num:5,mes:'Julio'},{num:6,mes:'Agosto'},{num:7,mes:'Septiembre'},{num:8,mes:'Octubre'},{num:9,mes:'Noviembre'},{num:10,mes:'Diciembre'}];
+var MESES_TODO_EL_MES=[1,5];
+var MESES_NOMBRE_ALL=['Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+var _alumnos=[],_cursos=[],_pagos=[],_reporte=[];
+var alumnoActual=null,bancoData=null;
+
+// API calls al servidor Node.js
+async function api(method,url,body){
+  showSpinner('Procesando...');
+  try{
+    var opts={method:method,headers:{'Content-Type':'application/json'}};
+    if(body) opts.body=JSON.stringify(body);
+    var r=await fetch(url,opts);
+    var data=await r.json();
+    hideSpinner();
+    return data;
+  }catch(e){
+    hideSpinner();
+    toast('Error de conexion: '+e.message,'e');
+    throw e;
+  }
+}
+
+function pesos(n){return '$'+(parseFloat(n)||0).toLocaleString('es-AR');}
+function iniciales(n){return (n||'').split(/[\s,]+/).filter(Boolean).slice(0,2).map(function(x){return x[0];}).join('').toUpperCase();}
+
+async function init(){
+  showSpinner('Cargando datos...');
+  try{
+    // Verificar modo demo
+    var demoInfo = await api('GET', '/api/demo-info');
+    if (demoInfo && demoInfo.demo) {
+      document.getElementById('demo-banner').style.display = 'block';
+      document.querySelector('.main') && (document.querySelector('.main').style.marginTop = '36px');
+    }
+    _cursos=await api('GET','/api/cursos');
+    _alumnos=await api('GET','/api/alumnos');
+    _pagos=await api('GET','/api/pagos');
+    poblarSelects();
+    await cargarPreciosCursosVigente();
+    await actualizarDashboard();
+    hideSpinner();
+  }catch(e){hideSpinner();}
+}
+
+function poblarSelects(){
+  ['alum-curso','cb-curso','ma-curso','ea-curso','rep-curso'].forEach(function(id){
+    var s=document.getElementById(id);if(!s)return;
+    var first=s.options[0];s.innerHTML='';s.appendChild(first);
+    _cursos.forEach(function(c){var o=document.createElement('option');o.value=c.nombre;o.textContent=c.nombre;s.appendChild(o);});
+  });
+}
+
+var TITULOS={dashboard:'Resumen',alumnos:'Alumnos',cobro:'Cobro manual',banco:'Importar banco',historial:'Historial de pagos',reporte:'Reporte de deuda',cursos:'Gestion de cursos',aranceles:'Tabla de aranceles','reporte-medios':'Reporte por medio de pago','saldos-pendientes':'Saldos sin imputar',admin:'Administración'};
+
+function nav(id){
+  document.querySelectorAll('.section').forEach(function(s){s.classList.remove('active');});
+  document.getElementById('s-'+id).classList.add('active');
+  document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('active');});
+  var ord=['dashboard','alumnos','cobro','banco','historial','reporte',null,'cursos'];
+  var idx=ord.indexOf(id);
+  if(idx>=0){var items=document.querySelectorAll('.ni');if(items[idx])items[idx].classList.add('active');}
+  document.getElementById('page-title').textContent=TITULOS[id]||id;
+  if(id==='dashboard')actualizarDashboard();
+  if(id==='alumnos')cargarAlumnos();
+  if(id==='historial')cargarHistorial();
+  if(id==='reporte')cargarReporte();
+  if(id==='reporte-medios'){if(!_pagos)api('GET','/api/pagos').then(function(r){_pagos=r;cargarCursosReporteMedios();});else cargarCursosReporteMedios();}
+  if(id==='saldos-pendientes')cargarSaldosPendientes();
+  if(id==='aranceles')cargarAranceles();
+  if(id==='cursos')renderCursos();
+}
+
+async function actualizarDashboard(){
+  _reporte=await api('GET','/api/reporte');
+  var tot=_reporte.length;
+  var conDeuda=_reporte.filter(function(a){return Object.keys(a.estadoCuotas||{}).some(function(k){return a.estadoCuotas[k]==='pendiente';});}).length;
+  var cobrado=(_pagos||[]).reduce(function(s,p){return s+(parseFloat(p.monto)||0);},0);
+  document.getElementById('dash-stats').innerHTML=
+    sc('Total alumnos',tot,'p')+sc('Con deuda',conDeuda,'d')+sc('Al dia',tot-conDeuda,'s');
+
+  var deudores=_reporte.filter(function(a){return Object.keys(a.estadoCuotas||{}).some(function(k){return a.estadoCuotas[k]==='pendiente';});}).slice(0,6);
+  document.getElementById('dash-deud').innerHTML=deudores.length===0?'<p style="color:var(--m);font-size:12.5px">Todos al dia!</p>':
+    deudores.map(function(a){var p=Object.keys(a.estadoCuotas||{}).filter(function(k){return a.estadoCuotas[k]==='pendiente';}).length;
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--b)"><span style="font-size:12.5px;font-weight:500">'+a.nombre+' <span style="font-size:10px;color:var(--m)">'+a.curso+'</span></span><span class="badge bd">'+p+' cuota(s)</span></div>';}).join('');
+
+  var ult=(_pagos||[]).slice(0,5);
+  document.getElementById('dash-ult').innerHTML=ult.length===0?'<p style="color:var(--m);font-size:12.5px">Sin pagos.</p>':
+    ult.map(function(p){return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--b)"><div><div style="font-size:12.5px;font-weight:500">'+p.alumno_nombre+'</div><div style="font-size:10.5px;color:var(--m)">'+p.fecha+' · '+p.origen+'</div></div><span style="font-weight:700;color:var(--s)">'+pesos(p.monto)+'</span></div>';}).join('');
+
+  var grupos={};
+  _reporte.forEach(function(a){if(!grupos[a.curso])grupos[a.curso]={tot:0,deud:0};grupos[a.curso].tot++;
+    if(Object.keys(a.estadoCuotas||{}).some(function(k){return a.estadoCuotas[k]==='pendiente';}))grupos[a.curso].deud++;});
+  var tbl='<table style="font-size:12px"><thead><tr><th>Curso</th><th>Alumnos</th><th>Con deuda</th><th>Al dia</th><th>Avance</th></tr></thead><tbody>';
+  Object.keys(grupos).sort().forEach(function(c){var g=grupos[c],pct=Math.round((g.tot-g.deud)/g.tot*100);
+    tbl+='<tr style="cursor:pointer" onclick="abrirDetalleCurso(\'' + c + '\')" title="Ver detalle del curso">'+
+      '<td style="font-weight:600;color:var(--p);text-decoration:underline">'+c+'</td>'+
+      '<td>'+g.tot+'</td>'+
+      '<td><span class="badge bd">'+g.deud+'</span></td>'+
+      '<td><span class="badge bs">'+(g.tot-g.deud)+'</span></td>'+
+      '<td><div style="display:flex;align-items:center;gap:6px"><div style="width:70px;height:5px;background:var(--dl);border-radius:3px"><div style="width:'+pct+'%;height:100%;background:var(--s);border-radius:3px"></div></div><span style="font-size:10px;color:var(--m)">'+pct+'%</span></div></td>'+
+    '</tr>';});
+  tbl+='</tbody></table>';
+  document.getElementById('dash-cur').innerHTML=tbl;
+}
+
+function sc(l,v,c){return '<div class="sc"><div class="sc-l">'+l+'</div><div class="sc-v '+c+'">'+v+'</div></div>';}
+
+var _preciosPorCurso = {};
+
+async function cargarPreciosCursosVigente(){
   try {
-    if (DEMO_MODE) await client.query('SET search_path TO demo');
-    const res = await client.query(sql, params);
-    return res.rows;
-  } finally { client.release(); }
-}
-async function q1(sql, params = []) { const rows = await q(sql, params); return rows[0] || null; }
-
-const MESES_TODO_EL_MES = [1, 5];
-
-// Fechas de vencimiento bonificado por cuota (dia/mes) — se pueden editar desde el panel admin
-const VENCIMIENTOS_DEFAULT = [
-  '31/03/2026', // C1
-  '09/04/2026', // C2
-  '11/05/2026', // C3
-  '10/06/2026', // C4
-  '30/07/2026', // C5
-  '10/08/2026', // C6
-  '10/09/2026', // C7
-  '08/10/2026', // C8
-  '10/11/2026', // C9
-  '10/12/2026', // C10
-];
-
-async function getVencimientos() {
-  const row = await q1("SELECT valor FROM config WHERE clave='vencimientos_bonif'");
-  if (row) { try { return JSON.parse(row.valor); } catch(e) {} }
-  return VENCIMIENTOS_DEFAULT;
+    var aranceles=await api('GET','/api/aranceles');
+    if(!aranceles||!aranceles.length) return;
+    var hoy=new Date().toISOString().slice(0,10);
+    var vigente=aranceles.find(function(a){return a.desde<=hoy;});
+    if(!vigente) return;
+    var cursos=await api('GET','/api/aranceles/'+vigente.id+'/cursos');
+    _preciosPorCurso={};
+    cursos.forEach(function(c){_preciosPorCurso[c.curso]={precio_normal:c.precio_normal,precio_bonificado:c.precio_bonificado};});
+  } catch(e){}
 }
 
-async function getMoraPorcentaje() {
-  const row = await q1("SELECT valor FROM config WHERE clave='mora_porcentaje'");
-  return row ? parseFloat(row.valor) || 0 : 0;
-}
-const MESES_NOMBRE_ALL = ['Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-const MESES_IDX = [2,3,4,5,6,7,8,9,10,11];
-
-async function getPrecioConVenc(alumno, numCuota, fechaPago, vencimientos) {
-  // fechaPago: 'dd/mm/yyyy' o 'yyyy-mm-dd'
-  if (MESES_TODO_EL_MES.includes(numCuota)) return parseFloat(alumno.precio_bonificado);
-  const venc = vencimientos[numCuota - 1];
-  if (!venc || !fechaPago) return parseFloat(alumno.precio_normal);
-  // Parsear fecha de pago — usar solo año/mes/dia sin hora para evitar problemas de timezone
-  let dp;
-  if (String(fechaPago).includes('/')) {
-    const [d,m,y] = String(fechaPago).split('/');
-    dp = new Date(parseInt(y), parseInt(m)-1, parseInt(d), 12, 0, 0);
+function autocompletarPrecioCurso(){
+  var curso=document.getElementById('ma-curso').value;
+  var info=document.getElementById('ma-precio-info');
+  if(curso&&_preciosPorCurso[curso]&&curso!=='FAMILIA'){
+    document.getElementById('ma-pnormal').value=_preciosPorCurso[curso].precio_normal;
+    document.getElementById('ma-pbonif').value=_preciosPorCurso[curso].precio_bonificado;
+    if(info) info.style.display='block';
   } else {
-    const parts = String(fechaPago).split('-');
-    dp = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]), 12, 0, 0);
-  }
-  // Parsear vencimiento — fijar hora al fin del dia para incluir el dia completo
-  const [dv,mv,yv] = venc.split('/');
-  const dVenc = new Date(parseInt(yv), parseInt(mv)-1, parseInt(dv), 23, 59, 59);
-  const esBonif = dp <= dVenc;
-  return esBonif ? parseFloat(alumno.precio_bonificado) : parseFloat(alumno.precio_normal);
-}
-
-function getPrecio(alumno, numCuota, dia) {
-  const esBonif = MESES_TODO_EL_MES.includes(numCuota) || dia <= 10;
-  return esBonif ? parseFloat(alumno.precio_bonificado) : parseFloat(alumno.precio_normal);
-}
-
-async function cuota10Gratis(alumnoId, alumno, cuotasPrec) {
-  const cuotas19 = cuotasPrec
-    ? cuotasPrec.filter(c=>c.numero_cuota<=9)
-    : await q('SELECT * FROM cuotas WHERE alumno_id=$1 AND numero_cuota<=9', [alumnoId]);
-  if (cuotas19.length < 9) return false;
-  return cuotas19.every(c => c.estado === 'pagada' && (MESES_TODO_EL_MES.includes(c.numero_cuota) || parseFloat(c.monto_pagado) <= parseFloat(alumno.precio_bonificado)));
-}
-
-function normalizarFechaAR(f) {
-  if (!f) return '';
-  const s = String(f).trim();
-  const partes = s.split('/');
-  if (partes.length === 3) {
-    return partes[0].padStart(2,'0')+'/'+partes[1].padStart(2,'0')+'/'+partes[2];
-  }
-  return s;
-}
-
-function normalizarCuit(valor) {
-  if (!valor && valor !== 0) return null;
-  const s = String(valor).replace(/[^0-9]/g, '');
-  // Aceptar CUIT (11 dígitos) o DNI (7-8 dígitos)
-  if (s.length === 11 || s.length === 8 || s.length === 7) return s;
-  const match = s.match(/\d{11}/) || s.match(/\d{8}/) || s.match(/\d{7}/);
-  return match ? match[0] : null;
-}
-
-function parsearMonto(valor) {
-  if (!valor && valor !== 0) return 0;
-  let s = String(valor).trim().replace(/\$\s*/g, '').trim();
-  if (/^\d{1,3}(\.\d{3})*(,\d{1,2})?$/.test(s)) { s = s.replace(/\./g, '').replace(',', '.'); }
-  else if (/^\d{1,3}(,\d{3})*(\.\d{1,2})?$/.test(s)) { s = s.replace(/,/g, ''); }
-  else { s = s.replace(/[^0-9,\.]/g, ''); const lc=s.lastIndexOf(','),ld=s.lastIndexOf('.'); if(lc>ld){s=s.replace(/\./g,'').replace(',','.');}else{s=s.replace(/,/g,'');} }
-  return parseFloat(s) || 0;
-}
-
-async function inicializarDB() {
-  // Crear schema demo si corresponde
-  if (DEMO_MODE) {
-    const client = await pool.connect();
-    try { await client.query('CREATE SCHEMA IF NOT EXISTS demo'); } finally { client.release(); }
-  }
-  await q(`
-    CREATE TABLE IF NOT EXISTS cursos (id SERIAL PRIMARY KEY, nombre TEXT NOT NULL, activo BOOLEAN DEFAULT TRUE);
-    CREATE TABLE IF NOT EXISTS alumnos (id SERIAL PRIMARY KEY, nombre TEXT NOT NULL, curso TEXT NOT NULL, cuits TEXT DEFAULT '', precio_normal NUMERIC DEFAULT 0, precio_bonificado NUMERIC DEFAULT 0, activo BOOLEAN DEFAULT TRUE, telefono TEXT DEFAULT '', saldo_favor NUMERIC DEFAULT 0);
-    CREATE TABLE IF NOT EXISTS cuotas (id SERIAL PRIMARY KEY, alumno_id INTEGER NOT NULL, numero_cuota INTEGER NOT NULL, estado TEXT DEFAULT 'pendiente', fecha_pago TEXT DEFAULT '', monto_pagado NUMERIC DEFAULT 0, compensada BOOLEAN DEFAULT FALSE, UNIQUE(alumno_id, numero_cuota));
-    CREATE TABLE IF NOT EXISTS pagos (id SERIAL PRIMARY KEY, fecha TEXT NOT NULL, alumno_id INTEGER NOT NULL, alumno_nombre TEXT NOT NULL, curso TEXT NOT NULL, monto NUMERIC NOT NULL, concepto TEXT NOT NULL, medio TEXT NOT NULL, origen TEXT NOT NULL, saldo_favor NUMERIC DEFAULT 0);
-    CREATE TABLE IF NOT EXISTS aranceles (id SERIAL PRIMARY KEY, desde TEXT NOT NULL, descripcion TEXT DEFAULT '', creado TEXT DEFAULT '');
-    CREATE TABLE IF NOT EXISTS aranceles_precios (id SERIAL PRIMARY KEY, arancel_id INTEGER NOT NULL, alumno_id INTEGER NOT NULL, precio_normal NUMERIC DEFAULT 0, precio_bonificado NUMERIC DEFAULT 0);
-    CREATE TABLE IF NOT EXISTS aranceles_cursos (id SERIAL PRIMARY KEY, arancel_id INTEGER NOT NULL, curso TEXT NOT NULL, precio_normal NUMERIC DEFAULT 0, precio_bonificado NUMERIC DEFAULT 0, UNIQUE(arancel_id, curso));
-    CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT);
-    ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS precio_especial BOOLEAN DEFAULT FALSE;
-  `);
-  await q("ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS saldo_favor NUMERIC DEFAULT 0");
-  const iniciado = await q1("SELECT valor FROM config WHERE clave='iniciado'");
-  if (!iniciado) {
-    if (!DEMO_MODE) await cargarDatosIniciales();
-    else await q("INSERT INTO config (clave,valor) VALUES ('iniciado','demo') ON CONFLICT DO NOTHING");
+    document.getElementById('ma-pnormal').value='';
+    document.getElementById('ma-pbonif').value='';
+    if(info) info.style.display='none';
   }
 }
 
-async function generarCuotas(alumnoId) {
-  const mesActual = new Date().getMonth();
-  for (let i = 0; i < MESES_IDX.length; i++) {
-    if (MESES_IDX[i] <= mesActual) await q('INSERT INTO cuotas (alumno_id,numero_cuota,estado) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [alumnoId, i+1, 'pendiente']);
-  }
+async function cargarAlumnos(){
+  _alumnos=await api('GET','/api/alumnos');
+  poblarSelects();
+  filtrarAlumnos();
 }
 
-async function cargarDatosIniciales() {
-  const cursos = ['1ST','1ST INT','2ND YEAR','5TH INT','6TH INT','7TH INT','CHILDREN','FAMILIA','JUNIORS 3','JUNIORS 4','KIDS 1','KIDS 2','KIDS 3','PLAY 2','PLY1'];
-  for (const c of cursos) await q('INSERT INTO cursos (nombre) VALUES ($1) ON CONFLICT DO NOTHING', [c]);
-
-  const alumnosData = [
-    ['CARABAJAL ANA PAULA','1ST INT','',76000,73000],['MAURIN GIANA','1ST INT','',76000,73000],['MARTINEZ CARBAJO IVAN','1ST INT','23282612984',76000,73000],['NIEVA GUEMES MIA ISABELLA','1ST INT','',76000,73000],['BENICIO BELEN','1ST INT','27258005762',76000,73000],['CARI, NIRVANA','2ND YEAR','',55500,52500],['DIAZ LOLA','2ND YEAR','27267806093',55500,52500],['NUGHES, LEON','2ND YEAR','27306379599',55500,52500],['TRONCOSO ALMA','1ST','27365805771',55500,52500],['ALCALA, MATEO','5TH INT','',85500,81500],['APAZA BORELLI, VERONICA','5TH INT','27258929123',85500,81500],['GARCIA, NICOLE','5TH INT','27288309111',85500,81500],['GUZMAN, INAKI','5TH INT','20271755946',85500,81500],['LARA LUCIO','5TH INT','',85500,81500],['LOPEZ BERRUEZO, PILAR','5TH INT','27288676793',85500,81500],['RUSSO RADA, FRANCESCA','5TH INT','27282480781',85500,81500],['MORALES BELLIDO ALVARO','5TH INT','',85500,81500],['MARTINEZ RUIZ BAUTISTA','5TH INT','',85500,81500],['ALTOBELLI, ANA','6TH INT','27115395063',85500,81500],['MARTINEZ ARGANARAZ ARIEL','6TH INT','20258023685',85500,81500],['LOPEZ GARCIA VALENTINA','6TH INT','',85500,81500],['CARDENAS, ARACELI','6TH INT','20348469127',85500,81500],['MORALES, JUANA','6TH INT','27295951015',85500,81500],['MORALES, LAUTARO','6TH INT','',85500,73000],['VILLARREAL, MELANIE','6TH INT','',85500,81500],['VERCELLINO IGNACIO','6TH INT','',85500,81500],['PALACIOS ERNESTINA','6TH INT','',85500,81500],['CASAS, GUILLERMINA','7TH INT','23364482299',87000,82500],['DIAZ TORRES, JOSEFINA','7TH INT','27248759653',87000,82500],['LOPEZ, AGNES','7TH INT','27312280855',87000,82500],['MICOL, FRANCISCO','7TH INT','',87000,82500],['VITALE GUADALUPE','7TH INT','20254376699',87000,82500],['CAMACHO AMPARO','CHILDREN','',42500,40500],['CANABIDES, ALLEGRA','CHILDREN','27407097608',42500,40500],['FERNANDEZ AMARELIS','CHILDREN','27311264538',42500,40500],['LUNA, SANTINO','CHILDREN','',42500,40500],['NUNEZ, ALEXANDER','CHILDREN','27293369254',42500,40500],['QUIROGA AMPARO','CHILDREN','20320624321',42500,40500],['SOSA, SANTIAGO','CHILDREN','27303913721',42500,40500],['TOLABA CARABAJAL KARLA ARIANA','CHILDREN','27316391236',42500,40500],['ZARATE LUCIA','CHILDREN','27368022484',42500,40500],['ALVAREZ LOURDES','CHILDREN','20364482729,27137473769',42500,36200],['CABRERA AMADEO BENICIO','CHILDREN','',42500,36200],['GUANCA PATRICIO MATIAS FEDERICO','CHILDREN','27418299822',42500,36200],['CARRASCO, GAEL TIZIANO','CHILDREN','27376022752',42500,40500],['FLIA AMADO RUSSO','FAMILIA','',171000,155500],['FLIA BRITO','FAMILIA','27267018788',144500,132500],['FLIA COTINI','FAMILIA','27321621142',111000,100000],['FLIA CAYO E Y RAFAELA','FAMILIA','20288773433',112000,101500],['FLIA CAYO A Y TAIEL','FAMILIA','27254603614',146000,133500],['FLIA DIAZ MORALES','FAMILIA','23316390064',112000,95000],['FLIA LACURI','FAMILIA','27296663080',95500,87000],['FLIA MAMANI RUIZ','FAMILIA','27214634215',172500,156500],['FLIA MARTINEZ','FAMILIA','',82000,75500],['FLIA MOYA','FAMILIA','27319484596',144500,132500],['FLIA ORTEGA','FAMILIA','',133500,122500],['FLIA RAMIREZ ORTUNO','FAMILIA','20248024918',101500,92500],['FLIA RIVERO','FAMILIA','27319488230',144500,132500],['FLIA ROSAS','FAMILIA','27282480021',197500,170200],['FLIA RUANO','FAMILIA','',98000,89000],['FLIA OLIVEIRA BEJARANO','FAMILIA','',129500,119000],['FLIA SANTAFE','FAMILIA','',112000,101500],['FLIA GITIAN','FAMILIA','20346167697',140000,128000],['FLIA SARAVIA','FAMILIA','27282481516',138500,127000],['FLIA SUAREZ','FAMILIA','27334286733',95500,87000],['FLIA TACTAGI','FAMILIA','',144500,132500],['FLIA TEJERINA','FAMILIA','27255163413',146000,133500],['FLIA TOLABA','FAMILIA','27349603697',106000,96000],['FLIA VACA MONASTEROLO','FAMILIA','27315574353',172500,156500],['FLIA VERCELLINO R','FAMILIA','27301102025',95500,87000],['FLIA VILLAFANE GUITIAN','FAMILIA','27374198683',112000,101500],['FLIA LIENDRO','FAMILIA','27335819131',181000,167500],['FLIA CARI','FAMILIA','',107000,97000],['FLIA RIOS','FAMILIA','',145500,132500],['FLIA MARTINEZ ISAIAS TOBIAS','FAMILIA','27385076342',58000,52500],['FLIA GASPAR GUITIAN','FAMILIA','',141000,131500],['FLIA FECCIA','FAMILIA','20346477408',101000,95700],['FLIA RIOS THIAGO RUTH','FAMILIA','27368059000',138500,127000],['FLIA CASIMIRO','FAMILIA','',129000,118500],['ANTUNA MAITENA','JUNIORS 3','27292956849',59000,56000],['CABRAL SIMON','JUNIORS 3','20303571990',59000,56000],['CARDENAS, MAILEN','JUNIORS 3','',59000,56000],['CRUZ, LUDMILA','JUNIORS 3','',59000,56000],['GUANCA, YAHIR','JUNIORS 3','20310629171',59000,56000],['SORIA LIENDRO, LIA','JUNIORS 3','',59000,56000],['CRUZ, EMA ISABELLA','JUNIORS 3','',59000,56000],['ROJAS, JAZMIN','JUNIORS 3','27291201879',59000,56000],['REALES, LAUTARO','JUNIORS 3','27268670713',59000,56000],['SEGURA, VICTORIA','JUNIORS 3','23365052794',59000,56000],['SOTILLO CATALINA','JUNIORS 3','27343488276,27177350988',59000,56000],['YAPURA, BAUTISTA','JUNIORS 3','27363389053',59000,50000],['ROBLEDO MAXIMO','JUNIORS 3','27274659500',59000,56000],['LAIME, DAIANA','JUNIORS 4','27364483479',59000,56000],['ORELLANA, ORIANA','JUNIORS 4','',59000,56000],['RICCO, TIZIANO','JUNIORS 4','27318028066',59000,56000],['RODRIGUEZ, GENESIS','JUNIORS 4','',59000,56000],['TOLABA, JEREMIAS','JUNIORS 4','23292955154',59000,56000],['ALCALA BAUTISTA','JUNIORS 4','20341849560',59000,50000],['MOLINA GUADALUPE','JUNIORS 4','',59000,50000],['CARRASCO, MATEO','KIDS 1','27297913927',48000,45500],['CESPEDES PUPPI, JUAN EMILIO','KIDS 1','27244539683',48000,45500],['CHOQUE JESUS GABRIEL','KIDS 1','',48000,45500],['GARCIA CARBAJAL, VALENTINO GABRIEL','KIDS 1','',48000,45500],['FLORES LUCAS','KIDS 1','',48000,45500],['GERON CARMEN','KIDS 1','20367917238',48000,45500],['GUTIERREZ, EMMA','KIDS 1','27339705335',48000,45500],['MONTES, LOLA','KIDS 1','27316391112',48000,45500],['PARRILLA, VALENTINA','KIDS 1','',48000,45500],['POSADAS, JEREMIAS','KIDS 1','',48000,45500],['RIVERO, AGUSTIN','KIDS 1','',48000,45500],['SANGUEZO MIRANDA, LUZ','KIDS 1','27365365747',48000,45500],['TERCERO, MATEO','KIDS 1','',48000,45500],['VEDIA, FELIPE','KIDS 1','',48000,45500],['VELA, NAHIARA','KIDS 1','23405161184',48000,45500],['ZARATE FRANCESCA','KIDS 1','',48000,45500],['NERI SALVADOR','KIDS 1','27332356877',48000,45500],['CARMEN GUILLERMINA','KIDS 1','',48000,45500],['ABALOS, AYLEN','KIDS 3','',53000,50500],['ACOSTA MIA','KIDS 2','20313357563',53000,50500],['AGUILERA, MIA','KIDS 2','',53000,50500],['ANTONELLI, DONATO','KIDS 2','27328042105',53000,50500],['CAMPOS GIOVANI','KIDS 2','',53000,50500],['CASTRO, AGUSTIN','KIDS 2','27335929883',53000,50500],['GOMEZ, NAZARENO','KIDS 2','27252624207',53000,50500],['GUTIERREZ, ZOEMI','KIDS 2','27335929441',53000,45000],['PERALES, MARIA CECILIA','KIDS 2','27306922187',53000,50500],['PERCINO, NAHIARA','KIDS 2','',53000,50500],['TOLABA, ESTEFANIA','KIDS 2','20270840419',53000,50500],['TOMASINI AGUSTIN','KIDS 2','27285994786',53000,50500],['YURKINA, MISAEL','KIDS 2','27310629516',53000,45000],['VARGAS THIAGO','KIDS 2','27350272769',53000,50500],['TAGLIOLI ANA','KIDS 2','20250786728',53000,50500],['VILCA ESPERANZA','KIDS 2','',53000,50500],['FACCHIN, OLIVIA','KIDS 3','27339704258',53000,50500],['LOPEZ ESTEFANIA','KIDS 3','27377456756',53000,45000],['MANSILLA, ABRIL','KIDS 3','',53000,50500],['MONDAQUE SABRINA','KIDS 3','',53000,50500],['REMENTERIA ISABEL','KIDS 3','20259313172',53000,50500],['MOSA, TADEO','KIDS 3','24276610933',53000,50500],['OROZCO, LAUTARO','KIDS 3','27285769634',53000,50500],['ORTEGA MARCOS','KIDS 3','',53000,50500],['VILLANUEVA CARLOS','KIDS 3','27316392135',53000,50500],['GUAYMAS ZERPA, CIRO','KIDS 3','27279737615',53000,45000],['CABELLO ALMA','KIDS 3','20361302975',53000,45000],['FIRME TIZIANO','KIDS 3','27253759432',53000,45000],['CHAVEZ DI PAULI CATALINA','PLAY 2','20445017478',29000,27500],['MAMANI, FELICITAS','PLAY 2','27288676769',29000,27500],['ALANCAY DEMIR','PLAY 2','',29000,27500],['RAMPULLA, GINO','PLAY 2','27340666378',29000,27500],['ZERPA, MATHEO','PLAY 2','27392176336',29000,24700],['APARICIO ROYANO NAHYARA','PLAY 2','27304026672',29000,27500],['VILTE PAZ LORENA SOL','PLAY 2','',29000,27500],['CORONEL LAUTARO','PLY1','27390380335',29000,27500],['VILLANUEVA FRANCISCO','PLY1','27448181729',29000,27500]
-  ];
-  for (const a of alumnosData) await q('INSERT INTO alumnos (nombre,curso,cuits,precio_normal,precio_bonificado) VALUES ($1,$2,$3,$4,$5)', a);
-
-  const mesActual = new Date().getMonth();
-  const pagosHist = [{id:1,c:[true,true,false]},{id:2,c:[true,true,false]},{id:3,c:[true,true,false]},{id:4,c:[true,false,false]},{id:5,c:[true,true,true]},{id:6,c:[false,false,true]},{id:7,c:[true,true,true]},{id:8,c:[true,true,true]},{id:9,c:[true,true,false]},{id:10,c:[false,false,false]},{id:11,c:[true,true,true]},{id:12,c:[true,true,true]},{id:13,c:[false,true,true]},{id:14,c:[true,true,false]},{id:15,c:[true,true,true]},{id:16,c:[true,true,true]},{id:17,c:[true,true,true]},{id:18,c:[true,true,true]},{id:19,c:[true,true,true]},{id:20,c:[false,true,false]},{id:21,c:[false,false,false]},{id:22,c:[true,true,true]},{id:23,c:[true,true,true]},{id:24,c:[true,true,false]},{id:25,c:[true,true,true]},{id:26,c:[true,false,false]},{id:27,c:[true,true,true]},{id:28,c:[true,true,true]},{id:29,c:[true,true,false]},{id:30,c:[true,true,false]},{id:31,c:[false,false,false]},{id:32,c:[true,true,true]},{id:33,c:[true,true,false]},{id:34,c:[true,true,true]},{id:35,c:[false,true,true]},{id:36,c:[true,true,false]},{id:37,c:[true,true,true]},{id:38,c:[true,true,true]},{id:39,c:[true,true,true]},{id:40,c:[true,true,true]},{id:41,c:[true,true,true]},{id:42,c:[true,true,true]},{id:43,c:[true,true,false]},{id:44,c:[true,true,false]},{id:45,c:[true,true,false]},{id:46,c:[true,true,false]},{id:47,c:[true,true,true]},{id:48,c:[true,true,false]},{id:49,c:[true,true,true]},{id:50,c:[true,true,false]},{id:51,c:[true,true,false]},{id:52,c:[true,true,false]},{id:53,c:[true,true,false]},{id:54,c:[true,true,false]},{id:55,c:[false,true,false]},{id:56,c:[false,false,false]},{id:57,c:[true,true,true]},{id:58,c:[true,true,false]},{id:59,c:[true,true,true]},{id:60,c:[true,true,true]},{id:61,c:[false,true,true]},{id:62,c:[true,true,true]},{id:63,c:[true,true,true]},{id:64,c:[true,true,true]},{id:65,c:[true,true,true]},{id:66,c:[true,true,true]},{id:67,c:[true,true,true]},{id:68,c:[false,true,true]},{id:69,c:[true,true,true]},{id:70,c:[true,true,true]},{id:71,c:[true,true,true]},{id:72,c:[true,true,true]},{id:73,c:[true,true,false]},{id:74,c:[true,true,false]},{id:75,c:[true,true,true]},{id:76,c:[false,false,false]},{id:77,c:[true,true,true]},{id:78,c:[true,true,false]},{id:79,c:[true,true,false]},{id:80,c:[true,true,true]},{id:81,c:[true,true,true]},{id:82,c:[false,false,false]},{id:83,c:[false,false,false]},{id:84,c:[true,true,false]},{id:85,c:[true,true,true]},{id:86,c:[true,true,false]},{id:87,c:[false,true,true]},{id:88,c:[true,true,false]},{id:89,c:[true,true,false]},{id:90,c:[true,true,false]},{id:91,c:[true,true,true]},{id:92,c:[true,true,true]},{id:93,c:[true,true,true]},{id:94,c:[true,true,true]},{id:95,c:[true,true,true]},{id:96,c:[true,true,true]},{id:97,c:[true,true,true]},{id:98,c:[true,true,true]},{id:99,c:[false,false,false]},{id:100,c:[true,true,true]},{id:101,c:[true,true,true]},{id:102,c:[true,true,false]},{id:103,c:[true,false,false]},{id:104,c:[true,true,true]},{id:105,c:[false,true,false]},{id:106,c:[true,true,true]},{id:107,c:[true,true,true]},{id:108,c:[true,true,true]},{id:109,c:[true,true,true]},{id:110,c:[true,true,false]},{id:111,c:[true,true,true]},{id:112,c:[true,false,false]},{id:113,c:[true,true,true]},{id:114,c:[true,true,false]},{id:115,c:[true,true,false]},{id:116,c:[true,true,false]},{id:117,c:[true,true,false]},{id:118,c:[true,false,true]},{id:119,c:[true,true,true]},{id:120,c:[true,true,false]},{id:121,c:[true,true,false]},{id:122,c:[false,false,false]},{id:123,c:[true,true,false]},{id:124,c:[true,true,true]},{id:125,c:[true,true,true]},{id:126,c:[true,true,false]},{id:127,c:[true,true,true]},{id:128,c:[false,true,false]},{id:129,c:[true,true,true]},{id:130,c:[true,true,true]},{id:131,c:[false,true,false]},{id:132,c:[true,true,true]},{id:133,c:[true,true,true]},{id:134,c:[true,true,true]},{id:135,c:[true,true,false]},{id:136,c:[true,true,false]},{id:137,c:[true,true,true]},{id:138,c:[true,true,true]},{id:139,c:[true,true,true]},{id:140,c:[true,true,true]},{id:141,c:[true,false,false]},{id:142,c:[true,true,true]},{id:143,c:[true,true,true]},{id:144,c:[false,true,true]},{id:145,c:[true,true,true]},{id:146,c:[true,true,true]},{id:147,c:[true,true,false]},{id:148,c:[false,true,false]},{id:149,c:[true,true,true]},{id:150,c:[true,true,true]},{id:151,c:[true,true,true]},{id:152,c:[true,true,true]},{id:153,c:[true,true,true]},{id:154,c:[true,true,true]}];
-
-  const FECHAS={"CARABAJAL ANA PAULA":{"1":"2026-03-31","2":"","3":""},"MAURIN GIANA":{"1":"2026-03-10","2":"2026-04-09","3":""},"MARTINEZ CARBAJO IVAN":{"1":"2026-03-12","2":"2026-04-09","3":""},"NIEVA GUEMES MIA ISABELLA":{"1":"2026-03-31","2":"","3":""},"BENICIO BELEN":{"1":"2026-03-21","2":"2026-04-09","3":"2026-05-08"},"CARI, NIRVANA":{"1":"","2":"","3":"2026-05-11"},"DIAZ LOLA":{"1":"2026-03-10","2":"2026-04-09","3":"2026-05-09"},"NUGHES, LEON":{"1":"2026-03-02","2":"","3":"2026-05-12"},"TRONCOSO ALMA":{"1":"2026-03-26","2":"2026-04-23","3":""},"ALCALA, MATEO":{"1":"","2":"","3":""},"APAZA BORELLI, VERONICA":{"1":"2026-03-04","2":"2026-04-09","3":"2026-05-07"},"GARCIA, NICOLE":{"1":"2026-03-10","2":"2026-04-07","3":"2026-05-05"},"GUZMAN, INAKI":{"1":"","2":"2026-04-09","3":"2026-05-10"},"LARA LUCIO":{"1":"2026-04-07","2":"2026-04-07","3":""},"LOPEZ BERRUEZO, PILAR":{"1":"2026-03-12","2":"2026-04-09","3":"2026-05-11"},"RUSSO RADA, FRANCESCA":{"1":"2026-03-03","2":"2026-04-07","3":"2026-05-08"},"MORALES BELLIDO ALVARO":{"1":"2026-03-26","2":"2026-05-04","3":"2026-05-04"},"MARTINEZ RUIZ BAUTISTA":{"1":"2026-03-10","2":"2026-05-14","3":"2026-05-14"},"ALTOBELLI, ANA":{"1":"2026-03-10","2":"2026-04-09","3":"2026-05-06"},"MARTINEZ ARGANARAZ ARIEL":{"1":"","2":"2026-04-13","3":""},"LOPEZ GARCIA VALENTINA":{"1":"","2":"","3":""},"CARDENAS, ARACELI":{"1":"2026-03-10","2":"2026-04-10","3":"2026-05-11"},"MORALES, JUANA":{"1":"2026-03-12","2":"2026-04-07","3":"2026-05-05"},"MORALES, LAUTARO":{"1":"2026-03-09","2":"2026-04-06","3":""},"VILLARREAL, MELANIE":{"1":"2026-03-09","2":"2026-04-08","3":"2026-05-06"},"VERCELLINO IGNACIO":{"1":"2026-04-06","2":"","3":""},"PALACIOS ERNESTINA":{"1":"2026-03-09","2":"2026-03-31","3":"2026-05-05"},"CASAS, GUILLERMINA":{"1":"2026-03-02","2":"2026-04-01","3":"2026-05-01"},"DIAZ TORRES, JOSEFINA":{"1":"2026-03-03","2":"","3":""},"LOPEZ, AGNES":{"1":"2026-03-09","2":"2026-04-30","3":""},"MICOL, FRANCISCO":{"1":"","2":"","3":""},"VITALE GUADALUPE":{"1":"2026-03-09","2":"2026-04-07","3":"2026-05-08"},"CAMACHO AMPARO":{"1":"2026-03-17","2":"2026-04-09","3":""},"CANABIDES, ALLEGRA":{"1":"2026-03-19","2":"2026-04-09","3":"2026-05-11"},"FERNANDEZ AMARELIS":{"1":"","2":"2026-04-15","3":"2026-05-14"},"LUNA, SANTINO":{"1":"2026-03-17","2":"2026-04-09","3":""},"NUNEZ, ALEXANDER":{"1":"2026-03-10","2":"2026-04-07","3":"2026-05-05"},"QUIROGA AMPARO":{"1":"2026-03-10","2":"2026-04-09","3":"2026-05-11"},"SOSA, SANTIAGO":{"1":"2026-03-03","2":"2026-04-01","3":"2026-05-05"},"TOLABA CARABAJAL KARLA ARIANA":{"1":"2026-03-03","2":"2026-04-07","3":"2026-05-07"},"ZARATE LUCIA":{"1":"2026-03-05","2":"2026-04-09","3":"2026-05-11"},"ALVAREZ LOURDES":{"1":"2026-03-10","2":"2026-04-09","3":"2026-05-07"},"CABRERA AMADEO BENICIO":{"1":"2026-04-14","2":"2026-04-16","3":""},"GUANCA PATRICIO MATIAS FEDERICO":{"1":"2026-03-19","2":"2026-04-09","3":""},"CARRASCO, GAEL TIZIANO":{"1":"2026-03-02","2":"2026-04-15","3":""},"FLIA AMADO RUSSO":{"1":"2026-03-02","2":"2026-04-06","3":""},"FLIA BRITO":{"1":"","2":"2026-04-23","3":"2026-05-12"},"FLIA COTINI":{"1":"2026-03-26","2":"2026-04-30","3":""},"FLIA CAYO E Y RAFAELA":{"1":"2026-03-10","2":"2026-04-09","3":"2026-05-09"},"FLIA CAYO A Y TAIEL":{"1":"2026-03-04","2":"2026-04-01","3":""},"FLIA DIAZ MORALES":{"1":"2026-03-10","2":"2026-04-09","3":""},"FLIA LACURI":{"1":"2026-03-03","2":"2026-04-09","3":""},"FLIA MAMANI RUIZ":{"1":"2026-03-04","2":"2026-03-30","3":""},"FLIA MARTINEZ":{"1":"2026-04-06","2":"2026-04-06","3":""},"FLIA MOYA":{"1":"","2":"2026-04-19","3":""},"FLIA ORTEGA":{"1":"","2":"","3":""},"FLIA RAMIREZ ORTUNO":{"1":"2026-03-12","2":"2026-04-09","3":"2026-05-11"},"FLIA RIVERO":{"1":"2026-03-05","2":"2026-04-08","3":""},"FLIA ROSAS":{"1":"2026-03-05","2":"2026-04-07","3":"2026-05-03"},"FLIA RUANO":{"1":"2026-03-30","2":"2026-04-09","3":"2026-05-06"},"FLIA OLIVEIRA BEJARANO":{"1":"","2":"2026-04-07","3":"2026-05-11"},"FLIA SANTAFE":{"1":"2026-03-03","2":"2026-04-09","3":"2026-05-06"},"FLIA GITIAN":{"1":"2026-04-07","2":"2026-04-07","3":"2026-05-11"},"FLIA SARAVIA":{"1":"2026-03-31","2":"2026-04-10","3":"2026-05-04"},"FLIA SUAREZ":{"1":"2026-03-11","2":"2026-04-09","3":"2026-05-11"},"FLIA TACTAGI":{"1":"2026-03-05","2":"2026-04-06","3":"2026-05-06"},"FLIA TEJERINA":{"1":"2026-03-10","2":"2026-04-10","3":"2026-05-10"},"FLIA TOLABA":{"1":"","2":"2026-04-09","3":"2026-05-11"},"FLIA VACA MONASTEROLO":{"1":"2026-03-05","2":"2026-04-08","3":"2026-05-05"},"FLIA VERCELLINO R":{"1":"2026-03-04","2":"2026-04-04","3":"2026-05-02"},"FLIA VILLAFANE GUITIAN":{"1":"2026-03-08","2":"2026-04-07","3":"2026-05-08"},"FLIA LIENDRO":{"1":"2026-03-10","2":"2026-04-09","3":"2026-05-11"},"FLIA CARI":{"1":"2026-03-09","2":"2026-04-01","3":""},"FLIA RIOS":{"1":"2026-03-09","2":"2026-04-07","3":""},"FLIA MARTINEZ ISAIAS TOBIAS":{"1":"2026-03-10","2":"2026-04-08","3":"2026-05-11"},"FLIA GASPAR GUITIAN":{"1":"","2":"","3":""},"FLIA FECCIA":{"1":"2026-03-31","2":"2026-04-08","3":"2026-05-11"},"FLIA RIOS THIAGO RUTH":{"1":"2026-03-31","2":"2026-04-13","3":""},"FLIA CASIMIRO":{"1":"2026-03-13","2":"2026-04-20","3":""},"ANTUNA MAITENA":{"1":"2026-03-05","2":"2026-04-05","3":"2026-05-04"},"CABRAL SIMON":{"1":"2026-03-03","2":"2026-04-09","3":"2026-05-06"},"CARDENAS, MAILEN":{"1":"","2":"","3":""},"CRUZ, LUDMILA":{"1":"","2":"","3":""},"GUANCA, YAHIR":{"1":"2026-03-09","2":"2026-04-09","3":""},"SORIA LIENDRO, LIA":{"1":"2026-03-10","2":"2026-05-13","3":"2026-05-13"},"CRUZ, EMA ISABELLA":{"1":"2026-05-11","2":"2026-05-11","3":""},"ROJAS, JAZMIN":{"1":"","2":"2026-04-09","3":"2026-05-08"},"REALES, LAUTARO":{"1":"","2":"2026-04-27","3":""},"SEGURA, VICTORIA":{"1":"2026-03-09","2":"2026-04-08","3":""},"SOTILLO CATALINA":{"1":"2026-03-15","2":"2026-04-09","3":""},"YAPURA, BAUTISTA":{"1":"2026-03-06","2":"2026-04-09","3":"2026-05-04"},"ROBLEDO MAXIMO":{"1":"2026-03-30","2":"2026-04-09","3":"2026-05-10"},"LAIME, DAIANA":{"1":"2026-03-04","2":"2026-04-08","3":"2026-05-04"},"ORELLANA, ORIANA":{"1":"2026-03-20","2":"2026-04-07","3":"2026-05-08"},"RICCO, TIZIANO":{"1":"2026-03-04","2":"2026-04-07","3":"2026-05-06"},"RODRIGUEZ, GENESIS":{"1":"2026-03-09","2":"2026-04-08","3":"2026-05-04"},"TOLABA, JEREMIAS":{"1":"2026-03-09","2":"2026-04-09","3":"2026-05-11"},"ALCALA BAUTISTA":{"1":"2026-03-06","2":"2026-04-07","3":"2026-05-07"},"MOLINA GUADALUPE":{"1":"","2":"","3":""},"CARRASCO, MATEO":{"1":"2026-03-04","2":"2026-04-01","3":"2026-05-05"},"CESPEDES PUPPI, JUAN EMILIO":{"1":"2026-03-03","2":"2026-04-08","3":"2026-05-05"},"CHOQUE JESUS GABRIEL":{"1":"2026-03-10","2":"2026-04-16","3":""},"GARCIA CARBAJAL, VALENTINO GABRIEL":{"1":"2026-03-31","2":"","3":""},"FLORES LUCAS":{"1":"2026-03-09","2":"2026-04-13","3":"2026-04-13"},"GERON CARMEN":{"1":"","2":"2026-04-14","3":""},"GUTIERREZ, EMMA":{"1":"2026-03-09","2":"2026-04-06","3":"2026-05-07"},"MONTES, LOLA":{"1":"2026-03-10","2":"2026-04-08","3":"2026-05-06"},"PARRILLA, VALENTINA":{"1":"2026-03-05","2":"2026-04-09","3":"2026-05-14"},"POSADAS, JEREMIAS":{"1":"2026-03-09","2":"2026-04-08","3":"2026-05-06"},"RIVERO, AGUSTIN":{"1":"2026-03-05","2":"2026-04-07","3":""},"SANGUEZO MIRANDA, LUZ":{"1":"2026-03-31","2":"2026-04-08","3":"2026-05-12"},"TERCERO, MATEO":{"1":"2026-04-06","2":"","3":""},"VEDIA, FELIPE":{"1":"2026-03-09","2":"2026-04-08","3":"2026-05-04"},"VELA, NAHIARA":{"1":"2026-03-09","2":"2026-04-09","3":""},"ZARATE FRANCESCA":{"1":"2026-04-09","2":"2026-04-09","3":""},"NERI SALVADOR":{"1":"2026-04-09","2":"2026-04-09","3":""},"CARMEN GUILLERMINA":{"1":"2026-04-09","2":"2026-04-09","3":""},"ABALOS, AYLEN":{"1":"2026-03-09","2":"","3":"2026-05-11"},"ACOSTA MIA":{"1":"2026-03-30","2":"2026-04-09","3":"2026-05-07"},"AGUILERA, MIA":{"1":"2026-03-02","2":"2026-04-01","3":""},"ANTONELLI, DONATO":{"1":"2026-03-10","2":"2026-04-09","3":""},"CAMPOS GIOVANI":{"1":"","2":"","3":""},"CASTRO, AGUSTIN":{"1":"2026-03-05","2":"2026-04-28","3":""},"GOMEZ, NAZARENO":{"1":"2026-03-09","2":"2026-04-06","3":"2026-05-04"},"GUTIERREZ, ZOEMI":{"1":"2026-03-10","2":"2026-04-10","3":"2026-05-10"},"PERALES, MARIA CECILIA":{"1":"2026-03-02","2":"2026-04-09","3":""},"PERCINO, NAHIARA":{"1":"2026-03-17","2":"2026-04-16","3":"2026-05-14"},"TOLABA, ESTEFANIA":{"1":"","2":"2026-04-27","3":""},"TOMASINI AGUSTIN":{"1":"2026-03-03","2":"2026-04-07","3":"2026-05-05"},"YURKINA, MISAEL":{"1":"2026-03-09","2":"2026-04-09","3":"2026-05-11"},"VARGAS THIAGO":{"1":"","2":"2026-04-09","3":""},"TAGLIOLI ANA":{"1":"2026-03-30","2":"2026-04-08","3":"2026-05-06"},"VILCA ESPERANZA":{"1":"2026-03-17","2":"2026-04-08","3":"2026-05-06"},"FACCHIN, OLIVIA":{"1":"2026-03-09","2":"2026-04-09","3":"2026-05-11"},"LOPEZ ESTEFANIA":{"1":"2026-04-09","2":"2026-04-09","3":""},"MANSILLA, ABRIL":{"1":"2026-03-10","2":"2026-03-31","3":""},"MONDAQUE SABRINA":{"1":"2026-03-09","2":"2026-04-08","3":"2026-05-06"},"REMENTERIA ISABEL":{"1":"2026-03-31","2":"2026-04-09","3":"2026-05-07"},"MOSA, TADEO":{"1":"2026-03-10","2":"2026-04-09","3":"2026-05-05"},"OROZCO, LAUTARO":{"1":"2026-03-06","2":"2026-04-07","3":"2026-05-07"},"ORTEGA MARCOS":{"1":"2026-04-20","2":"","3":""},"VILLANUEVA CARLOS":{"1":"2026-03-04","2":"2026-04-07","3":"2026-05-05"},"GUAYMAS ZERPA, CIRO":{"1":"2026-03-06","2":"2026-04-09","3":"2026-05-11"},"CABELLO ALMA":{"1":"","2":"2026-04-09","3":"2026-05-09"},"FIRME TIZIANO":{"1":"2026-03-30","2":"2026-04-09","3":"2026-05-04"},"CHAVEZ DI PAULI CATALINA":{"1":"2026-03-03","2":"2026-04-06","3":"2026-05-08"},"MAMANI, FELICITAS":{"1":"2026-03-19","2":"2026-04-20","3":""},"ALANCAY DEMIR":{"1":"","2":"2026-04-09","3":""},"RAMPULLA, GINO":{"1":"2026-03-09","2":"2026-04-06","3":"2026-05-08"},"ZERPA, MATHEO":{"1":"2026-03-10","2":"2026-04-07","3":"2026-05-07"},"APARICIO ROYANO NAHYARA":{"1":"2026-03-10","2":"2026-04-09","3":"2026-05-11"},"VILTE PAZ LORENA SOL":{"1":"2026-03-10","2":"2026-04-09","3":"2026-05-05"},"CORONEL LAUTARO":{"1":"2026-03-26","2":"2026-04-09","3":"2026-05-06"},"VILLANUEVA FRANCISCO":{"1":"2026-04-13","2":"2026-04-09","3":"2026-05-11"}};
-  const MONTOS={"CARABAJAL ANA PAULA":{"1":73000,"2":0,"3":0},"MAURIN GIANA":{"1":73000,"2":73000,"3":0},"MARTINEZ CARBAJO IVAN":{"1":73000,"2":73000,"3":0},"NIEVA GUEMES MIA ISABELLA":{"1":73000,"2":0,"3":0},"BENICIO BELEN":{"1":73000,"2":73000,"3":73000},"CARI, NIRVANA":{"1":0,"2":0,"3":52500},"DIAZ LOLA":{"1":52500,"2":52500,"3":52500},"NUGHES, LEON":{"1":52500,"2":52500,"3":52500},"TRONCOSO ALMA":{"1":52500,"2":55000,"3":0},"ALCALA, MATEO":{"1":0,"2":0,"3":0},"APAZA BORELLI, VERONICA":{"1":81500,"2":81500,"3":81500},"GARCIA, NICOLE":{"1":81500,"2":81500,"3":81500},"GUZMAN, INAKI":{"1":0,"2":81500,"3":81500},"LARA LUCIO":{"1":85500,"2":81500,"3":0},"LOPEZ BERRUEZO, PILAR":{"1":81500,"2":81500,"3":81500},"RUSSO RADA, FRANCESCA":{"1":81500,"2":81500,"3":81500},"MORALES BELLIDO ALVARO":{"1":81500,"2":81500,"3":4000},"MARTINEZ RUIZ BAUTISTA":{"1":81500,"2":81500,"3":81500},"ALTOBELLI, ANA":{"1":81500,"2":81500,"3":81500},"MARTINEZ ARGANARAZ ARIEL":{"1":0,"2":171000,"3":0},"LOPEZ GARCIA VALENTINA":{"1":0,"2":0,"3":0},"CARDENAS, ARACELI":{"1":81500,"2":81500,"3":81500},"MORALES, JUANA":{"1":85500,"2":81500,"3":81500},"MORALES, LAUTARO":{"1":73000,"2":73000,"3":0},"VILLARREAL, MELANIE":{"1":81500,"2":81500,"3":81500},"VERCELLINO IGNACIO":{"1":85500,"2":0,"3":0},"PALACIOS ERNESTINA":{"1":81500,"2":81500,"3":81500},"CASAS, GUILLERMINA":{"1":82500,"2":82500,"3":82500},"DIAZ TORRES, JOSEFINA":{"1":82500,"2":82500,"3":0},"LOPEZ, AGNES":{"1":82500,"2":82500,"3":0},"MICOL, FRANCISCO":{"1":0,"2":0,"3":0},"VITALE GUADALUPE":{"1":133000,"2":82500,"3":82500},"CAMACHO AMPARO":{"1":40500,"2":40500,"3":0},"CANABIDES, ALLEGRA":{"1":40500,"2":40500,"3":40500},"FERNANDEZ AMARELIS":{"1":0,"2":42500,"3":42500},"LUNA, SANTINO":{"1":40500,"2":40500,"3":0},"NUNEZ, ALEXANDER":{"1":40500,"2":40500,"3":40500},"QUIROGA AMPARO":{"1":40500,"2":40500,"3":40500},"SOSA, SANTIAGO":{"1":40500,"2":40500,"3":40500},"TOLABA CARABAJAL KARLA ARIANA":{"1":40500,"2":40500,"3":40500},"ZARATE LUCIA":{"1":40500,"2":40500,"3":40000},"ALVAREZ LOURDES":{"1":40500,"2":40500,"3":40500},"CABRERA AMADEO BENICIO":{"1":42500,"2":42500,"3":0},"GUANCA PATRICIO MATIAS FEDERICO":{"1":40500,"2":40500,"3":0},"CARRASCO, GAEL TIZIANO":{"1":40500,"2":42500,"3":0},"FLIA AMADO RUSSO":{"1":155500,"2":155500,"3":0},"FLIA BRITO":{"1":132500,"2":144500,"3":132500},"FLIA COTINI":{"1":100000,"2":100000,"3":0},"FLIA CAYO E Y RAFAELA":{"1":101500,"2":101500,"3":101500},"FLIA CAYO A Y TAIEL":{"1":133000,"2":267000,"3":0},"FLIA DIAZ MORALES":{"1":95000,"2":95000,"3":0},"FLIA LACURI":{"1":87000,"2":87000,"3":0},"FLIA MAMANI RUIZ":{"1":156500,"2":156500,"3":0},"FLIA MARTINEZ":{"1":82000,"2":75500,"3":0},"FLIA MOYA":{"1":0,"2":144500,"3":0},"FLIA ORTEGA":{"1":0,"2":0,"3":0},"FLIA RAMIREZ ORTUNO":{"1":92500,"2":92500,"3":92500},"FLIA RIVERO":{"1":132500,"2":132500,"3":0},"FLIA ROSAS":{"1":170500,"2":170500,"3":170500},"FLIA RUANO":{"1":89000,"2":89000,"3":89000},"FLIA OLIVEIRA BEJARANO":{"1":0,"2":118500,"3":119000},"FLIA SANTAFE":{"1":101500,"2":101500,"3":101500},"FLIA GITIAN":{"1":87000,"2":261000,"3":128000},"FLIA SARAVIA":{"1":127000,"2":127000,"3":127000},"FLIA SUAREZ":{"1":87000,"2":87000,"3":87000},"FLIA TACTAGI":{"1":132500,"2":132500,"3":132500},"FLIA TEJERINA":{"1":133000,"2":133000,"3":133000},"FLIA TOLABA":{"1":0,"2":202000,"3":106000},"FLIA VACA MONASTEROLO":{"1":156000,"2":156000,"3":156000},"FLIA VERCELLINO R":{"1":87000,"2":87000,"3":89000},"FLIA VILLAFANE GUITIAN":{"1":101500,"2":101500,"3":101500},"FLIA LIENDRO":{"1":167500,"2":167500,"3":167500},"FLIA CARI":{"1":101200,"2":97000,"3":0},"FLIA RIOS":{"1":132500,"2":132500,"3":0},"FLIA MARTINEZ ISAIAS TOBIAS":{"1":52500,"2":52500,"3":52500},"FLIA GASPAR GUITIAN":{"1":0,"2":0,"3":0},"FLIA FECCIA":{"1":91500,"2":91500,"3":91500},"FLIA RIOS THIAGO RUTH":{"1":154000,"2":138500,"3":0},"FLIA CASIMIRO":{"1":118000,"2":129000,"3":0},"ANTUNA MAITENA":{"1":56000,"2":50000,"3":50000},"CABRAL SIMON":{"1":56000,"2":56000,"3":56000},"CARDENAS, MAILEN":{"1":0,"2":0,"3":0},"CRUZ, LUDMILA":{"1":0,"2":0,"3":0},"GUANCA, YAHIR":{"1":56000,"2":56000,"3":0},"SORIA LIENDRO, LIA":{"1":56000,"2":56000,"3":56000},"CRUZ, EMA ISABELLA":{"1":56000,"2":5950,"3":0},"ROJAS, JAZMIN":{"1":0,"2":56000,"3":56000},"REALES, LAUTARO":{"1":59000,"2":59000,"3":0},"SEGURA, VICTORIA":{"1":56000,"2":56000,"3":0},"SOTILLO CATALINA":{"1":59000,"2":56000,"3":0},"YAPURA, BAUTISTA":{"1":56000,"2":50000,"3":50000},"ROBLEDO MAXIMO":{"1":56000,"2":56000,"3":56000},"LAIME, DAIANA":{"1":56000,"2":56000,"3":112000},"ORELLANA, ORIANA":{"1":56000,"2":56000,"3":56000},"RICCO, TIZIANO":{"1":56000,"2":56000,"3":112000},"RODRIGUEZ, GENESIS":{"1":56000,"2":56000,"3":56000},"TOLABA, JEREMIAS":{"1":56000,"2":56000,"3":56000},"ALCALA BAUTISTA":{"1":56000,"2":56000,"3":56000},"MOLINA GUADALUPE":{"1":0,"2":0,"3":0},"CARRASCO, MATEO":{"1":45500,"2":45500,"3":45500},"CESPEDES PUPPI, JUAN EMILIO":{"1":45500,"2":45500,"3":45500},"CHOQUE JESUS GABRIEL":{"1":45500,"2":48000,"3":0},"GARCIA CARBAJAL, VALENTINO GABRIEL":{"1":45500,"2":0,"3":0},"FLORES LUCAS":{"1":45500,"2":48000,"3":45500},"GERON CARMEN":{"1":0,"2":96000,"3":0},"GUTIERREZ, EMMA":{"1":45500,"2":45500,"3":45500},"MONTES, LOLA":{"1":45500,"2":45500,"3":45000},"PARRILLA, VALENTINA":{"1":45500,"2":45500,"3":45500},"POSADAS, JEREMIAS":{"1":45500,"2":45500,"3":45500},"RIVERO, AGUSTIN":{"1":45500,"2":45500,"3":0},"SANGUEZO MIRANDA, LUZ":{"1":45500,"2":91000,"3":45500},"TERCERO, MATEO":{"1":48000,"2":0,"3":0},"VEDIA, FELIPE":{"1":45500,"2":45500,"3":45500},"VELA, NAHIARA":{"1":45500,"2":45500,"3":0},"ZARATE FRANCESCA":{"1":45500,"2":45500,"3":0},"NERI SALVADOR":{"1":45500,"2":45500,"3":0},"CARMEN GUILLERMINA":{"1":48000,"2":45500,"3":0},"ABALOS, AYLEN":{"1":50500,"2":0,"3":50500},"ACOSTA MIA":{"1":50500,"2":50500,"3":50500},"AGUILERA, MIA":{"1":50500,"2":50500,"3":0},"ANTONELLI, DONATO":{"1":50500,"2":50500,"3":0},"CAMPOS GIOVANI":{"1":0,"2":0,"3":0},"CASTRO, AGUSTIN":{"1":50500,"2":50500,"3":0},"GOMEZ, NAZARENO":{"1":50500,"2":50500,"3":50500},"GUTIERREZ, ZOEMI":{"1":45500,"2":45000,"3":45000},"PERALES, MARIA CECILIA":{"1":50500,"2":50500,"3":0},"PERCINO, NAHIARA":{"1":50500,"2":53000,"3":50500},"TOLABA, ESTEFANIA":{"1":0,"2":53000,"3":0},"TOMASINI AGUSTIN":{"1":50500,"2":50500,"3":50500},"YURKINA, MISAEL":{"1":45000,"2":45500,"3":45500},"VARGAS THIAGO":{"1":0,"2":50500,"3":0},"TAGLIOLI ANA":{"1":53000,"2":50500,"3":50500},"VILCA ESPERANZA":{"1":50500,"2":50500,"3":50500},"FACCHIN, OLIVIA":{"1":50500,"2":50500,"3":50500},"LOPEZ ESTEFANIA":{"1":111000,"2":90000,"3":0},"MANSILLA, ABRIL":{"1":50500,"2":50500,"3":0},"MONDAQUE SABRINA":{"1":50500,"2":50500,"3":50500},"REMENTERIA ISABEL":{"1":93000,"2":50500,"3":50500},"MOSA, TADEO":{"1":50500,"2":50500,"3":50500},"OROZCO, LAUTARO":{"1":50500,"2":50500,"3":50500},"ORTEGA MARCOS":{"1":53000,"2":0,"3":0},"VILLANUEVA CARLOS":{"1":50500,"2":50500,"3":50500},"GUAYMAS ZERPA, CIRO":{"1":45000,"2":45000,"3":45000},"CABELLO ALMA":{"1":0,"2":50500,"3":53000},"FIRME TIZIANO":{"1":53000,"2":50500,"3":50500},"CHAVEZ DI PAULI CATALINA":{"1":29000,"2":27500,"3":27500},"MAMANI, FELICITAS":{"1":27500,"2":29000,"3":0},"ALANCAY DEMIR":{"1":0,"2":27500,"3":0},"RAMPULLA, GINO":{"1":27500,"2":27500,"3":27500},"ZERPA, MATHEO":{"1":24700,"2":24700,"3":24700},"APARICIO ROYANO NAHYARA":{"1":27500,"2":27500,"3":27500},"VILTE PAZ LORENA SOL":{"1":27500,"2":27500,"3":27500},"CORONEL LAUTARO":{"1":29000,"2":27500,"3":27500},"VILLANUEVA FRANCISCO":{"1":29000,"2":25000,"3":27500}};
-
-  const alumnos = await q('SELECT id,nombre FROM alumnos ORDER BY id');
-  for (let i = 0; i < pagosHist.length; i++) {
-    const p = pagosHist[i];
-    const alumno = alumnos[i];
-    if (!alumno) continue;
-    const nombre = alumno.nombre;
-    const fa = FECHAS[nombre]||{};
-    const ma = MONTOS[nombre]||{};
-    for (let n = 1; n <= 10; n++) {
-      const mi = MESES_IDX[n-1];
-      if (mi <= mesActual) {
-        let estado='pendiente', fp='', mp=0;
-        if (n<=3 && p.c[n-1]) { estado='pagada'; fp=fa[String(n)]||''; mp=ma[String(n)]||0; }
-        await q('INSERT INTO cuotas (alumno_id,numero_cuota,estado,fecha_pago,monto_pagado) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING', [alumno.id,n,estado,fp,mp]);
-        if (estado==='pagada') {
-          const fecha = fp || `2026-0${mi+1}-01`;
-          await q('INSERT INTO pagos (fecha,alumno_id,alumno_nombre,curso,monto,concepto,medio,origen) SELECT $1,$2,a.nombre,a.curso,$3,$4,$5,$6 FROM alumnos a WHERE a.id=$2', [fecha,alumno.id,mp,`Cuota ${n} (${MESES_NOMBRE_ALL[n-1]} 2026)`,'Importado','Importado desde planilla']);
-        }
-      }
-    }
-  }
-  await q("INSERT INTO config (clave,valor) VALUES ('iniciado','1') ON CONFLICT DO NOTHING");
+function filtrarAlumnos(){
+  var q=(document.getElementById('alum-q').value||'').toLowerCase();
+  var curso=document.getElementById('alum-curso').value;
+  var estado=document.getElementById('alum-estado').value;
+  var lista=_alumnos.filter(function(a){
+    var activo=a.activo===1||a.activo===true||a.activo==='1';
+    if(estado==='baja'&&activo)return false;
+    if(estado!=='baja'&&!activo)return false;
+    if(q&&(a.nombre||'').toLowerCase().indexOf(q)<0)return false;
+    if(curso&&a.curso!==curso)return false;
+    return true;
+  });
+  document.getElementById('alum-cnt').textContent=lista.length+' alumnos';
+  var h='<thead><tr><th>Alumno</th><th>Curso</th><th>CUITs</th><th>P. Normal</th><th>P. Bonificado</th><th>Estado</th><th></th></tr></thead><tbody>';
+  lista.forEach(function(a){
+    var activo=a.activo===1||a.activo===true||a.activo==='1';
+    h+='<tr><td style="font-weight:500">'+a.nombre+(activo?'':'<span class="tag-inactivo">BAJA</span>')+'</td>'+
+      '<td><span class="badge bp" style="font-size:10px">'+a.curso+'</span></td>'+
+      '<td style="font-size:10.5px;color:var(--m)">'+((a.cuits||'—').slice(0,25))+'</td>'+
+      '<td>'+pesos(a.precio_normal)+'</td><td style="color:var(--s)">'+pesos(a.precio_bonificado)+'</td>'+
+      '<td>'+(activo?'<span class="badge bs">Activo</span>':'<span class="badge bd">Baja</span>')+'</td>'+
+      '<td style="white-space:nowrap">'+
+        '<button class="btn bob" style="padding:2px 7px;font-size:10.5px" onclick=\'abrirEditAlumno('+JSON.stringify(a)+')\'>Editar</button> '+
+        (activo?'<button class="btn bob" style="padding:2px 7px;font-size:10.5px;color:var(--d)" onclick="bajaAlumno('+a.id+')">Baja</button>':
+                 '<button class="btn bob" style="padding:2px 7px;font-size:10.5px;color:var(--s)" onclick="altaAlumno('+a.id+')">Alta</button>')+
+      '</td></tr>';
+  });
+  h+='</tbody>';
+  document.getElementById('tabla-alumnos').innerHTML=h;
 }
 
-// RUTAS
-// Migrar datos a Supabase
-app.post('/api/migrar-a-supabase', async (req, res) => {
-  const { supabaseUrl } = req.body;
-  if (!supabaseUrl) return res.json({ ok: false, error: 'Falta supabaseUrl' });
+function abrirModalNuevoAlumno(){
+  document.getElementById('ma-nombre').value='';
+  document.getElementById('ma-pnormal').value='';
+  document.getElementById('ma-pbonif').value='';
+  document.getElementById('ma-cuits').value='';
+  if(_cursos.length>0)document.getElementById('ma-curso').value=_cursos[0].nombre;
+  abrirM('m-alum');
+}
 
-  try {
-    const { Pool: PgPool } = require('pg');
-    const dest = new PgPool({ connectionString: supabaseUrl, ssl: { rejectUnauthorized: false } });
+async function guardarAlumno(){
+  var nombre=document.getElementById('ma-nombre').value.trim();
+  var curso=document.getElementById('ma-curso').value;
+  var pn=parseFloat(document.getElementById('ma-pnormal').value)||0;
+  var pb=parseFloat(document.getElementById('ma-pbonif').value)||0;
+  var cuits=document.getElementById('ma-cuits').value.trim();
+  var tel=document.getElementById('ma-tel').value.trim();
+  if(!nombre||!curso){toast('Completa nombre y curso','e');return;}
+  var r=await api('POST','/api/alumnos',{nombre,curso,cuits,precio_normal:pn,precio_bonificado:pb,telefono:tel});
+  if(!r||!r.ok){toast(r&&r.error?r.error:'Error al guardar','e');return;}
+  cerrarM('m-alum');cargarAlumnos();toast('Alumno agregado','s');
+}
 
-    // Crear tablas en destino
-    await dest.query(`
-      CREATE TABLE IF NOT EXISTS cursos (id SERIAL PRIMARY KEY, nombre TEXT NOT NULL, activo BOOLEAN DEFAULT TRUE);
-      CREATE TABLE IF NOT EXISTS alumnos (id SERIAL PRIMARY KEY, nombre TEXT NOT NULL, curso TEXT NOT NULL, cuits TEXT DEFAULT '', precio_normal NUMERIC DEFAULT 0, precio_bonificado NUMERIC DEFAULT 0, activo BOOLEAN DEFAULT TRUE, telefono TEXT DEFAULT '');
-      CREATE TABLE IF NOT EXISTS cuotas (id SERIAL PRIMARY KEY, alumno_id INTEGER NOT NULL, numero_cuota INTEGER NOT NULL, estado TEXT DEFAULT 'pendiente', fecha_pago TEXT DEFAULT '', monto_pagado NUMERIC DEFAULT 0, compensada BOOLEAN DEFAULT FALSE, UNIQUE(alumno_id, numero_cuota));
-      CREATE TABLE IF NOT EXISTS pagos (id SERIAL PRIMARY KEY, fecha TEXT NOT NULL, alumno_id INTEGER NOT NULL, alumno_nombre TEXT NOT NULL, curso TEXT NOT NULL, monto NUMERIC NOT NULL, concepto TEXT NOT NULL, medio TEXT NOT NULL, origen TEXT NOT NULL, saldo_favor NUMERIC DEFAULT 0);
-      CREATE TABLE IF NOT EXISTS aranceles (id SERIAL PRIMARY KEY, desde TEXT NOT NULL, descripcion TEXT DEFAULT '', creado TEXT DEFAULT '');
-      CREATE TABLE IF NOT EXISTS aranceles_precios (id SERIAL PRIMARY KEY, arancel_id INTEGER NOT NULL, alumno_id INTEGER NOT NULL, precio_normal NUMERIC DEFAULT 0, precio_bonificado NUMERIC DEFAULT 0);
-      CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT);
-    `);
+function abrirEditAlumno(a){
+  document.getElementById('ea-id').value=a.id;
+  document.getElementById('ea-nombre').value=a.nombre;
+  document.getElementById('ea-pnormal').value=a.precio_normal;
+  document.getElementById('ea-pbonif').value=a.precio_bonificado;
+  // Forzar como string para evitar formateo numérico
+  document.getElementById('ea-cuits').value=String(a.cuits||'');
+  document.getElementById('ea-tel').value=String(a.telefono||'');
+  setTimeout(function(){document.getElementById('ea-curso').value=a.curso;},50);
+  abrirM('m-edit-alum');
+}
 
-    // Exportar datos del origen
-    const cursos = await q('SELECT * FROM cursos ORDER BY id');
-    const alumnos = await q('SELECT * FROM alumnos ORDER BY id');
-    const cuotas = await q('SELECT * FROM cuotas ORDER BY id');
-    const pagos = await q('SELECT * FROM pagos ORDER BY id');
+async function guardarEdicionAlumno(){
+  var id=document.getElementById('ea-id').value;
+  var nombre=document.getElementById('ea-nombre').value.trim();
+  var curso=document.getElementById('ea-curso').value;
+  var pn=parseFloat(document.getElementById('ea-pnormal').value)||0;
+  var pb=parseFloat(document.getElementById('ea-pbonif').value)||0;
+  var cuits=document.getElementById('ea-cuits').value.trim();
+  var tel=document.getElementById('ea-tel').value.trim();
+  await api('PUT','/api/alumnos/'+id,{nombre,curso,cuits,precio_normal:pn,precio_bonificado:pb,telefono:tel});
+  cerrarM('m-edit-alum');cargarAlumnos();toast('Alumno actualizado','s');
+}
 
-    // Limpiar destino
-    await dest.query('TRUNCATE pagos, cuotas, alumnos, cursos, config RESTART IDENTITY CASCADE');
+async function bajaAlumno(id){
+  if(!confirm('Dar de baja este alumno?'))return;
+  await api('PATCH','/api/alumnos/'+id+'/baja');
+  cargarAlumnos();toast('Alumno dado de baja','i');
+}
 
-    // Insertar cursos
-    for (const c of cursos) {
-      await dest.query('INSERT INTO cursos (id, nombre, activo) VALUES ($1,$2,$3)', [c.id, c.nombre, c.activo]);
-    }
-    await dest.query(`SELECT setval('cursos_id_seq', (SELECT MAX(id) FROM cursos))`);
+async function altaAlumno(id){
+  await api('PATCH','/api/alumnos/'+id+'/alta');
+  cargarAlumnos();toast('Alumno reactivado','s');
+}
 
-    // Insertar alumnos
-    for (const a of alumnos) {
-      await dest.query('INSERT INTO alumnos (id,nombre,curso,cuits,precio_normal,precio_bonificado,activo,telefono) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-        [a.id,a.nombre,a.curso,a.cuits,a.precio_normal,a.precio_bonificado,a.activo,a.telefono]);
-    }
-    await dest.query(`SELECT setval('alumnos_id_seq', (SELECT MAX(id) FROM alumnos))`);
+// COBRO
+function buscarCobro(){
+  var q=(document.getElementById('cb-q').value||'').toLowerCase().trim();
+  var curso=document.getElementById('cb-curso').value;
+  var drop=document.getElementById('cb-drop');
+  var activos=_alumnos.filter(function(a){return a.activo===1||a.activo===true||a.activo==='1';});
+  if(!q&&!curso){drop.style.display='none';return;}
+  var matches=activos.filter(function(a){return(!q||a.nombre.toLowerCase().indexOf(q)>=0)&&(!curso||a.curso===curso);}).slice(0,10);
+  if(matches.length===0){drop.innerHTML='<div class="ac-item" style="color:var(--m)">Sin resultados</div>';drop.style.display='block';return;}
+  drop.innerHTML=matches.map(function(a){
+    var nom=q?a.nombre.replace(new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<mark>$1</mark>'):a.nombre;
+    return '<div class="ac-item" onclick="selAlumno('+a.id+')"><div><strong>'+nom+'</strong></div><div class="ac-sub">'+a.curso+'</div></div>';
+  }).join('');
+  drop.style.display='block';
+}
 
-    // Insertar cuotas
-    for (const c of cuotas) {
-      await dest.query('INSERT INTO cuotas (id,alumno_id,numero_cuota,estado,fecha_pago,monto_pagado,compensada) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-        [c.id,c.alumno_id,c.numero_cuota,c.estado,c.fecha_pago,c.monto_pagado,c.compensada]);
-    }
-    await dest.query(`SELECT setval('cuotas_id_seq', (SELECT MAX(id) FROM cuotas))`);
+async function selAlumno(id){
+  var a=_alumnos.find(function(x){return x.id===id;});
+  if(!a)return;
+  alumnoActual=a;
+  document.getElementById('cb-drop').style.display='none';
+  document.getElementById('cb-q').value=a.nombre;
+  document.getElementById('cobro-busq').style.display='none';
+  document.getElementById('cobro-alumno').style.display='block';
+  document.getElementById('cob-av').textContent=iniciales(a.nombre);
+  document.getElementById('cob-nom').textContent=a.nombre;
+  document.getElementById('cob-cur').textContent=a.curso;
+  var dia=new Date().getDate();
+  var esBonif=dia<=10;
+  document.getElementById('cob-precio-info').innerHTML='Normal: <strong>'+pesos(a.precio_normal)+'</strong> · Bonificado: <strong style="color:var(--s)">'+pesos(a.precio_bonificado)+'</strong> '+(esBonif?'<span class="ctag ctag-b">Bonif. hoy</span>':'<span class="ctag ctag-n">Normal hoy</span>');
+  var cuotas=await api('GET','/api/cuotas/'+a.id);
+  renderCuotas(a,cuotas||[]);
+  actualizarTotal();
+  document.getElementById('paso3').style.display='block';
+  var hoyStr=new Date().toISOString().slice(0,10);
+  document.getElementById('cob-fecha').value=hoyStr;
+}
 
-    // Insertar pagos
-    for (const p of pagos) {
-      await dest.query('INSERT INTO pagos (id,fecha,alumno_id,alumno_nombre,curso,monto,concepto,medio,origen,saldo_favor) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-        [p.id,p.fecha,p.alumno_id,p.alumno_nombre,p.curso,p.monto,p.concepto,p.medio,p.origen,p.saldo_favor]);
-    }
-    await dest.query(`SELECT setval('pagos_id_seq', (SELECT MAX(id) FROM pagos))`);
-
-    // Marcar como iniciado
-    await dest.query("INSERT INTO config (clave,valor) VALUES ('iniciado','true') ON CONFLICT DO NOTHING");
-
-    await dest.end();
-    res.json({ ok: true, cursos: cursos.length, alumnos: alumnos.length, cuotas: cuotas.length, pagos: pagos.length });
-  } catch(e) {
-    res.json({ ok: false, error: e.message });
+function getPrecio(alumno, numCuota, cuotasPagadas) {
+  // Cuota 10 gratis si cuotas 1-9 todas pagadas con precio bonificado
+  if (numCuota === 10 && cuotasPagadas) {
+    var ant = cuotasPagadas.filter(function(c){ return c.numero_cuota <= 9; });
+    if (ant.length === 9 && ant.every(function(c){
+      return c.estado === 'pagada' &&
+        (MESES_TODO_EL_MES.indexOf(c.numero_cuota) >= 0 || c.monto_pagado <= parseFloat(alumno.precio_bonificado));
+    })) return 0;
   }
-});
+  var dia = new Date().getDate();
+  return (MESES_TODO_EL_MES.indexOf(numCuota) >= 0 || dia <= 10) ?
+    parseFloat(alumno.precio_bonificado) || 0 :
+    parseFloat(alumno.precio_normal) || 0;
+}
 
-// Exportar todos los datos para migración
-app.get('/api/exportar/todo', async (req,res) => {
-  const alumnos = await q('SELECT * FROM alumnos ORDER BY id');
-  const cuotas = await q('SELECT * FROM cuotas ORDER BY id');
-  const pagos = await q('SELECT * FROM pagos ORDER BY id');
-  const cursos = await q('SELECT * FROM cursos ORDER BY id');
-  const aranceles = await q('SELECT * FROM aranceles ORDER BY id');
-  const aranceles_precios = await q('SELECT * FROM aranceles_precios ORDER BY id');
-  res.json({ alumnos, cuotas, pagos, cursos, aranceles, aranceles_precios, exportado: new Date().toISOString() });
-});
-
-app.get('/api/demo-info', (req,res) => {
-  res.json({ demo: DEMO_MODE, maxAlumnos: DEMO_MAX_ALUMNOS });
-});
-
-app.get('/api/cursos', async (req,res) => { res.json(await q('SELECT * FROM cursos WHERE activo=TRUE ORDER BY nombre')); });
-// --- Mora ---
-app.get('/api/mora', async (req,res) => {
-  const pct = await getMoraPorcentaje();
-  res.json({ok:true, porcentaje:pct});
-});
-
-app.post('/api/mora', async (req,res) => {
-  const {porcentaje} = req.body;
-  const pct = parseFloat(porcentaje);
-  if (isNaN(pct) || pct < 0 || pct > 100) return res.json({ok:false,error:'Porcentaje inválido'});
-  await q("INSERT INTO config (clave,valor) VALUES ('mora_porcentaje',$1) ON CONFLICT (clave) DO UPDATE SET valor=$1", [String(pct)]);
-  res.json({ok:true});
-});
-
-// --- Bonificar mora ---
-app.post('/api/bonificar-mora', async (req,res) => {
-  const {alumnoId, moraMonto, motivo} = req.body;
-  const alumno = await q1('SELECT * FROM alumnos WHERE id=$1', [alumnoId]);
-  if (!alumno) return res.json({ok:false, error:'Alumno no encontrado'});
-  const fecha = new Date().toLocaleDateString('es-AR');
-  const concepto = 'Bonificación de mora'+(motivo?' — '+motivo:'');
-  // Registrar como pago especial de mora bonificada en pagos
-  await q('INSERT INTO pagos (fecha,alumno_id,alumno_nombre,curso,monto,concepto,medio,origen) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-    [fecha, alumnoId, alumno.nombre, alumno.curso, 0, concepto, 'Bonificación', 'Admin']);
-  res.json({ok:true});
-});
-
-// --- Vencimientos bonificado ---
-app.get('/api/vencimientos', async (req,res) => {
-  const v = await getVencimientos();
-  res.json({ok:true, vencimientos:v});
-});
-
-app.post('/api/vencimientos', async (req,res) => {
-  const {vencimientos} = req.body;
-  if (!Array.isArray(vencimientos) || vencimientos.length !== 10) return res.json({ok:false,error:'Array de 10 fechas requerido'});
-  await q("INSERT INTO config (clave,valor) VALUES ('vencimientos_bonif',$1) ON CONFLICT (clave) DO UPDATE SET valor=$1", [JSON.stringify(vencimientos)]);
-  res.json({ok:true});
-});
-
-app.post('/api/cursos', async (req,res) => { const r=await q('INSERT INTO cursos (nombre) VALUES ($1) RETURNING id',[req.body.nombre.trim().toUpperCase()]); res.json({ok:true,id:r[0].id}); });
-app.delete('/api/cursos/:id', async (req,res) => { await q('UPDATE cursos SET activo=FALSE WHERE id=$1',[req.params.id]); res.json({ok:true}); });
-
-app.get('/api/alumnos', async (req,res) => { res.json(await q('SELECT * FROM alumnos ORDER BY nombre')); });
-app.post('/api/alumnos', async (req,res) => {
-  // Límite demo
-  if (DEMO_MODE) {
-    const count = await q1('SELECT COUNT(*) as n FROM alumnos WHERE activo=TRUE');
-    if (parseInt(count?.n||0) >= DEMO_MAX_ALUMNOS) {
-      return res.json({ ok: false, error: `Versión demo limitada a ${DEMO_MAX_ALUMNOS} alumnos` });
-    }
-  }
-  const {nombre,curso,cuits,precio_normal,precio_bonificado,telefono}=req.body;
-  const r=await q('INSERT INTO alumnos (nombre,curso,cuits,precio_normal,precio_bonificado,telefono) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',[nombre.trim().toUpperCase(),curso,cuits||'',precio_normal||0,precio_bonificado||0,telefono||'']);
-  await generarCuotas(r[0].id); res.json({ok:true,id:r[0].id});
-});
-app.put('/api/alumnos/:id', async (req,res) => {
-  const {nombre,curso,cuits,precio_normal,precio_bonificado,telefono}=req.body;
-  const alumnoId=parseInt(req.params.id);
-  const pb=parseFloat(precio_bonificado)||0;
-  const pn=parseFloat(precio_normal)||0;
-  await q('UPDATE alumnos SET nombre=$1,curso=$2,cuits=$3,precio_normal=$4,precio_bonificado=$5,telefono=$6 WHERE id=$7',[nombre.trim().toUpperCase(),curso,cuits||'',pn,pb,telefono||'',alumnoId]);
+function renderCuotas(a, cuotas){
+  var cont=document.getElementById('cob-cuotas');
+  var sinD=document.getElementById('cob-sindeuda');
+  var hoyMesIdx=new Date().getMonth();
+  var mesesIdx=[2,3,4,5,6,7,8,9,10,11];
+  var pendientes=cuotas.filter(function(c){return c.estado==='pendiente';}).sort(function(a,b){return a.numero_cuota-b.numero_cuota;});
   
-  // Recalcular estado de cuotas según nuevo precio
-  // Si monto_pagado >= precio_bonificado → pagada
-  // Si 0 < monto_pagado < precio_bonificado → pendiente (parcial)
-  // Si monto_pagado = 0 → pendiente
-  const cuotas = await q('SELECT * FROM cuotas WHERE alumno_id=$1', [alumnoId]);
-  const vencimientos = await getVencimientos();
-  for (const c of cuotas) {
-    const mp = parseFloat(c.monto_pagado)||0;
-    if (mp <= 0) continue;
-    // Determinar precio correcto según fecha de pago
-    let precioRef = pn;
-    if (c.fecha_pago && vencimientos[c.numero_cuota-1]) {
-      const venc = vencimientos[c.numero_cuota-1];
-      const [dv,mv,yv] = venc.split('/');
-      const dVenc = new Date(parseInt(yv),parseInt(mv)-1,parseInt(dv),23,59,59);
-      let dp;
-      if (String(c.fecha_pago).includes('/')) {
-        const [d,m,y]=String(c.fecha_pago).split('/');
-        dp=new Date(parseInt(y),parseInt(m)-1,parseInt(d),12);
-      } else {
-        const pts=String(c.fecha_pago).split('-');
-        dp=new Date(parseInt(pts[0]),parseInt(pts[1])-1,parseInt(pts[2]),12);
-      }
-      precioRef = dp<=dVenc ? pb : pn;
+  // Cuotas futuras: las que no existen en la lista de cuotas (no generadas)
+  var numsPendientes=pendientes.map(function(c){return c.numero_cuota;});
+  var todasLasCuotas=[];
+  for(var n=1;n<=10;n++){
+    var existente=cuotas.find(function(c){return c.numero_cuota===n;});
+    if(existente && existente.estado==='pendiente'){
+      todasLasCuotas.push({numero_cuota:n, estado:'pendiente', esFutura:false});
+    } else if(!existente || existente.estado==='futura'){
+      todasLasCuotas.push({numero_cuota:n, estado:'futura', esFutura:true});
     }
-    const nuevoEstado = mp >= precioRef ? 'pagada' : 'pendiente';
-    if (nuevoEstado !== c.estado) {
-      await q('UPDATE cuotas SET estado=$1 WHERE id=$2', [nuevoEstado, c.id]);
-    }
+    // pagadas/compensadas/gratis no se muestran
   }
   
-  res.json({ok:true});
-});
-app.patch('/api/alumnos/:id/baja', async (req,res) => { await q('UPDATE alumnos SET activo=FALSE WHERE id=$1',[req.params.id]); res.json({ok:true}); });
-app.patch('/api/alumnos/:id/alta', async (req,res) => { await q('UPDATE alumnos SET activo=TRUE WHERE id=$1',[req.params.id]); res.json({ok:true}); });
-
-app.get('/api/cuotas/:alumnoId', async (req,res) => { res.json(await q('SELECT * FROM cuotas WHERE alumno_id=$1 ORDER BY numero_cuota',[req.params.alumnoId])); });
-
-app.get('/api/pagos', async (req,res) => { res.json(await q('SELECT * FROM pagos ORDER BY id DESC')); });
-app.get('/api/exportar/pagos', async (req,res) => { res.json(await q('SELECT * FROM pagos ORDER BY id')); });
-
-app.put('/api/pagos/:id', async (req,res) => {
-  const {monto,concepto,medio,fecha}=req.body;
-  await q('UPDATE pagos SET monto=$1,concepto=$2,medio=$3,fecha=$4 WHERE id=$5',[monto,concepto,medio,fecha,req.params.id]);
-  res.json({ok:true});
-});
-
-app.delete('/api/pagos/:id', async (req,res) => {
-  const revertir=req.query.revertir==='1';
-  const pago=await q1('SELECT * FROM pagos WHERE id=$1',[req.params.id]);
-  if(!pago) return res.json({ok:false});
-  if(revertir) {
-    const matches=(pago.concepto||'').match(/Cuota (\d+)/g)||[];
-    for(const m of matches) { const n=parseInt(m.replace('Cuota ','')); await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE alumno_id=$4 AND numero_cuota=$5',['pendiente','',0,pago.alumno_id,n]); }
-  }
-  await q('DELETE FROM pagos WHERE id=$1',[req.params.id]); res.json({ok:true});
-});
-
-app.post('/api/cobro', async (req,res) => {
-  const {alumnoId,monto,medio,origen,cuotasSeleccionadas,fechaManual}=req.body;
-  const alumno=await q1('SELECT * FROM alumnos WHERE id=$1',[alumnoId]);
-  if(!alumno) return res.json({ok:false,error:'Alumno no encontrado'});
+  if(todasLasCuotas.length===0){cont.innerHTML='';sinD.style.display='flex';return;}
+  sinD.style.display='none';
   
-  // Usar fecha manual si viene, si no usar fecha actual
-  const fechaBase = fechaManual ? new Date(fechaManual+'T12:00:00') : new Date();
-  const fechaPago = normalizarFechaAR(fechaBase.toLocaleDateString('es-AR'));
-  const fechaCompleta = fechaPago+' '+fechaBase.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
-  
-  const vencimientos = await getVencimientos();
-  const {conceptos} = await aplicarPagoYCrearCuotas(alumnoId, alumno, monto, fechaPago, vencimientos);
-  
-  const r=await q('INSERT INTO pagos (fecha,alumno_id,alumno_nombre,curso,monto,concepto,medio,origen) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
-    [fechaCompleta, alumnoId, alumno.nombre, alumno.curso, monto, conceptos.join(', '), medio, origen]);
-  res.json({ok:true,pagoId:r[0].id,fecha:fechaCompleta,conceptos});
-});
+  cont.innerHTML=todasLasCuotas.map(function(c){
+    var numC=c.numero_cuota;
+    var esFutura=c.esFutura;
+    // Precio: futuras siempre bonificado (pago anticipado)
+    var precio=esFutura ? parseFloat(a.precio_bonificado)||0 : getPrecio(a, numC, cuotas);
+    var esGratis=precio===0;
+    var esBon=!esGratis && precio===(parseFloat(a.precio_bonificado)||0);
+    var todoElMes=MESES_TODO_EL_MES.indexOf(numC)>=0;
+    var vencida=!esFutura && mesesIdx[numC-1]<hoyMesIdx;
+    var tagEstado=esFutura
+      ? '<span class="ctag" style="background:#e8f4fd;color:#1565C0">Anticipado</span>'
+      : '<span class="ctag '+(vencida?'ctag-v':'ctag-b')+'">'+(vencida?'Vencida':'Vigente')+'</span>';
+    var tagBonif=esGratis
+      ? '<span class="ctag ctag-b" style="background:#c8f7c5;color:#1a7a1a;font-weight:700">¡GRATIS!</span>'
+      : '<span class="ctag '+(esBon?'ctag-b':'ctag-n')+'">'+(todoElMes?'Todo el mes':(esBon?'Bonificada':'Normal'))+'</span>';
+    // Futuras: desmarcadas por defecto
+    var checked=esFutura?'':'checked';
+    var opacity=esFutura?'0.4':'1';
+    var disabled=esFutura?'disabled':'';
+    return '<div class="cuota-row '+(esFutura?'':'sel')+'" id="crow-'+numC+'" style="'+(esFutura?'opacity:0.7':'')+'">'+
+      '<input type="checkbox" data-num="'+numC+'" '+checked+' onchange="toggleCuotaCheck(this)">'+
+      '<div class="cuota-mes">Cuota '+numC+' — '+CUOTAS[numC-1].mes+' 2026</div>'+
+      tagEstado+
+      tagBonif+
+      '<input type="number" class="cuota-monto-input" data-num="'+numC+'" data-precio-base="'+precio+'" value="'+precio+'" min="0" step="100" '+disabled+
+        ' style="width:110px;padding:4px 7px;border:1px solid var(--b);border-radius:var(--rs);font-size:12.5px;font-weight:700;color:'+(esGratis?'var(--s)':esBon?'var(--s)':'var(--w)')+';opacity:'+opacity+';" '+
+        'oninput="actualizarTotal()" title="Podes modificar el monto manualmente">'+
+    '</div>';
+  }).join('');
+}
 
-// Reprocesar pagos históricos con lógica de saldo correcta
-app.post('/api/reprocesar-historicos', async (req,res) => {
-  const alumnos = await q('SELECT * FROM alumnos ORDER BY id');
-  let reprocesados = 0, corregidos = 0;
+function toggleCuotaCheck(cb){
+  var row=document.getElementById('crow-'+cb.dataset.num);
+  row.classList.toggle('sel',cb.checked);
+  var inp=row.querySelector('.cuota-monto-input');
+  inp.disabled=!cb.checked;
+  inp.style.opacity=cb.checked?'1':'0.4';
+  actualizarTotal();
+}
 
-  for (const alumno of alumnos) {
-    // Solo procesar alumnos con pagos importados
-    const pagosAlumno = await q(
-      "SELECT * FROM pagos WHERE alumno_id=$1 AND (origen LIKE '%Importado%' OR origen LIKE '%Banco%') ORDER BY fecha ASC, id ASC",
-      [alumno.id]
-    );
-    if (!pagosAlumno.length) continue;
+function actualizarTotal(){
+  if(!alumnoActual)return;
+  var checks=document.querySelectorAll('#cob-cuotas input[type=checkbox]:checked');
+  var total=0,meses=[];
+  checks.forEach(function(cb){
+    var numC=cb.dataset.num;
+    var inp=document.querySelector('#cob-cuotas .cuota-monto-input[data-num="'+numC+'"]');
+    var monto=inp?parseFloat(inp.value)||0:0;
+    total+=monto;
+    meses.push('Cuota '+numC+' ('+CUOTAS[parseInt(numC)-1].mes+')');
+  });
+  var extra=parseFloat(document.getElementById('extra-monto').value)||0;
+  total+=extra;
+  document.getElementById('cob-total').textContent=pesos(total);
+  document.getElementById('cob-desc').textContent=meses.join(', ')+(extra?' + extra '+pesos(extra):'');
+}
 
-    // Obtener cuotas actuales del alumno (1-3)
-    const cuotasActuales = await q(
-      'SELECT * FROM cuotas WHERE alumno_id=$1 AND numero_cuota<=3 ORDER BY numero_cuota',
-      [alumno.id]
-    );
+function cambiarAlumno(){
+  alumnoActual=null;
+  document.getElementById('cobro-busq').style.display='block';
+  document.getElementById('cobro-alumno').style.display='none';
+  document.getElementById('paso3').style.display='none';
+  document.getElementById('cb-q').value='';
+  document.getElementById('cob-extra').style.display='none';
+  document.getElementById('extra-monto').value='';
+  document.getElementById('extra-conc').value='';
+}
 
-    // Calcular total pagado vs total de cuotas marcadas como pagadas
-    const totalPagado = pagosAlumno.reduce((s, p) => s + parseFloat(p.monto), 0);
-    const cuotasPagadas = cuotasActuales.filter(c => c.estado === 'pagada');
+async function confirmarCobro(){
+  if(!alumnoActual){toast('Selecciona un alumno','e');return;}
+  var checks=[...document.querySelectorAll('#cob-cuotas input[type=checkbox]:checked')];
+  var cuotasSel=[];
+  var totalCuotas=0;
+  checks.forEach(function(cb){
+    var numC=parseInt(cb.dataset.num);
+    var inp=document.querySelector('#cob-cuotas .cuota-monto-input[data-num="'+numC+'"]');
+    var monto=inp?parseFloat(inp.value)||0:0;
+    cuotasSel.push(numC);
+    totalCuotas+=monto;
+  });
+  var extra=parseFloat(document.getElementById('extra-monto').value)||0;
+  var extraConc=document.getElementById('extra-conc').value||'';
+  var total=totalCuotas+extra;
+  if(total===0){toast('Selecciona al menos una cuota','e');return;}
+  var medio=document.getElementById('cob-medio').value;
+  var obs=document.getElementById('cob-obs').value;
+  var fechaManual=document.getElementById('cob-fecha').value||new Date().toISOString().slice(0,10);
 
-    // Si hay exceso de pago sobre las cuotas marcadas, puede haber cuotas adicionales a cubrir
-    let totalCuotasPagadas = 0;
-    for (const c of cuotasPagadas) {
-      totalCuotasPagadas += parseFloat(c.monto_pagado) || 0;
+  // Verificar duplicado — mismo alumno, mismo monto, mismas cuotas en los últimos pagos
+  if(_pagos){
+    var pagosAlumno=_pagos.filter(function(p){return p.alumno_id==alumnoActual.id;});
+    var conc='Cuota '+cuotasSel.join(', Cuota ');
+    var posibleDup=pagosAlumno.find(function(p){
+      return parseFloat(p.monto)===total && cuotasSel.some(function(n){return (p.concepto||'').indexOf('Cuota '+n)>=0;});
+    });
+    if(posibleDup){
+      var confirmar=confirm('⚠️ POSIBLE DUPLICADO\n\nYa existe un pago de '+pesos(total)+' para '+alumnoActual.nombre+' con concepto similar:\n"'+posibleDup.concepto+'"\nFecha: '+posibleDup.fecha+'\n\n¿Está seguro que desea registrar este cobro de todas formas?');
+      if(!confirmar)return;
     }
-
-    const exceso = totalPagado - totalCuotasPagadas;
-
-    if (exceso >= 100) { // Hay exceso significativo
-      // Verificar si puede cubrir cuotas pendientes
-      const pendientes = await q(
-        'SELECT * FROM cuotas WHERE alumno_id=$1 AND estado=$2 AND numero_cuota<=3 ORDER BY numero_cuota',
-        [alumno.id, 'pendiente']
-      );
-
-      let disponible = exceso;
-      for (const c of pendientes) {
-        if (disponible <= 0) break;
-        const esBonif = MESES_TODO_EL_MES.includes(c.numero_cuota); // Solo meses especiales
-        const precio = esBonif ? parseFloat(alumno.precio_bonificado) : parseFloat(alumno.precio_normal);
-
-        // Si el exceso cubre la cuota pendiente, marcarla como pagada
-        if (disponible >= precio * 0.9) { // 90% del precio como mínimo
-          const ultimoPago = pagosAlumno[pagosAlumno.length - 1];
-          await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4',
-            ['pagada', ultimoPago.fecha, Math.min(disponible, precio), c.id]);
-          disponible -= precio;
-          corregidos++;
-        }
-      }
-    }
-    reprocesados++;
   }
 
-  res.json({ ok: true, reprocesados, corregidos, mensaje: `${reprocesados} alumnos procesados, ${corregidos} cuotas corregidas por exceso de pago` });
-});
+  var r=await api('POST','/api/cobro',{alumnoId:alumnoActual.id,monto:total,medio,origen:'Manual · '+medio+(obs?' · '+obs:''),cuotasSeleccionadas:cuotasSel,fechaManual:fechaManual});
+  if(!r.ok){toast('Error al registrar','e');return;}
+  document.getElementById('r-num').textContent=r.pagoId;
+  var fechaMostrar=fechaManual?new Date(fechaManual+'T12:00:00').toLocaleDateString('es-AR'):r.fecha;
+  document.getElementById('r-fecha').textContent=fechaMostrar;
+  document.getElementById('r-alumno').textContent=alumnoActual.nombre;
+  document.getElementById('r-curso').textContent=alumnoActual.curso;
+  document.getElementById('r-conc').textContent=r.conceptos.join(', ');
+  document.getElementById('r-medio').textContent=medio+(obs?' — '+obs:'');
+  document.getElementById('r-total').textContent=pesos(total);
+  document.getElementById('recibo').classList.add('visible');
+  document.getElementById('rec-ph').style.display='none';
+  document.getElementById('rec-btns').style.display='flex';
+  cambiarAlumno();
+  _pagos=await api('GET','/api/pagos');
+  toast('Cobro '+pesos(total)+' registrado · Recibo #'+r.pagoId,'s');
+  // Usar fechaManual para el recibo (fecha de pago real, no de confección)
+  var fechaRecibo=fechaManual?new Date(fechaManual+'T12:00:00').toLocaleDateString('es-AR'):r.fecha;
+  setTimeout(function(){ imprimirReciboDuplicado(r.pagoId, fechaRecibo, alumnoActual.nombre, alumnoActual.curso, r.conceptos.join(', '), medio+(obs?' — '+obs:''), pesos(total)); }, 400);
+}
 
-// Función central: aplica un monto a cuotas pendientes de más antigua a más nueva
-// Si sobra saldo, lo aplica a la siguiente cuota que venza
-// Función central: aplicar un pago cronológicamente y crear cuotas anticipadas si es necesario
-async function aplicarPagoYCrearCuotas(alumnoId, alumno, monto, fechaPago, vencimientos) {
-  if (!vencimientos) vencimientos = await getVencimientos();
-  
-  // Parsear fecha de pago
-  let fechaDP;
-  if (String(fechaPago).includes('/')) {
-    const [d,m,y] = String(fechaPago).split('/');
-    fechaDP = new Date(parseInt(y), parseInt(m)-1, parseInt(d), 12);
-  } else {
-    const parts = String(fechaPago).replace(/[^0-9-]/g,'').split('-');
-    fechaDP = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]), 12);
-  }
-  
-  // Precio de una cuota según su vencimiento vs fecha de pago
-  const getPrecioConVencLocal = (numCuota) => {
-    const venc = vencimientos[numCuota-1];
-    if (!venc) return parseFloat(alumno.precio_normal);
-    const [dv,mv,yv] = venc.split('/');
-    const dVenc = new Date(parseInt(yv), parseInt(mv)-1, parseInt(dv), 23, 59, 59);
-    return fechaDP <= dVenc ? parseFloat(alumno.precio_bonificado) : parseFloat(alumno.precio_normal);
+function imprimirReciboDuplicado(num, fecha, alumno, curso, concepto, medio, total) {
+  // Obtener logo como base64 directamente del elemento img del recibo
+  var logoEl = document.querySelector('#recibo img');
+  var logoSrc = logoEl ? logoEl.src : '';
+
+  var reciboInner = function(copia) {
+    return '<div style="width:180mm;font-family:Arial,sans-serif;font-size:11px;line-height:1.6">'+
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;border-bottom:2px solid #1F4E79;padding-bottom:6px">'+
+        (logoSrc ? '<img src="'+logoSrc+'" style="width:55px;height:55px;object-fit:contain">' : '')+
+        '<div>'+
+          '<div style="font-size:15px;font-weight:700;color:#1F4E79">RECIBO DE PAGO</div>'+
+          '<div style="font-size:9px;color:#777">Cultural Cerrillos — Teaching English with Love</div>'+
+          '<div style="font-size:9px;color:#999;font-style:italic">'+copia+'</div>'+
+        '</div>'+
+        '<div style="margin-left:auto;text-align:right">'+
+          '<div style="font-size:10px;color:#777">N° Recibo</div>'+
+          '<div style="font-size:16px;font-weight:700;color:#1F4E79">'+num+'</div>'+
+        '</div>'+
+      '</div>'+
+      '<table style="width:100%;border-collapse:collapse;font-size:11px">'+
+        '<tr><td style="padding:3px 0;color:#555;width:30%">Fecha</td><td style="padding:3px 0;font-weight:600">'+fecha+'</td></tr>'+
+        '<tr style="background:#f5f5f5"><td style="padding:3px 4px;color:#555">Alumno</td><td style="padding:3px 4px;font-weight:600">'+alumno+'</td></tr>'+
+        '<tr><td style="padding:3px 0;color:#555">Curso</td><td style="padding:3px 0">'+curso+'</td></tr>'+
+        '<tr style="background:#f5f5f5"><td style="padding:3px 4px;color:#555">Concepto</td><td style="padding:3px 4px">'+concepto+'</td></tr>'+
+        '<tr><td style="padding:3px 0;color:#555">Medio de pago</td><td style="padding:3px 0">'+medio+'</td></tr>'+
+      '</table>'+
+      '<div style="margin-top:8px;background:#1F4E79;color:#fff;padding:6px 10px;border-radius:4px;display:flex;justify-content:space-between;align-items:center">'+
+        '<span style="font-weight:700;font-size:13px">TOTAL</span>'+
+        '<span style="font-weight:700;font-size:16px">'+total+'</span>'+
+      '</div>'+
+      '<div style="margin-top:8px;font-size:10px;color:#999;text-align:right">Firma y sello: ____________________</div>'+
+    '</div>';
   };
-  
-  // Cuota objetivo según mes del pago
-  const CUOTA_MES = {3:1,4:2,5:3,6:4,7:5,8:6,9:7,10:8,11:9,12:10};
-  const cuotaObj = CUOTA_MES[fechaDP.getMonth()+1] || null;
-  
-  // Obtener cuotas existentes
-  const cuotasExistentes = await q('SELECT * FROM cuotas WHERE alumno_id=$1 ORDER BY numero_cuota', [alumnoId]);
-  const cuotaMap = {};
-  cuotasExistentes.forEach(c => cuotaMap[c.numero_cuota] = c);
-  
-  // Todas las cuotas 1-10 (crear si no existen)
-  const estado = {};
-  for (let n=1; n<=10; n++) {
-    if (cuotaMap[n]) {
-      estado[n] = {id: cuotaMap[n].id, estado: cuotaMap[n].estado, monto_pagado: parseFloat(cuotaMap[n].monto_pagado)||0, existe: true};
-    } else {
-      estado[n] = {id: null, estado: 'pendiente', monto_pagado: 0, existe: false};
-    }
-  }
-  
-  // Ordenar: primero pendientes anteriores a objetivo, luego desde objetivo
-  const pendientesAntes = [];
-  const desdeObj = [];
-  for (let n=1; n<=10; n++) {
-    if (estado[n].estado !== 'pendiente') continue;
-    if (cuotaObj && n < cuotaObj) pendientesAntes.push(n);
-    else desdeObj.push(n);
-  }
-  const orden = [...pendientesAntes, ...desdeObj];
-  
-  let restante = monto;
-  const conceptos = [];
-  const fechaStr = normalizarFechaAR(fechaDP.toLocaleDateString('es-AR'));
-  
-  for (const n of orden) {
-    if (restante <= 0) break;
-    const esGratis = n === 10 && await cuota10Gratis(alumnoId, alumno);
-    const precio = esGratis ? 0 : getPrecioConVencLocal(n);
-    const yaAbonado = estado[n].monto_pagado;
-    const falta = precio - yaAbonado;
-    if (falta <= 0) continue;
-    
-    let nuevoMonto, nuevoEstado;
-    if (restante >= falta) {
-      nuevoMonto = precio;
-      nuevoEstado = 'pagada';
-      restante -= falta;
-    } else {
-      nuevoMonto = yaAbonado + restante;
-      nuevoEstado = 'pendiente';
-      restante = 0;
-    }
-    
-    const label = `Cuota ${n} (${MESES_NOMBRE_ALL[n-1]} 2026)${esGratis?' (GRATIS)':''}`;
-    
-    if (estado[n].existe) {
-      // Si ya tenía monto pagado de un pago anterior, conservar la fecha anterior para el monto previo
-      // Solo actualizar fecha si es el primer pago o si el nuevo monto es mayor
-      const fechaFinal = (estado[n].monto_pagado > 0 && nuevoMonto > estado[n].monto_pagado) 
-        ? fechaStr  // nuevo pago completa la cuota
-        : (estado[n].monto_pagado > 0 
-          ? cuotaMap[n].fecha_pago  // conservar fecha original del pago parcial previo
-          : fechaStr);
-      await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', [nuevoEstado, fechaFinal, nuevoMonto, estado[n].id]);
-    } else {
-      // Crear cuota anticipada
-      const r = await q('INSERT INTO cuotas (alumno_id,numero_cuota,estado,fecha_pago,monto_pagado,compensada) VALUES ($1,$2,$3,$4,$5,false) RETURNING id', [alumnoId, n, nuevoEstado, fechaStr, nuevoMonto]);
-      estado[n].id = r[0].id;
-      estado[n].existe = true;
-    }
-    estado[n].estado = nuevoEstado;
-    estado[n].monto_pagado = nuevoMonto;
-    
-    if (nuevoEstado === 'pagada') conceptos.push(label);
-    else {
-      const saldoPendiente = precio - nuevoMonto;
-      conceptos.push(`${label} — pago parcial $${nuevoMonto.toLocaleString('es-AR')}, saldo pendiente $${saldoPendiente.toLocaleString('es-AR')}`);
-    }
-  }
-  
-  // Saldo a favor si sobra
-  if (restante > 0) {
-    await q('UPDATE alumnos SET saldo_favor=$1 WHERE id=$2', [restante, alumnoId]);
-    conceptos.push(`Saldo a favor: $${restante.toLocaleString('es-AR')}`);
-  }
-  
-  return { conceptos, saldoRestante: restante };
+
+  var area = document.getElementById('print-area');
+  area.innerHTML =
+    '<div class="recibo-mitad">'+reciboInner('— Original —')+'</div>'+
+    '<div class="recibo-corte">✂ &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;</div>'+
+    '<div class="recibo-mitad">'+reciboInner('— Duplicado —')+'</div>';
+
+  setTimeout(function(){
+    window.print();
+    setTimeout(function(){ area.innerHTML=''; }, 1000);
+  }, 300);
 }
 
-async function aplicarPagoConSaldo(alumnoId, alumno, monto, fecha, origen, vencimientos=null) {
-  if (!vencimientos) vencimientos = await getVencimientos();
-  // Determinar dia y mes de la transferencia para aplicar a la cuota correcta
-  const dia = parseInt((fecha||'').split('/')[0]) || new Date().getDate();
-
-  // Detectar mes de la fecha para saber cuál es la cuota objetivo
-  // fecha puede venir como "dd/mm/yyyy" o "yyyy-mm-dd"
-  let mesFecha = null;
-  if (fecha) {
-    let partes = fecha.includes('/') ? fecha.split('/') : fecha.split('-');
-    if (fecha.includes('/')) {
-      // dd/mm/yyyy
-      mesFecha = parseInt(partes[1]);
-    } else {
-      // yyyy-mm-dd
-      mesFecha = parseInt(partes[1]);
-    }
-  }
-  // Cuota objetivo: el numero de cuota que corresponde al mes de la transferencia
-  // MESES_IDX = [2,3,4,5,6,7,8,9,10,11] => cuota 1=marzo(2), cuota 2=abril(3), etc.
-  let cuotaObjetivo = null;
-  if (mesFecha) {
-    const idx = MESES_IDX.indexOf(mesFecha - 1); // mesFecha es 1-based, MESES_IDX tiene mes 0-based
-    // Correccion: MESES_IDX tiene [2,3,4,...] que son indices de mes 0-based (marzo=2, abril=3)
-    // fecha mes 3 (marzo) => MESES_IDX[0]=2 => no coincide directo
-    // Mejor: buscar cuota cuyo MESES_IDX[i] === mesFecha-1
-    for (let i = 0; i < MESES_IDX.length; i++) {
-      if (MESES_IDX[i] === mesFecha - 1) { cuotaObjetivo = i + 1; break; }
-    }
-  }
-
-  const todasPendientes = await q('SELECT * FROM cuotas WHERE alumno_id=$1 AND estado=$2 ORDER BY numero_cuota', [alumnoId, 'pendiente']);
-  let restante = monto;
-  const conceptos = [];
-
-  // Ordenar pendientes: siempre en orden ascendente (cuota 1, 2, 3...)
-  // La cuota objetivo define hasta dónde aplicar en primera pasada.
-  // Si hay cuotas anteriores a la objetivo pendientes, se pagan primero.
-  // Cuotas posteriores a la objetivo se pagan solo si sobra saldo.
-  let ordenadas = todasPendientes;
-  if (cuotaObjetivo) {
-    const hastaObjetivo = todasPendientes.filter(c => c.numero_cuota <= cuotaObjetivo);
-    const despues       = todasPendientes.filter(c => c.numero_cuota > cuotaObjetivo);
-    ordenadas = [...hastaObjetivo, ...despues];
-  }
-
-  for (const c of ordenadas) {
-    if (restante <= 0) break;
-    const esGratis = c.numero_cuota === 10 && await cuota10Gratis(alumnoId, alumno);
-    const precio = esGratis ? 0 : await getPrecioConVenc(alumno, c.numero_cuota, fecha, vencimientos);
-    const yaAbonado = parseFloat(c.monto_pagado) || 0;
-    const saldoCuota = precio - yaAbonado; // lo que falta para completar esta cuota
-    if (saldoCuota <= 0) continue; // ya estaba pagada parcialmente con saldo completo
-    if (precio === 0 || restante >= saldoCuota) {
-      // Pago completo de la cuota
-      await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', ['pagada', fecha, precio, c.id]);
-      conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota-1]} 2026)${esGratis?' (GRATIS)':''}${c.numero_cuota < (cuotaObjetivo||1) ? ' [cuota anterior]' : ''}`);
-      restante -= saldoCuota;
-    } else {
-      // Pago parcial
-      const nuevoAbonado = yaAbonado + restante;
-      const saldoPendiente = precio - nuevoAbonado;
-      await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', ['pendiente', fecha, nuevoAbonado, c.id]);
-      conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota-1]} 2026) — pago parcial $${nuevoAbonado.toLocaleString('es-AR')}, saldo pendiente $${saldoPendiente.toLocaleString('es-AR')}`);
-      restante = 0;
-    }
-  }
-
-  return { conceptos, saldoRestante: restante };
-}
-
-// --- PREVIEW: analiza sin impactar ---
-app.post('/api/banco/preview', async (req,res) => {
-  const {filas,colCuit,colMonto}=req.body;
-  const alumnos=await q('SELECT * FROM alumnos WHERE activo=TRUE');
-  const cuitMap={};
-  alumnos.forEach(a=>{
-    if(a.cuits) a.cuits.split(',').forEach(c=>{
-      const clean=c.trim().replace(/[^0-9]/g,'');
-      if(clean.length>=7) cuitMap[clean]=a;
-    });
-  });
-  let nuevos=0, totalNuevo=0; 
-  const duplicados=[],noEncontrados=[],sinCuit=[];
-
-  for(const fila of filas){
-    const cuit=normalizarCuit(fila[colCuit]); 
-    const monto=parsearMonto(fila[colMonto]);
-    const descrip=fila['DESCRIPCION']||fila['DESCRIP']||fila['descrip']||'';
-    if(!cuit){sinCuit.push({detalle:String(fila[colCuit]||'').slice(0,80),monto});continue;}
-    if(monto<=0)continue;
-    const alumno=cuitMap[cuit];
-
-    // Extraer fecha
-    const fechaRawDup=fila['FECHA']||fila['fecha']||fila['Fecha']||'';
-    let mesFechaDup=null, fechaStr='';
-    if(fechaRawDup){
-      if(typeof fechaRawDup==='number'){
-        const d=new Date(Math.round((fechaRawDup-25569)*86400*1000));
-        mesFechaDup=d.getMonth()+1;
-        fechaStr=normalizarFechaAR(d.toLocaleDateString('es-AR'));
-      } else if(fechaRawDup instanceof Date){
-        mesFechaDup=fechaRawDup.getMonth()+1;
-        fechaStr=normalizarFechaAR(fechaRawDup.toLocaleDateString('es-AR'));
-      } else {
-        const s=normalizarFechaAR(String(fechaRawDup));
-        mesFechaDup=s.includes('/')?parseInt(s.split('/')[1]):parseInt(s.split('-')[1]);
-        fechaStr=s;
-      }
-    }
-
-    if(!alumno){
-      noEncontrados.push({cuit,fecha:fechaStr,monto,descrip:String(descrip).trim().slice(0,60)});
-      continue;
-    }
-
-    // Verificar si ya existe
-    const yaExiste=mesFechaDup
-      ?await q1("SELECT id,fecha,origen FROM pagos WHERE alumno_id=$1 AND monto=$2 AND SUBSTRING(fecha,4,2)=$3",[alumno.id,monto,String(mesFechaDup).padStart(2,'0')])
-      :await q1("SELECT id,fecha,origen FROM pagos WHERE alumno_id=$1 AND monto=$2",[alumno.id,monto]);
-
-    if(yaExiste){
-      duplicados.push({alumno:alumno.nombre,curso:alumno.curso,cuit,monto,fecha:fechaStr,pagoExistente:{id:yaExiste.id,fecha:yaExiste.fecha,origen:yaExiste.origen}});
-    } else {
-      nuevos++;
-      totalNuevo+=monto;
-    }
-  }
-  res.json({ok:true,nuevos,totalNuevo,duplicados,noEncontrados,sinCuit,totalFilas:filas.length});
-});
-
-app.post('/api/banco', async (req,res) => {
-  const {filas,colCuit,colMonto}=req.body;
-  const alumnos=await q('SELECT * FROM alumnos WHERE activo=TRUE');
-  const cuitMap={};
-  alumnos.forEach(a=>{
-    if(a.cuits) a.cuits.split(',').forEach(c=>{
-      const clean=c.trim().replace(/[^0-9]/g,'');
-      if(clean.length>=7) cuitMap[clean]=a;
-    });
-  });
-  const dia=new Date().getDate(), fecha=new Date().toLocaleDateString('es-AR');
-  const vencimientosBanco = await getVencimientos();
-  let aplicados=0; const duplicados=[],noEncontrados=[],sinCuit=[];
-  for(const fila of filas) {
-    const cuit=normalizarCuit(fila[colCuit]); const monto=parsearMonto(fila[colMonto]);
-    const descrip=fila['DESCRIP']||fila['descrip']||fila['DESCRIPCION']||fila['DETALLE']||'';
-    if(!cuit){sinCuit.push({detalle:String(fila[colCuit]||'').slice(0,80),descrip:String(descrip).trim(),monto});continue;}
-    if(monto<=0)continue;
-    const alumno=cuitMap[cuit];
-    if(!alumno){
-      let fr=fila['FECHA']||fila['fecha']||fila['Fecha']||'',fs='';
-      if(typeof fr==='number'){const d=new Date(Math.round((fr-25569)*86400*1000));fs=d.toLocaleDateString('es-AR');}
-      else if(fr instanceof Date){fs=fr.toLocaleDateString('es-AR');}
-      else{fs=String(fr).slice(0,10);}
-      noEncontrados.push({cuit,monto,fecha:fs,detalle:String(fila[colCuit]||'').slice(0,80),descrip:String(descrip).trim()});
-      continue;
-    }
-    // Extraer mes de la fecha del archivo para el anti-duplicado
-    const fechaRawDup = fila['FECHA']||fila['fecha']||fila['Fecha']||'';
-    let mesFechaDup = null;
-    if (fechaRawDup) {
-      if (typeof fechaRawDup === 'number') {
-        const d = new Date(Math.round((fechaRawDup-25569)*86400*1000));
-        mesFechaDup = d.getMonth()+1;
-      } else if (fechaRawDup instanceof Date) {
-        mesFechaDup = fechaRawDup.getMonth()+1;
-      } else {
-        const s = normalizarFechaAR(String(fechaRawDup));
-        mesFechaDup = s.includes('/') ? parseInt(s.split('/')[1]) : parseInt(s.split('-')[1]);
-      }
-    }
-    // Anti-duplicado: mismo alumno, mismo monto Y mismo mes — evita confundir cuotas de distintos meses
-    const yaExiste = mesFechaDup
-      ? await q1("SELECT id, fecha, origen FROM pagos WHERE alumno_id=$1 AND monto=$2 AND SUBSTRING(fecha,4,2)=$3", [alumno.id, monto, String(mesFechaDup).padStart(2,'0')])
-      : await q1("SELECT id, fecha, origen FROM pagos WHERE alumno_id=$1 AND monto=$2", [alumno.id, monto]);
-    if (yaExiste) {
-      let fr=fila['FECHA']||fila['fecha']||fila['Fecha']||'',fs='';
-      if(typeof fr==='number'){const d=new Date(Math.round((fr-25569)*86400*1000));fs=normalizarFechaAR(d.toLocaleDateString('es-AR'));}
-      else if(fr instanceof Date){fs=normalizarFechaAR(fr.toLocaleDateString('es-AR'));}
-      else{fs=normalizarFechaAR(String(fr).slice(0,10));}
-      duplicados.push({alumno:alumno.nombre,curso:alumno.curso,cuit,monto,fecha:fs,pagoExistente:{id:yaExiste.id,fecha:yaExiste.fecha,origen:yaExiste.origen}});
-      continue;
-    }
-
-    // Usar la fecha del archivo bancario, no la de importación
-    let fechaPago = fecha;
-    const fechaRaw = fila['FECHA'] || fila['fecha'] || fila['Fecha'] || '';
-    if (fechaRaw) {
-      if (typeof fechaRaw === 'number') {
-        const d = new Date(Math.round((fechaRaw - 25569) * 86400 * 1000));
-        fechaPago = normalizarFechaAR(d.toLocaleDateString('es-AR'));
-      } else if (fechaRaw instanceof Date) {
-        fechaPago = normalizarFechaAR(fechaRaw.toLocaleDateString('es-AR'));
-      } else if (String(fechaRaw).length >= 8) {
-        fechaPago = String(fechaRaw).slice(0, 10);
-      }
-    }
-
-    const {conceptos} = await aplicarPagoYCrearCuotas(alumno.id, alumno, monto, fechaPago, vencimientosBanco);
-    await q('INSERT INTO pagos (fecha,alumno_id,alumno_nombre,curso,monto,concepto,medio,origen) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-      [fechaPago,alumno.id,alumno.nombre,alumno.curso,monto,conceptos.join(', ')||'Transferencia bancaria','Transferencia',`Banco (CUIT ${cuit})`]);
-    aplicados++;
-  }
-  res.json({ok:true,aplicados,duplicados,noEncontrados,sinCuit,totalFilas:filas.length});
-});
-
-app.post('/api/backfill-pagos', async (req,res) => {
-  const cuotas=await q('SELECT c.*,a.nombre,a.curso,a.precio_bonificado FROM cuotas c JOIN alumnos a ON c.alumno_id=a.id WHERE c.estado=$1 ORDER BY c.alumno_id,c.numero_cuota',['pagada']);
-  let insertados=0;
-  for(const c of cuotas) {
-    const existe=await q1('SELECT id FROM pagos WHERE alumno_id=$1 AND concepto LIKE $2',[c.alumno_id,`%Cuota ${c.numero_cuota}%`]);
-    if(!existe){
-      const fecha=c.fecha_pago||`2026-0${MESES_IDX[c.numero_cuota-1]+1}-01`;
-      await q('INSERT INTO pagos (fecha,alumno_id,alumno_nombre,curso,monto,concepto,medio,origen) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',[fecha,c.alumno_id,c.nombre,c.curso,parseFloat(c.monto_pagado)||parseFloat(c.precio_bonificado),`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota-1]} 2026)`,'Importado','Importado desde planilla']);
-      insertados++;
-    }
-  }
-  res.json({ok:true,insertados});
-});
-
-app.get('/api/reporte', async (req,res) => {
-  const alumnos=await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
-  const mesActual=new Date().getMonth(), dia=new Date().getDate();
-  const vencimientosReporte=await getVencimientos();
-  // Cargar TODAS las cuotas y pagos de una sola vez
-  const todasCuotas=await q('SELECT * FROM cuotas WHERE alumno_id=ANY($1) ORDER BY numero_cuota',[alumnos.map(a=>a.id)]);
-  const todosPagos=await q('SELECT alumno_id,COALESCE(SUM(monto),0) as total FROM pagos WHERE alumno_id=ANY($1) GROUP BY alumno_id',[alumnos.map(a=>a.id)]);
-  const mapPagos={};
-  todosPagos.forEach(p=>{ mapPagos[p.alumno_id]=parseFloat(p.total||0); });
-  const resultado=[];
-  for(const a of alumnos) {
-    const cuotas=todasCuotas.filter(c=>c.alumno_id===a.id);
-    const totalPagado=mapPagos[a.id]||0;
-    const estadoCuotas={},fechasPago={},montosPago={};
-    for(let i=0;i<10;i++){
-      const numC=i+1;
-      const cuota=cuotas.find(c=>c.numero_cuota===numC);
-      // Si la cuota existe y está pagada (anticipada), mostrarla como pagada aunque sea mes futuro
-      if(MESES_IDX[i]>mesActual){
-        if(cuota&&cuota.estado==='pagada'){
-          estadoCuotas[numC]='pagada';
-          if(cuota.fecha_pago&&cuota.fecha_pago!=='')fechasPago[numC]=String(cuota.fecha_pago).slice(0,10);
-          if(parseFloat(cuota.monto_pagado)>0)montosPago[numC]=parseFloat(cuota.monto_pagado);
-        } else {
-          estadoCuotas[numC]='futura';
-        }
-        continue;
-      }
-      if(!cuota){estadoCuotas[numC]='pendiente';continue;}
-      estadoCuotas[numC]=cuota.estado==='pagada'?(cuota.compensada?'compensada':'pagada'):'pendiente';
-      if(cuota.fecha_pago&&cuota.fecha_pago!=='')fechasPago[numC]=String(cuota.fecha_pago).slice(0,10);
-      if(parseFloat(cuota.monto_pagado)>0)montosPago[numC]=parseFloat(cuota.monto_pagado);
-    }
-    const c10g=await cuota10Gratis(a.id,a,cuotas);
-    if(c10g&&estadoCuotas[10]==='pendiente')estadoCuotas[10]='gratis';
-    const cuotasGen=Object.entries(estadoCuotas).filter(([,v])=>v!=='futura');
-    const totalDebido=cuotasGen.reduce((s,[k])=>{const n=parseInt(k);return s+(n===10&&c10g?0:getPrecio(a,n,dia));},0);
-    let saldo=totalPagado-totalDebido;
-    if(saldo>0){let d=saldo;for(let i=0;i<10;i++){const n=i+1;if(estadoCuotas[n]==='pendiente'&&d>0){const p=n===10&&c10g?0:getPrecio(a,n,dia);if(p>0&&d>=p){estadoCuotas[n]='compensada';d-=p;}}}}
-    // deudaReal: usar fecha de pago de la cuota para determinar precio bonif/normal
-    const deudaReal=Object.entries(estadoCuotas).reduce((s,[k,v])=>{
-      if(v!=='pendiente')return s;
-      const n=parseInt(k);
-      const mp=montosPago[n]||0;
-      let precio;
-      if(n===10&&c10g){
-        precio=0;
-      } else {
-        // Usar fecha de pago de la cuota si existe, sino fecha actual
-        const fpCuota=fechasPago[n];
-        if(fpCuota&&vencimientosReporte){
-          const venc=vencimientosReporte[n-1];
-          if(venc){
-            const [dv,mv,yv]=venc.split('/');
-            const dVenc=new Date(parseInt(yv),parseInt(mv)-1,parseInt(dv),23,59,59);
-            let dp;
-            if(String(fpCuota).includes('/')){const [d,m,y]=String(fpCuota).split('/');dp=new Date(parseInt(y),parseInt(m)-1,parseInt(d),12);}
-            else{const pts=String(fpCuota).split('-');dp=new Date(parseInt(pts[0]),parseInt(pts[1])-1,parseInt(pts[2]),12);}
-            precio=dp<=dVenc?parseFloat(a.precio_bonificado):parseFloat(a.precio_normal);
-          } else {
-            precio=getPrecio(a,n,dia);
-          }
-        } else {
-          precio=getPrecio(a,n,dia);
-        }
-      }
-      return s+(precio-mp>0?precio-mp:0);
-    },0);
-    // Mora: aplica cuando el alumno tiene 3 o mas cuotas impagas (pendientes con monto_pagado=0)
-    // consecutivas o no
-    const cuotasImpagas = Object.entries(estadoCuotas).filter(([k,v])=>{
-      if(v!=='pendiente') return false;
-      const n=parseInt(k);
-      const mp=montosPago[n]||0;
-      return mp===0; // cuota completamente impaga (no parcial)
-    }).length;
-    const tienesMoraFlag = cuotasImpagas >= 3;
-    resultado.push({id:a.id,nombre:a.nombre,curso:a.curso,precio_normal:parseFloat(a.precio_normal),precio_bonificado:parseFloat(a.precio_bonificado),cuits:a.cuits,telefono:a.telefono||'',activo:a.activo,estadoCuotas,fechasPago,montosPago,deudaReal,totalPagado,cuota10Gratis:c10g,tienesMora:tienesMoraFlag,saldo_favor:parseFloat(a.saldo_favor)||0});
-  }
-  res.json(resultado);
-});
-
-// Corregir fechas de pagos bancarios al valor real del archivo
-app.get('/api/corregir-fechas-banco', async (req,res) => {
-  const correcciones = [{"id":435,"fecha_real":"2/5/2026"},{"id":431,"fecha_real":"7/5/2026"},{"id":430,"fecha_real":"11/5/2026"},{"id":428,"fecha_real":"11/5/2026"},{"id":426,"fecha_real":"13/5/2026"},{"id":424,"fecha_real":"6/5/2026"},{"id":382,"fecha_real":"11/5/2026"}];
-  let corregidos = 0;
-  for (const c of correcciones) {
-    await q('UPDATE pagos SET fecha=$1 WHERE id=$2', [c.fecha_real, c.id]);
-    // También actualizar las cuotas asociadas
-    await q('UPDATE cuotas SET fecha_pago=$1 WHERE alumno_id=(SELECT alumno_id FROM pagos WHERE id=$2) AND fecha_pago=(SELECT fecha FROM pagos WHERE id=$2)', [c.fecha_real, c.id]);
-    corregidos++;
-  }
-  res.json({ ok: true, corregidos });
-});
-
-// Bonificar cuota
-app.post('/api/bonificar', async (req, res) => {
-  const { alumnoId, numCuota, monto, motivo } = req.body;
-  const alumno = await q1('SELECT * FROM alumnos WHERE id=$1', [alumnoId]);
-  if (!alumno) return res.json({ ok: false, error: 'Alumno no encontrado' });
-  const fecha = new Date().toLocaleDateString('es-AR');
-  await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE alumno_id=$4 AND numero_cuota=$5',
-    ['pagada', fecha, monto, alumnoId, numCuota]);
-  const concepto = `Cuota ${numCuota} (${MESES_NOMBRE_ALL[numCuota-1]} 2026) — Bonificada${motivo ? ': ' + motivo : ''}`;
-  await q('INSERT INTO pagos (fecha,alumno_id,alumno_nombre,curso,monto,concepto,medio,origen) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-    [fecha, alumnoId, alumno.nombre, alumno.curso, monto, concepto, 'Bonificación', 'Bonificación manual']);
-  res.json({ ok: true });
-});
-
-app.post('/api/reimputar', async (req,res) => {
-  const {alumnoId,cuotaOrigen,cuotaDestino}=req.body;
-  const origen=await q1('SELECT * FROM cuotas WHERE alumno_id=$1 AND numero_cuota=$2',[alumnoId,cuotaOrigen]);
-  if(!origen||origen.estado!=='pagada') return res.json({ok:false,error:'Cuota origen no está pagada'});
-  await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3,compensada=$4 WHERE alumno_id=$5 AND numero_cuota=$6',['pagada',origen.fecha_pago,origen.monto_pagado,origen.compensada,alumnoId,cuotaDestino]);
-  await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3,compensada=$4 WHERE alumno_id=$5 AND numero_cuota=$6',['pendiente','',0,false,alumnoId,cuotaOrigen]);
-  const pago=await q1('SELECT * FROM pagos WHERE alumno_id=$1 AND concepto LIKE $2 ORDER BY id DESC LIMIT 1',[alumnoId,`%Cuota ${cuotaOrigen}%`]);
-  if(pago){await q('UPDATE pagos SET concepto=$1 WHERE id=$2',[pago.concepto.replace(`Cuota ${cuotaOrigen} (${MESES_NOMBRE_ALL[cuotaOrigen-1]} 2026)`,`Cuota ${cuotaDestino} (${MESES_NOMBRE_ALL[cuotaDestino-1]} 2026)`),pago.id]);}
-  res.json({ok:true});
-});
-
-app.get('/api/aranceles', async (req,res) => { res.json(await q('SELECT * FROM aranceles ORDER BY desde DESC')); });
-app.post('/api/aranceles', async (req,res) => {
-  const {desde,descripcion}=req.body;
-  const r=await q('INSERT INTO aranceles (desde,descripcion,creado) VALUES ($1,$2,$3) RETURNING id',[desde,descripcion||'',new Date().toISOString()]);
-  const id=r[0].id;
-  const alumnos=await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
-  for(const a of alumnos) await q('INSERT INTO aranceles_precios (arancel_id,alumno_id,precio_normal,precio_bonificado) VALUES ($1,$2,$3,$4)',[id,a.id,a.precio_normal,a.precio_bonificado]);
-  // Clonar precios por curso del arancel anterior, o calcular del promedio
-  const prevArancel=await q1('SELECT id FROM aranceles WHERE id!=$1 ORDER BY desde DESC LIMIT 1',[id]);
-  if(prevArancel) {
-    const prevCursos=await q('SELECT * FROM aranceles_cursos WHERE arancel_id=$1',[prevArancel.id]);
-    for(const c of prevCursos) await q('INSERT INTO aranceles_cursos (arancel_id,curso,precio_normal,precio_bonificado) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING',[id,c.curso,c.precio_normal,c.precio_bonificado]);
+function toggleExtra(){
+  var div=document.getElementById('cob-extra');
+  var visible=div.style.display!=='none';
+  div.style.display=visible?'none':'block';
+  if(visible){
+    document.getElementById('extra-monto').value='';
+    document.getElementById('extra-conc').value='';
+    actualizarTotal();
   } else {
-    const cursos=await q("SELECT DISTINCT curso FROM alumnos WHERE activo=TRUE AND curso!='' ORDER BY curso");
-    for(const c of cursos) {
-      const precios=await q('SELECT precio_normal,precio_bonificado FROM alumnos WHERE curso=$1 AND activo=TRUE AND (precio_especial=FALSE OR precio_especial IS NULL)',[c.curso]);
-      if(!precios.length) continue;
-      const pn=Math.round(precios.reduce((s,p)=>s+Number(p.precio_normal),0)/precios.length);
-      const pb=Math.round(precios.reduce((s,p)=>s+Number(p.precio_bonificado),0)/precios.length);
-      await q('INSERT INTO aranceles_cursos (arancel_id,curso,precio_normal,precio_bonificado) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING',[id,c.curso,pn,pb]);
-    }
+    document.getElementById('extra-conc').focus();
   }
-  res.json({ok:true,id});
-});
-app.get('/api/aranceles/:id/precios', async (req,res) => { res.json(await q('SELECT ap.*,a.nombre,a.curso,a.precio_especial FROM aranceles_precios ap JOIN alumnos a ON ap.alumno_id=a.id WHERE ap.arancel_id=$1 ORDER BY a.curso,a.nombre',[req.params.id])); });
-app.put('/api/aranceles/:id/precios', async (req,res) => {
-  const {precios}=req.body; const hoy=new Date().toISOString().slice(0,10);
-  const arancel=await q1('SELECT * FROM aranceles WHERE id=$1',[req.params.id]);
-  for(const p of precios){
-    await q('UPDATE aranceles_precios SET precio_normal=$1,precio_bonificado=$2 WHERE arancel_id=$3 AND alumno_id=$4',[p.precio_normal,p.precio_bonificado,req.params.id,p.alumno_id]);
-    if(arancel&&arancel.desde<=hoy) await q('UPDATE alumnos SET precio_normal=$1,precio_bonificado=$2 WHERE id=$3',[p.precio_normal,p.precio_bonificado,p.alumno_id]);
-  }
-  res.json({ok:true});
-});
-// Precios por curso
-app.get('/api/aranceles/:id/cursos', async (req,res) => {
-  res.json(await q('SELECT * FROM aranceles_cursos WHERE arancel_id=$1 ORDER BY curso',[req.params.id]));
-});
-app.put('/api/aranceles/:id/cursos', async (req,res) => {
-  const {curso,precio_normal,precio_bonificado,desde_cuota}=req.body;
-  const arancel=await q1('SELECT * FROM aranceles WHERE id=$1',[req.params.id]);
-  if(!arancel) return res.json({ok:false});
-  await q('INSERT INTO aranceles_cursos (arancel_id,curso,precio_normal,precio_bonificado) VALUES ($1,$2,$3,$4) ON CONFLICT (arancel_id,curso) DO UPDATE SET precio_normal=$3,precio_bonificado=$4',[req.params.id,curso,precio_normal,precio_bonificado]);
-  const alumnos=await q('SELECT id FROM alumnos WHERE curso=$1 AND activo=TRUE AND (precio_especial=FALSE OR precio_especial IS NULL)',[curso]);
-  for(const a of alumnos) {
-    await q('UPDATE alumnos SET precio_normal=$1,precio_bonificado=$2 WHERE id=$3',[precio_normal,precio_bonificado,a.id]);
-    await q('UPDATE aranceles_precios SET precio_normal=$1,precio_bonificado=$2 WHERE arancel_id=$3 AND alumno_id=$4',[precio_normal,precio_bonificado,req.params.id,a.id]);
-    if(desde_cuota && desde_cuota!=='ninguna') {
-      const desdeCuota=desde_cuota==='futuras'?(new Date().getMonth()+1):parseInt(desde_cuota);
-      await q('UPDATE cuotas SET monto_pagado=$1 WHERE alumno_id=$2 AND estado=$3 AND numero_cuota>=$4',[precio_normal,a.id,'pendiente',desdeCuota]);
-    }
-  }
-  res.json({ok:true,afectados:alumnos.length});
-});
-// Precio especial por alumno
-app.put('/api/alumnos/:id/precio-especial', async (req,res) => {
-  const {precio_especial,precio_normal,precio_bonificado}=req.body;
-  await q('UPDATE alumnos SET precio_especial=$1,precio_normal=$2,precio_bonificado=$3 WHERE id=$4',[precio_especial,precio_normal,precio_bonificado,req.params.id]);
-  res.json({ok:true});
-});
-app.delete('/api/aranceles/:id', async (req,res) => {
-  await q('DELETE FROM aranceles_precios WHERE arancel_id=$1',[req.params.id]);
-  await q('DELETE FROM aranceles_cursos WHERE arancel_id=$1',[req.params.id]);
-  await q('DELETE FROM aranceles WHERE id=$1',[req.params.id]); res.json({ok:true});
-});
-
-app.get('/api/diagnostico/cuotas/:nombre', async (req,res) => {
-  const n=decodeURIComponent(req.params.nombre).toUpperCase();
-  const alumno=await q1('SELECT * FROM alumnos WHERE nombre LIKE $1',[`%${n}%`]);
-  if(!alumno) return res.json({error:'No encontrado'});
-  res.json({alumno:alumno.nombre,id:alumno.id,cuotas:await q('SELECT * FROM cuotas WHERE alumno_id=$1 ORDER BY numero_cuota',[alumno.id])});
-});
-
-// RESTAURAR cuotas históricas al estado original del Excel
-app.get('/api/restaurar-historicos', async (req,res) => {
-  const pagosHist = [{id:1,c:[true,true,false]},{id:2,c:[true,true,false]},{id:3,c:[true,true,false]},{id:4,c:[true,false,false]},{id:5,c:[true,true,true]},{id:6,c:[false,false,true]},{id:7,c:[true,true,true]},{id:8,c:[true,true,true]},{id:9,c:[true,true,false]},{id:10,c:[false,false,false]},{id:11,c:[true,true,true]},{id:12,c:[true,true,true]},{id:13,c:[false,true,true]},{id:14,c:[true,true,false]},{id:15,c:[true,true,true]},{id:16,c:[true,true,true]},{id:17,c:[true,true,true]},{id:18,c:[true,true,true]},{id:19,c:[true,true,true]},{id:20,c:[false,true,false]},{id:21,c:[false,false,false]},{id:22,c:[true,true,true]},{id:23,c:[true,true,true]},{id:24,c:[true,true,false]},{id:25,c:[true,true,true]},{id:26,c:[true,false,false]},{id:27,c:[true,true,true]},{id:28,c:[true,true,true]},{id:29,c:[true,true,false]},{id:30,c:[true,true,false]},{id:31,c:[false,false,false]},{id:32,c:[true,true,true]},{id:33,c:[true,true,false]},{id:34,c:[true,true,true]},{id:35,c:[false,true,true]},{id:36,c:[true,true,false]},{id:37,c:[true,true,true]},{id:38,c:[true,true,true]},{id:39,c:[true,true,true]},{id:40,c:[true,true,true]},{id:41,c:[true,true,true]},{id:42,c:[true,true,true]},{id:43,c:[true,true,false]},{id:44,c:[true,true,false]},{id:45,c:[true,true,false]},{id:46,c:[true,true,false]},{id:47,c:[true,true,true]},{id:48,c:[true,true,false]},{id:49,c:[true,true,true]},{id:50,c:[true,true,false]},{id:51,c:[true,true,false]},{id:52,c:[true,true,false]},{id:53,c:[true,true,false]},{id:54,c:[true,true,false]},{id:55,c:[false,true,false]},{id:56,c:[false,false,false]},{id:57,c:[true,true,true]},{id:58,c:[true,true,false]},{id:59,c:[true,true,true]},{id:60,c:[true,true,true]},{id:61,c:[false,true,true]},{id:62,c:[true,true,true]},{id:63,c:[true,true,true]},{id:64,c:[true,true,true]},{id:65,c:[true,true,true]},{id:66,c:[true,true,true]},{id:67,c:[true,true,true]},{id:68,c:[false,true,true]},{id:69,c:[true,true,true]},{id:70,c:[true,true,true]},{id:71,c:[true,true,true]},{id:72,c:[true,true,true]},{id:73,c:[true,true,false]},{id:74,c:[true,true,false]},{id:75,c:[true,true,true]},{id:76,c:[false,false,false]},{id:77,c:[true,true,true]},{id:78,c:[true,true,false]},{id:79,c:[true,true,false]},{id:80,c:[true,true,true]},{id:81,c:[true,true,true]},{id:82,c:[false,false,false]},{id:83,c:[false,false,false]},{id:84,c:[true,true,false]},{id:85,c:[true,true,true]},{id:86,c:[true,true,false]},{id:87,c:[false,true,true]},{id:88,c:[true,true,false]},{id:89,c:[true,true,false]},{id:90,c:[true,true,false]},{id:91,c:[true,true,true]},{id:92,c:[true,true,true]},{id:93,c:[true,true,true]},{id:94,c:[true,true,true]},{id:95,c:[true,true,true]},{id:96,c:[true,true,true]},{id:97,c:[true,true,true]},{id:98,c:[true,true,true]},{id:99,c:[false,false,false]},{id:100,c:[true,true,true]},{id:101,c:[true,true,true]},{id:102,c:[true,true,false]},{id:103,c:[true,false,false]},{id:104,c:[true,true,true]},{id:105,c:[false,true,false]},{id:106,c:[true,true,true]},{id:107,c:[true,true,true]},{id:108,c:[true,true,true]},{id:109,c:[true,true,true]},{id:110,c:[true,true,false]},{id:111,c:[true,true,true]},{id:112,c:[true,false,false]},{id:113,c:[true,true,true]},{id:114,c:[true,true,false]},{id:115,c:[true,true,false]},{id:116,c:[true,true,false]},{id:117,c:[true,true,false]},{id:118,c:[true,false,true]},{id:119,c:[true,true,true]},{id:120,c:[true,true,false]},{id:121,c:[true,true,false]},{id:122,c:[false,false,false]},{id:123,c:[true,true,false]},{id:124,c:[true,true,true]},{id:125,c:[true,true,true]},{id:126,c:[true,true,false]},{id:127,c:[true,true,true]},{id:128,c:[false,true,false]},{id:129,c:[true,true,true]},{id:130,c:[true,true,true]},{id:131,c:[false,true,false]},{id:132,c:[true,true,true]},{id:133,c:[true,true,true]},{id:134,c:[true,true,true]},{id:135,c:[true,true,false]},{id:136,c:[true,true,false]},{id:137,c:[true,true,true]},{id:138,c:[true,true,true]},{id:139,c:[true,true,true]},{id:140,c:[true,true,true]},{id:141,c:[true,false,false]},{id:142,c:[true,true,true]},{id:143,c:[true,true,true]},{id:144,c:[false,true,true]},{id:145,c:[true,true,true]},{id:146,c:[true,true,true]},{id:147,c:[true,true,false]},{id:148,c:[false,true,false]},{id:149,c:[true,true,true]},{id:150,c:[true,true,true]},{id:151,c:[true,true,true]},{id:152,c:[true,true,true]},{id:153,c:[true,true,true]},{id:154,c:[true,true,true]}];
-
-  const FECHAS={"CARABAJAL ANA PAULA":{"1":"2026-03-31","2":"","3":""},"MAURIN GIANA":{"1":"2026-03-10","2":"2026-04-09","3":""},"MARTINEZ CARBAJO IVAN":{"1":"2026-03-12","2":"2026-04-09","3":""},"NIEVA GUEMES MIA ISABELLA":{"1":"2026-03-31","2":"","3":""},"BENICIO BELEN":{"1":"2026-03-21","2":"2026-04-09","3":"2026-05-08"},"CARI, NIRVANA":{"1":"","2":"","3":"2026-05-11"},"DIAZ LOLA":{"1":"2026-03-10","2":"2026-04-09","3":"2026-05-09"},"NUGHES, LEON":{"1":"2026-03-02","2":"","3":"2026-05-12"},"TRONCOSO ALMA":{"1":"2026-03-26","2":"2026-04-23","3":""},"ALCALA, MATEO":{"1":"","2":"","3":""},"APAZA BORELLI, VERONICA":{"1":"2026-03-04","2":"2026-04-09","3":"2026-05-07"},"GARCIA, NICOLE":{"1":"2026-03-10","2":"2026-04-07","3":"2026-05-05"},"GUZMAN, INAKI":{"1":"","2":"2026-04-09","3":"2026-05-10"},"LARA LUCIO":{"1":"2026-04-07","2":"2026-04-07","3":""},"LOPEZ BERRUEZO, PILAR":{"1":"2026-03-12","2":"2026-04-09","3":"2026-05-11"},"RUSSO RADA, FRANCESCA":{"1":"2026-03-03","2":"2026-04-07","3":"2026-05-08"},"MORALES BELLIDO ALVARO":{"1":"2026-03-26","2":"2026-05-04","3":"2026-05-04"},"MARTINEZ RUIZ BAUTISTA":{"1":"2026-03-10","2":"2026-05-14","3":"2026-05-14"},"ALTOBELLI, ANA":{"1":"2026-03-10","2":"2026-04-09","3":"2026-05-06"},"MARTINEZ ARGANARAZ ARIEL":{"1":"","2":"2026-04-13","3":""},"LOPEZ GARCIA VALENTINA":{"1":"","2":"","3":""},"CARDENAS, ARACELI":{"1":"2026-03-10","2":"2026-04-10","3":"2026-05-11"},"MORALES, JUANA":{"1":"2026-03-12","2":"2026-04-07","3":"2026-05-05"},"MORALES, LAUTARO":{"1":"2026-03-09","2":"2026-04-06","3":""},"VILLARREAL, MELANIE":{"1":"2026-03-09","2":"2026-04-08","3":"2026-05-06"},"VERCELLINO IGNACIO":{"1":"2026-04-06","2":"","3":""},"PALACIOS ERNESTINA":{"1":"2026-03-09","2":"2026-03-31","3":"2026-05-05"},"CASAS, GUILLERMINA":{"1":"2026-03-02","2":"2026-04-01","3":"2026-05-01"},"DIAZ TORRES, JOSEFINA":{"1":"2026-03-03","2":"","3":""},"LOPEZ, AGNES":{"1":"2026-03-09","2":"2026-04-30","3":""},"MICOL, FRANCISCO":{"1":"","2":"","3":""},"VITALE GUADALUPE":{"1":"2026-03-09","2":"2026-04-07","3":"2026-05-08"},"CAMACHO AMPARO":{"1":"2026-03-17","2":"2026-04-09","3":""},"CANABIDES, ALLEGRA":{"1":"2026-03-19","2":"2026-04-09","3":"2026-05-11"},"FERNANDEZ AMARELIS":{"1":"","2":"2026-04-15","3":"2026-05-14"},"LUNA, SANTINO":{"1":"2026-03-17","2":"2026-04-09","3":""},"NUNEZ, ALEXANDER":{"1":"2026-03-10","2":"2026-04-07","3":"2026-05-05"},"QUIROGA AMPARO":{"1":"2026-03-10","2":"2026-04-09","3":"2026-05-11"},"SOSA, SANTIAGO":{"1":"2026-03-03","2":"2026-04-01","3":"2026-05-05"},"TOLABA CARABAJAL KARLA ARIANA":{"1":"2026-03-03","2":"2026-04-07","3":"2026-05-07"},"ZARATE LUCIA":{"1":"2026-03-05","2":"2026-04-09","3":"2026-05-11"},"ALVAREZ LOURDES":{"1":"2026-03-10","2":"2026-04-09","3":"2026-05-07"},"CABRERA AMADEO BENICIO":{"1":"2026-04-14","2":"2026-04-16","3":""},"GUANCA PATRICIO MATIAS FEDERICO":{"1":"2026-03-19","2":"2026-04-09","3":""},"CARRASCO, GAEL TIZIANO":{"1":"2026-03-02","2":"2026-04-15","3":""},"FLIA AMADO RUSSO":{"1":"2026-03-02","2":"2026-04-06","3":""},"FLIA BRITO":{"1":"","2":"2026-04-23","3":"2026-05-12"},"FLIA COTINI":{"1":"2026-03-26","2":"2026-04-30","3":""},"FLIA CAYO E Y RAFAELA":{"1":"2026-03-10","2":"2026-04-09","3":"2026-05-09"},"FLIA CAYO A Y TAIEL":{"1":"2026-03-04","2":"2026-04-01","3":""},"FLIA DIAZ MORALES":{"1":"2026-03-10","2":"2026-04-09","3":""},"FLIA LACURI":{"1":"2026-03-03","2":"2026-04-09","3":""},"FLIA MAMANI RUIZ":{"1":"2026-03-04","2":"2026-03-30","3":""},"FLIA MARTINEZ":{"1":"2026-04-06","2":"2026-04-06","3":""},"FLIA MOYA":{"1":"","2":"2026-04-19","3":""},"FLIA ORTEGA":{"1":"","2":"","3":""},"FLIA RAMIREZ ORTUNO":{"1":"2026-03-12","2":"2026-04-09","3":"2026-05-11"},"FLIA RIVERO":{"1":"2026-03-05","2":"2026-04-08","3":""},"FLIA ROSAS":{"1":"2026-03-05","2":"2026-04-07","3":"2026-05-03"},"FLIA RUANO":{"1":"2026-03-30","2":"2026-04-09","3":"2026-05-06"},"FLIA OLIVEIRA BEJARANO":{"1":"","2":"2026-04-07","3":"2026-05-11"},"FLIA SANTAFE":{"1":"2026-03-03","2":"2026-04-09","3":"2026-05-06"},"FLIA GITIAN":{"1":"2026-04-07","2":"2026-04-07","3":"2026-05-11"},"FLIA SARAVIA":{"1":"2026-03-31","2":"2026-04-10","3":"2026-05-04"},"FLIA SUAREZ":{"1":"2026-03-11","2":"2026-04-09","3":"2026-05-11"},"FLIA TACTAGI":{"1":"2026-03-05","2":"2026-04-06","3":"2026-05-06"},"FLIA TEJERINA":{"1":"2026-03-10","2":"2026-04-10","3":"2026-05-10"},"FLIA TOLABA":{"1":"","2":"2026-04-09","3":"2026-05-11"},"FLIA VACA MONASTEROLO":{"1":"2026-03-05","2":"2026-04-08","3":"2026-05-05"},"FLIA VERCELLINO R":{"1":"2026-03-04","2":"2026-04-04","3":"2026-05-02"},"FLIA VILLAFANE GUITIAN":{"1":"2026-03-08","2":"2026-04-07","3":"2026-05-08"},"FLIA LIENDRO":{"1":"2026-03-10","2":"2026-04-09","3":"2026-05-11"},"FLIA CARI":{"1":"2026-03-09","2":"2026-04-01","3":""},"FLIA RIOS":{"1":"2026-03-09","2":"2026-04-07","3":""},"FLIA MARTINEZ ISAIAS TOBIAS":{"1":"2026-03-10","2":"2026-04-08","3":"2026-05-11"},"FLIA GASPAR GUITIAN":{"1":"","2":"","3":""},"FLIA FECCIA":{"1":"2026-03-31","2":"2026-04-08","3":"2026-05-11"},"FLIA RIOS THIAGO RUTH":{"1":"2026-03-31","2":"2026-04-13","3":""},"FLIA CASIMIRO":{"1":"2026-03-13","2":"2026-04-20","3":""},"ANTUNA MAITENA":{"1":"2026-03-05","2":"2026-04-05","3":"2026-05-04"},"CABRAL SIMON":{"1":"2026-03-03","2":"2026-04-09","3":"2026-05-06"},"CARDENAS, MAILEN":{"1":"","2":"","3":""},"CRUZ, LUDMILA":{"1":"","2":"","3":""},"GUANCA, YAHIR":{"1":"2026-03-09","2":"2026-04-09","3":""},"SORIA LIENDRO, LIA":{"1":"2026-03-10","2":"2026-05-13","3":"2026-05-13"},"CRUZ, EMA ISABELLA":{"1":"2026-05-11","2":"2026-05-11","3":""},"ROJAS, JAZMIN":{"1":"","2":"2026-04-09","3":"2026-05-08"},"REALES, LAUTARO":{"1":"","2":"2026-04-27","3":""},"SEGURA, VICTORIA":{"1":"2026-03-09","2":"2026-04-08","3":""},"SOTILLO CATALINA":{"1":"2026-03-15","2":"2026-04-09","3":""},"YAPURA, BAUTISTA":{"1":"2026-03-06","2":"2026-04-09","3":"2026-05-04"},"ROBLEDO MAXIMO":{"1":"2026-03-30","2":"2026-04-09","3":"2026-05-10"},"LAIME, DAIANA":{"1":"2026-03-04","2":"2026-04-08","3":"2026-05-04"},"ORELLANA, ORIANA":{"1":"2026-03-20","2":"2026-04-07","3":"2026-05-08"},"RICCO, TIZIANO":{"1":"2026-03-04","2":"2026-04-07","3":"2026-05-06"},"RODRIGUEZ, GENESIS":{"1":"2026-03-09","2":"2026-04-08","3":"2026-05-04"},"TOLABA, JEREMIAS":{"1":"2026-03-09","2":"2026-04-09","3":"2026-05-11"},"ALCALA BAUTISTA":{"1":"2026-03-06","2":"2026-04-07","3":"2026-05-07"},"MOLINA GUADALUPE":{"1":"","2":"","3":""},"CARRASCO, MATEO":{"1":"2026-03-04","2":"2026-04-01","3":"2026-05-05"},"CESPEDES PUPPI, JUAN EMILIO":{"1":"2026-03-03","2":"2026-04-08","3":"2026-05-05"},"CHOQUE JESUS GABRIEL":{"1":"2026-03-10","2":"2026-04-16","3":""},"GARCIA CARBAJAL, VALENTINO GABRIEL":{"1":"2026-03-31","2":"","3":""},"FLORES LUCAS":{"1":"2026-03-09","2":"2026-04-13","3":"2026-04-13"},"GERON CARMEN":{"1":"","2":"2026-04-14","3":""},"GUTIERREZ, EMMA":{"1":"2026-03-09","2":"2026-04-06","3":"2026-05-07"},"MONTES, LOLA":{"1":"2026-03-10","2":"2026-04-08","3":"2026-05-06"},"PARRILLA, VALENTINA":{"1":"2026-03-05","2":"2026-04-09","3":"2026-05-14"},"POSADAS, JEREMIAS":{"1":"2026-03-09","2":"2026-04-08","3":"2026-05-06"},"RIVERO, AGUSTIN":{"1":"2026-03-05","2":"2026-04-07","3":""},"SANGUEZO MIRANDA, LUZ":{"1":"2026-03-31","2":"2026-04-08","3":"2026-05-12"},"TERCERO, MATEO":{"1":"2026-04-06","2":"","3":""},"VEDIA, FELIPE":{"1":"2026-03-09","2":"2026-04-08","3":"2026-05-04"},"VELA, NAHIARA":{"1":"2026-03-09","2":"2026-04-09","3":""},"ZARATE FRANCESCA":{"1":"2026-04-09","2":"2026-04-09","3":""},"NERI SALVADOR":{"1":"2026-04-09","2":"2026-04-09","3":""},"CARMEN GUILLERMINA":{"1":"2026-04-09","2":"2026-04-09","3":""},"ABALOS, AYLEN":{"1":"2026-03-09","2":"","3":"2026-05-11"},"ACOSTA MIA":{"1":"2026-03-30","2":"2026-04-09","3":"2026-05-07"},"AGUILERA, MIA":{"1":"2026-03-02","2":"2026-04-01","3":""},"ANTONELLI, DONATO":{"1":"2026-03-10","2":"2026-04-09","3":""},"CAMPOS GIOVANI":{"1":"","2":"","3":""},"CASTRO, AGUSTIN":{"1":"2026-03-05","2":"2026-04-28","3":""},"GOMEZ, NAZARENO":{"1":"2026-03-09","2":"2026-04-06","3":"2026-05-04"},"GUTIERREZ, ZOEMI":{"1":"2026-03-10","2":"2026-04-10","3":"2026-05-10"},"PERALES, MARIA CECILIA":{"1":"2026-03-02","2":"2026-04-09","3":""},"PERCINO, NAHIARA":{"1":"2026-03-17","2":"2026-04-16","3":"2026-05-14"},"TOLABA, ESTEFANIA":{"1":"","2":"2026-04-27","3":""},"TOMASINI AGUSTIN":{"1":"2026-03-03","2":"2026-04-07","3":"2026-05-05"},"YURKINA, MISAEL":{"1":"2026-03-09","2":"2026-04-09","3":"2026-05-11"},"VARGAS THIAGO":{"1":"","2":"2026-04-09","3":""},"TAGLIOLI ANA":{"1":"2026-03-30","2":"2026-04-08","3":"2026-05-06"},"VILCA ESPERANZA":{"1":"2026-03-17","2":"2026-04-08","3":"2026-05-06"},"FACCHIN, OLIVIA":{"1":"2026-03-09","2":"2026-04-09","3":"2026-05-11"},"LOPEZ ESTEFANIA":{"1":"2026-04-09","2":"2026-04-09","3":""},"MANSILLA, ABRIL":{"1":"2026-03-10","2":"2026-03-31","3":""},"MONDAQUE SABRINA":{"1":"2026-03-09","2":"2026-04-08","3":"2026-05-06"},"REMENTERIA ISABEL":{"1":"2026-03-31","2":"2026-04-09","3":"2026-05-07"},"MOSA, TADEO":{"1":"2026-03-10","2":"2026-04-09","3":"2026-05-05"},"OROZCO, LAUTARO":{"1":"2026-03-06","2":"2026-04-07","3":"2026-05-07"},"ORTEGA MARCOS":{"1":"2026-04-20","2":"","3":""},"VILLANUEVA CARLOS":{"1":"2026-03-04","2":"2026-04-07","3":"2026-05-05"},"GUAYMAS ZERPA, CIRO":{"1":"2026-03-06","2":"2026-04-09","3":"2026-05-11"},"CABELLO ALMA":{"1":"","2":"2026-04-09","3":"2026-05-09"},"FIRME TIZIANO":{"1":"2026-03-30","2":"2026-04-09","3":"2026-05-04"},"CHAVEZ DI PAULI CATALINA":{"1":"2026-03-03","2":"2026-04-06","3":"2026-05-08"},"MAMANI, FELICITAS":{"1":"2026-03-19","2":"2026-04-20","3":""},"ALANCAY DEMIR":{"1":"","2":"2026-04-09","3":""},"RAMPULLA, GINO":{"1":"2026-03-09","2":"2026-04-06","3":"2026-05-08"},"ZERPA, MATHEO":{"1":"2026-03-10","2":"2026-04-07","3":"2026-05-07"},"APARICIO ROYANO NAHYARA":{"1":"2026-03-10","2":"2026-04-09","3":"2026-05-11"},"VILTE PAZ LORENA SOL":{"1":"2026-03-10","2":"2026-04-09","3":"2026-05-05"},"CORONEL LAUTARO":{"1":"2026-03-26","2":"2026-04-09","3":"2026-05-06"},"VILLANUEVA FRANCISCO":{"1":"2026-04-13","2":"2026-04-09","3":"2026-05-11"}};
-  const MONTOS={"CARABAJAL ANA PAULA":{"1":73000,"2":0,"3":0},"MAURIN GIANA":{"1":73000,"2":73000,"3":0},"MARTINEZ CARBAJO IVAN":{"1":73000,"2":73000,"3":0},"NIEVA GUEMES MIA ISABELLA":{"1":73000,"2":0,"3":0},"BENICIO BELEN":{"1":73000,"2":73000,"3":73000},"CARI, NIRVANA":{"1":0,"2":0,"3":52500},"DIAZ LOLA":{"1":52500,"2":52500,"3":52500},"NUGHES, LEON":{"1":52500,"2":52500,"3":52500},"TRONCOSO ALMA":{"1":52500,"2":55000,"3":0},"ALCALA, MATEO":{"1":0,"2":0,"3":0},"APAZA BORELLI, VERONICA":{"1":81500,"2":81500,"3":81500},"GARCIA, NICOLE":{"1":81500,"2":81500,"3":81500},"GUZMAN, INAKI":{"1":0,"2":81500,"3":81500},"LARA LUCIO":{"1":85500,"2":81500,"3":0},"LOPEZ BERRUEZO, PILAR":{"1":81500,"2":81500,"3":81500},"RUSSO RADA, FRANCESCA":{"1":81500,"2":81500,"3":81500},"MORALES BELLIDO ALVARO":{"1":81500,"2":81500,"3":4000},"MARTINEZ RUIZ BAUTISTA":{"1":81500,"2":81500,"3":81500},"ALTOBELLI, ANA":{"1":81500,"2":81500,"3":81500},"MARTINEZ ARGANARAZ ARIEL":{"1":0,"2":171000,"3":0},"LOPEZ GARCIA VALENTINA":{"1":0,"2":0,"3":0},"CARDENAS, ARACELI":{"1":81500,"2":81500,"3":81500},"MORALES, JUANA":{"1":85500,"2":81500,"3":81500},"MORALES, LAUTARO":{"1":73000,"2":73000,"3":0},"VILLARREAL, MELANIE":{"1":81500,"2":81500,"3":81500},"VERCELLINO IGNACIO":{"1":85500,"2":0,"3":0},"PALACIOS ERNESTINA":{"1":81500,"2":81500,"3":81500},"CASAS, GUILLERMINA":{"1":82500,"2":82500,"3":82500},"DIAZ TORRES, JOSEFINA":{"1":82500,"2":82500,"3":0},"LOPEZ, AGNES":{"1":82500,"2":82500,"3":0},"MICOL, FRANCISCO":{"1":0,"2":0,"3":0},"VITALE GUADALUPE":{"1":133000,"2":82500,"3":82500},"CAMACHO AMPARO":{"1":40500,"2":40500,"3":0},"CANABIDES, ALLEGRA":{"1":40500,"2":40500,"3":40500},"FERNANDEZ AMARELIS":{"1":0,"2":42500,"3":42500},"LUNA, SANTINO":{"1":40500,"2":40500,"3":0},"NUNEZ, ALEXANDER":{"1":40500,"2":40500,"3":40500},"QUIROGA AMPARO":{"1":40500,"2":40500,"3":40500},"SOSA, SANTIAGO":{"1":40500,"2":40500,"3":40500},"TOLABA CARABAJAL KARLA ARIANA":{"1":40500,"2":40500,"3":40500},"ZARATE LUCIA":{"1":40500,"2":40500,"3":40000},"ALVAREZ LOURDES":{"1":40500,"2":40500,"3":40500},"CABRERA AMADEO BENICIO":{"1":42500,"2":42500,"3":0},"GUANCA PATRICIO MATIAS FEDERICO":{"1":40500,"2":40500,"3":0},"CARRASCO, GAEL TIZIANO":{"1":40500,"2":42500,"3":0},"FLIA AMADO RUSSO":{"1":155500,"2":155500,"3":0},"FLIA BRITO":{"1":132500,"2":144500,"3":132500},"FLIA COTINI":{"1":100000,"2":100000,"3":0},"FLIA CAYO E Y RAFAELA":{"1":101500,"2":101500,"3":101500},"FLIA CAYO A Y TAIEL":{"1":133000,"2":267000,"3":0},"FLIA DIAZ MORALES":{"1":95000,"2":95000,"3":0},"FLIA LACURI":{"1":87000,"2":87000,"3":0},"FLIA MAMANI RUIZ":{"1":156500,"2":156500,"3":0},"FLIA MARTINEZ":{"1":82000,"2":75500,"3":0},"FLIA MOYA":{"1":0,"2":144500,"3":0},"FLIA ORTEGA":{"1":0,"2":0,"3":0},"FLIA RAMIREZ ORTUNO":{"1":92500,"2":92500,"3":92500},"FLIA RIVERO":{"1":132500,"2":132500,"3":0},"FLIA ROSAS":{"1":170500,"2":170500,"3":170500},"FLIA RUANO":{"1":89000,"2":89000,"3":89000},"FLIA OLIVEIRA BEJARANO":{"1":0,"2":118500,"3":119000},"FLIA SANTAFE":{"1":101500,"2":101500,"3":101500},"FLIA GITIAN":{"1":87000,"2":261000,"3":128000},"FLIA SARAVIA":{"1":127000,"2":127000,"3":127000},"FLIA SUAREZ":{"1":87000,"2":87000,"3":87000},"FLIA TACTAGI":{"1":132500,"2":132500,"3":132500},"FLIA TEJERINA":{"1":133000,"2":133000,"3":133000},"FLIA TOLABA":{"1":0,"2":202000,"3":106000},"FLIA VACA MONASTEROLO":{"1":156000,"2":156000,"3":156000},"FLIA VERCELLINO R":{"1":87000,"2":87000,"3":89000},"FLIA VILLAFANE GUITIAN":{"1":101500,"2":101500,"3":101500},"FLIA LIENDRO":{"1":167500,"2":167500,"3":167500},"FLIA CARI":{"1":101200,"2":97000,"3":0},"FLIA RIOS":{"1":132500,"2":132500,"3":0},"FLIA MARTINEZ ISAIAS TOBIAS":{"1":52500,"2":52500,"3":52500},"FLIA GASPAR GUITIAN":{"1":0,"2":0,"3":0},"FLIA FECCIA":{"1":91500,"2":91500,"3":91500},"FLIA RIOS THIAGO RUTH":{"1":154000,"2":138500,"3":0},"FLIA CASIMIRO":{"1":118000,"2":129000,"3":0},"ANTUNA MAITENA":{"1":56000,"2":50000,"3":50000},"CABRAL SIMON":{"1":56000,"2":56000,"3":56000},"CARDENAS, MAILEN":{"1":0,"2":0,"3":0},"CRUZ, LUDMILA":{"1":0,"2":0,"3":0},"GUANCA, YAHIR":{"1":56000,"2":56000,"3":0},"SORIA LIENDRO, LIA":{"1":56000,"2":56000,"3":56000},"CRUZ, EMA ISABELLA":{"1":56000,"2":5950,"3":0},"ROJAS, JAZMIN":{"1":0,"2":56000,"3":56000},"REALES, LAUTARO":{"1":59000,"2":59000,"3":0},"SEGURA, VICTORIA":{"1":56000,"2":56000,"3":0},"SOTILLO CATALINA":{"1":59000,"2":56000,"3":0},"YAPURA, BAUTISTA":{"1":56000,"2":50000,"3":50000},"ROBLEDO MAXIMO":{"1":56000,"2":56000,"3":56000},"LAIME, DAIANA":{"1":56000,"2":56000,"3":112000},"ORELLANA, ORIANA":{"1":56000,"2":56000,"3":56000},"RICCO, TIZIANO":{"1":56000,"2":56000,"3":112000},"RODRIGUEZ, GENESIS":{"1":56000,"2":56000,"3":56000},"TOLABA, JEREMIAS":{"1":56000,"2":56000,"3":56000},"ALCALA BAUTISTA":{"1":56000,"2":56000,"3":56000},"MOLINA GUADALUPE":{"1":0,"2":0,"3":0},"CARRASCO, MATEO":{"1":45500,"2":45500,"3":45500},"CESPEDES PUPPI, JUAN EMILIO":{"1":45500,"2":45500,"3":45500},"CHOQUE JESUS GABRIEL":{"1":45500,"2":48000,"3":0},"GARCIA CARBAJAL, VALENTINO GABRIEL":{"1":45500,"2":0,"3":0},"FLORES LUCAS":{"1":45500,"2":48000,"3":45500},"GERON CARMEN":{"1":0,"2":96000,"3":0},"GUTIERREZ, EMMA":{"1":45500,"2":45500,"3":45500},"MONTES, LOLA":{"1":45500,"2":45500,"3":45000},"PARRILLA, VALENTINA":{"1":45500,"2":45500,"3":45500},"POSADAS, JEREMIAS":{"1":45500,"2":45500,"3":45500},"RIVERO, AGUSTIN":{"1":45500,"2":45500,"3":0},"SANGUEZO MIRANDA, LUZ":{"1":45500,"2":91000,"3":45500},"TERCERO, MATEO":{"1":48000,"2":0,"3":0},"VEDIA, FELIPE":{"1":45500,"2":45500,"3":45500},"VELA, NAHIARA":{"1":45500,"2":45500,"3":0},"ZARATE FRANCESCA":{"1":45500,"2":45500,"3":0},"NERI SALVADOR":{"1":45500,"2":45500,"3":0},"CARMEN GUILLERMINA":{"1":48000,"2":45500,"3":0},"ABALOS, AYLEN":{"1":50500,"2":0,"3":50500},"ACOSTA MIA":{"1":50500,"2":50500,"3":50500},"AGUILERA, MIA":{"1":50500,"2":50500,"3":0},"ANTONELLI, DONATO":{"1":50500,"2":50500,"3":0},"CAMPOS GIOVANI":{"1":0,"2":0,"3":0},"CASTRO, AGUSTIN":{"1":50500,"2":50500,"3":0},"GOMEZ, NAZARENO":{"1":50500,"2":50500,"3":50500},"GUTIERREZ, ZOEMI":{"1":45500,"2":45000,"3":45000},"PERALES, MARIA CECILIA":{"1":50500,"2":50500,"3":0},"PERCINO, NAHIARA":{"1":50500,"2":53000,"3":50500},"TOLABA, ESTEFANIA":{"1":0,"2":53000,"3":0},"TOMASINI AGUSTIN":{"1":50500,"2":50500,"3":50500},"YURKINA, MISAEL":{"1":45000,"2":45500,"3":45500},"VARGAS THIAGO":{"1":0,"2":50500,"3":0},"TAGLIOLI ANA":{"1":53000,"2":50500,"3":50500},"VILCA ESPERANZA":{"1":50500,"2":50500,"3":50500},"FACCHIN, OLIVIA":{"1":50500,"2":50500,"3":50500},"LOPEZ ESTEFANIA":{"1":111000,"2":90000,"3":0},"MANSILLA, ABRIL":{"1":50500,"2":50500,"3":0},"MONDAQUE SABRINA":{"1":50500,"2":50500,"3":50500},"REMENTERIA ISABEL":{"1":93000,"2":50500,"3":50500},"MOSA, TADEO":{"1":50500,"2":50500,"3":50500},"OROZCO, LAUTARO":{"1":50500,"2":50500,"3":50500},"ORTEGA MARCOS":{"1":53000,"2":0,"3":0},"VILLANUEVA CARLOS":{"1":50500,"2":50500,"3":50500},"GUAYMAS ZERPA, CIRO":{"1":45000,"2":45000,"3":45000},"CABELLO ALMA":{"1":0,"2":50500,"3":53000},"FIRME TIZIANO":{"1":53000,"2":50500,"3":50500},"CHAVEZ DI PAULI CATALINA":{"1":29000,"2":27500,"3":27500},"MAMANI, FELICITAS":{"1":27500,"2":29000,"3":0},"ALANCAY DEMIR":{"1":0,"2":27500,"3":0},"RAMPULLA, GINO":{"1":27500,"2":27500,"3":27500},"ZERPA, MATHEO":{"1":24700,"2":24700,"3":24700},"APARICIO ROYANO NAHYARA":{"1":27500,"2":27500,"3":27500},"VILTE PAZ LORENA SOL":{"1":27500,"2":27500,"3":27500},"CORONEL LAUTARO":{"1":29000,"2":27500,"3":27500},"VILLANUEVA FRANCISCO":{"1":29000,"2":25000,"3":27500}};
-
-  const alumnos = await q('SELECT id,nombre FROM alumnos ORDER BY id');
-  let restaurados = 0;
-  for (let i = 0; i < pagosHist.length; i++) {
-    const p = pagosHist[i];
-    const alumno = alumnos[i];
-    if (!alumno) continue;
-    const nombre = alumno.nombre;
-    const fa = FECHAS[nombre]||{};
-    const ma = MONTOS[nombre]||{};
-    for (let n = 1; n <= 3; n++) {
-      const pagado = p.c[n-1];
-      const fp = fa[String(n)]||'';
-      const mp = ma[String(n)]||0;
-      const estado = pagado ? 'pagada' : 'pendiente';
-      await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE alumno_id=$4 AND numero_cuota=$5',
-        [estado, pagado ? fp : '', pagado ? mp : 0, alumno.id, n]);
-    }
-    restaurados++;
-  }
-  res.json({ ok: true, restaurados, mensaje: `${restaurados} alumnos restaurados al estado original del Excel` });
-});
-
-// Eliminar pagos duplicados (mismo alumno_id + monto + fecha + origen)
-app.get('/api/limpiar-duplicados', async (req,res) => {
-  // Encontrar duplicados
-  const duplicados = await q(`
-    SELECT MIN(id) as id_keep, alumno_id, monto, fecha, origen, COUNT(*) as cnt
-    FROM pagos
-    GROUP BY alumno_id, monto, fecha, origen
-    HAVING COUNT(*) > 1
-  `);
-
-  let eliminados = 0;
-  for (const d of duplicados) {
-    // Eliminar todos menos el primero
-    const resultado = await q(
-      'DELETE FROM pagos WHERE alumno_id=$1 AND monto=$2 AND fecha=$3 AND origen=$4 AND id != $5',
-      [d.alumno_id, d.monto, d.fecha, d.origen, d.id_keep]
-    );
-    eliminados += (parseInt(d.cnt) - 1);
-  }
-
-  res.json({ ok: true, duplicadosEncontrados: duplicados.length, eliminados });
-});
-
-// Ver pagos por fecha para diagnóstico
-app.get('/api/diagnostico/pagos-fecha/:fecha', async (req,res) => {
-  const pagos = await q(
-    'SELECT p.*,a.nombre FROM pagos p JOIN alumnos a ON p.alumno_id=a.id WHERE p.fecha LIKE $1 ORDER BY a.nombre',
-    [`%${req.params.fecha}%`]
-  );
-  res.json({ total: pagos.length, pagos });
-});
-
-// Ver todos los pagos bancarios recientes
-app.get('/api/diagnostico/pagos-banco-recientes', async (req,res) => {
-  const pagos = await q(`
-    SELECT p.id, p.fecha, p.monto, p.concepto, p.origen, a.nombre, a.curso
-    FROM pagos p JOIN alumnos a ON p.alumno_id = a.id
-    WHERE p.origen LIKE '%Banco%'
-    ORDER BY p.fecha DESC, p.id DESC
-    LIMIT 100
-  `);
-  res.json({ total: pagos.length, pagos });
-});
-
-// Eliminar TODOS los pagos bancarios de una fecha específica
-app.delete('/api/pagos-banco-fecha/:fecha', async (req,res) => {
-  const fecha = decodeURIComponent(req.params.fecha);
-  // Primero revertir cuotas asociadas
-  const pagos = await q("SELECT * FROM pagos WHERE origen LIKE '%Banco%' AND fecha=$1", [fecha]);
-  for (const pago of pagos) {
-    const matches = (pago.concepto||'').match(/Cuota (\d+)/g)||[];
-    for (const m of matches) {
-      const n = parseInt(m.replace('Cuota ',''));
-      await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE alumno_id=$4 AND numero_cuota=$5 AND fecha_pago=$6',
-        ['pendiente','',0,pago.alumno_id,n,fecha]);
-    }
-  }
-  const r = await q("DELETE FROM pagos WHERE origen LIKE '%Banco%' AND fecha=$1", [fecha]);
-  res.json({ ok: true, eliminados: pagos.length, fecha });
-});
-
-// Eliminar pagos bancarios del 20/5/2026 (duplicados) y revertir cuotas
-app.get('/api/limpiar-banco-20mayo', async (req,res) => {
-  const fecha = '20/5/2026';
-  const pagos = await q("SELECT * FROM pagos WHERE origen LIKE '%Banco%' AND fecha=$1", [fecha]);
-
-  let cuotasRevertidas = 0;
-  for (const pago of pagos) {
-    // Revertir cuotas que fueron marcadas por este pago específico
-    // Solo revertir si la fecha_pago coincide con 20/5/2026
-    const matches = (pago.concepto||'').match(/Cuota (\d+)/g)||[];
-    for (const m of matches) {
-      const n = parseInt(m.replace('Cuota ',''));
-      const cuota = await q1('SELECT * FROM cuotas WHERE alumno_id=$1 AND numero_cuota=$2', [pago.alumno_id, n]);
-      if (cuota && cuota.fecha_pago === fecha) {
-        await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE alumno_id=$4 AND numero_cuota=$5',
-          ['pendiente','',0,pago.alumno_id,n]);
-        cuotasRevertidas++;
-      }
-    }
-  }
-
-  await q("DELETE FROM pagos WHERE origen LIKE '%Banco%' AND fecha=$1", [fecha]);
-
-  res.json({ ok: true, pagosEliminados: pagos.length, cuotasRevertidas });
-});
-
-// Limpiar pagos bancarios que duplican pagos ya existentes (del Excel u otro origen)
-app.get('/api/limpiar-duplicados-banco', async (req,res) => {
-  // Buscar pagos bancarios que tengan el mismo alumno_id y monto que otro pago previo
-  const bancarios = await q(
-    "SELECT * FROM pagos WHERE origen LIKE '%Banco%' ORDER BY id ASC"
-  );
-
-  let eliminados = 0;
-  let cuotasRevertidas = 0;
-
-  for (const pago of bancarios) {
-    // Buscar si existe otro pago del mismo alumno con el mismo monto pero diferente id
-    const previo = await q1(
-      "SELECT id FROM pagos WHERE alumno_id=$1 AND monto=$2 AND id != $3",
-      [pago.alumno_id, pago.monto, pago.id]
-    );
-
-    if (previo) {
-      // Es un duplicado — revertir cuotas si las marcó
-      const matches = (pago.concepto||'').match(/Cuota (\d+)/g)||[];
-      for (const m of matches) {
-        const n = parseInt(m.replace('Cuota ',''));
-        const cuota = await q1(
-          'SELECT * FROM cuotas WHERE alumno_id=$1 AND numero_cuota=$2',
-          [pago.alumno_id, n]
-        );
-        // Solo revertir si la fecha_pago de la cuota coincide con la fecha del pago bancario duplicado
-        if (cuota && cuota.fecha_pago === pago.fecha) {
-          // Restaurar con datos del pago previo si corresponde
-          await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE alumno_id=$4 AND numero_cuota=$5',
-            ['pendiente','',0,pago.alumno_id,n]);
-          cuotasRevertidas++;
-        }
-      }
-      await q('DELETE FROM pagos WHERE id=$1', [pago.id]);
-      eliminados++;
-    }
-  }
-
-  res.json({ ok: true, bancariosProcesados: bancarios.length, eliminados, cuotasRevertidas });
-});
-
-// Corregir cuotas marcadas como pagadas con monto 0 → pendiente
-app.get('/api/corregir-cuotas-cero', async (req,res) => {
-  const cuotasCero = await q(
-    "SELECT c.*, a.nombre FROM cuotas c JOIN alumnos a ON c.alumno_id=a.id WHERE c.estado='pagada' AND (c.monto_pagado=0 OR c.monto_pagado IS NULL)"
-  );
-
-  let corregidas = 0;
-  for (const c of cuotasCero) {
-    // Marcar como pendiente
-    await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4',
-      ['pendiente','',0,c.id]);
-    // Eliminar el pago asociado si existe con monto 0
-    await q("DELETE FROM pagos WHERE alumno_id=$1 AND monto=0 AND concepto LIKE $2",
-      [c.alumno_id, `%Cuota ${c.numero_cuota}%`]);
-    corregidas++;
-  }
-
-  res.json({ ok: true, corregidas, detalle: cuotasCero.map(c=>({nombre:c.nombre, cuota:c.numero_cuota})) });
-});
-
-// Restaurar estado correcto de cuotas 1-3 según el Excel original
-// Solo pone como pendiente las que tienen monto=0, sin tocar las que están bien
-app.get('/api/corregir-estados-excel', async (req,res) => {
-  const ESTADOS_EXCEL = [{"nombre":"CARABAJAL ANA PAULA","cuota":1,"estado_correcto":"pagada","monto":73000.0},{"nombre":"CARABAJAL ANA PAULA","cuota":2,"estado_correcto":"pendiente","monto":0.0},{"nombre":"CARABAJAL ANA PAULA","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"MAURIN GIANA","cuota":1,"estado_correcto":"pagada","monto":73000.0},{"nombre":"MAURIN GIANA","cuota":2,"estado_correcto":"pagada","monto":73000.0},{"nombre":"MAURIN GIANA","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"MARTINEZ CARBAJO IVAN","cuota":1,"estado_correcto":"pagada","monto":73000.0},{"nombre":"MARTINEZ CARBAJO IVAN","cuota":2,"estado_correcto":"pagada","monto":73000.0},{"nombre":"MARTINEZ CARBAJO IVAN","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"NIEVA GUEMES MIA ISABELLA","cuota":1,"estado_correcto":"pagada","monto":73000.0},{"nombre":"NIEVA GUEMES MIA ISABELLA","cuota":2,"estado_correcto":"pendiente","monto":0.0},{"nombre":"NIEVA GUEMES MIA ISABELLA","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"BENICIO BELEN","cuota":1,"estado_correcto":"pagada","monto":73000.0},{"nombre":"BENICIO BELEN","cuota":2,"estado_correcto":"pagada","monto":73000.0},{"nombre":"BENICIO BELEN","cuota":3,"estado_correcto":"pagada","monto":73000.0},{"nombre":"CARI, NIRVANA","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"CARI, NIRVANA","cuota":2,"estado_correcto":"pendiente","monto":0.0},{"nombre":"CARI, NIRVANA","cuota":3,"estado_correcto":"pagada","monto":52500.0},{"nombre":"DIAZ LOLA","cuota":1,"estado_correcto":"pagada","monto":52500.0},{"nombre":"DIAZ LOLA","cuota":2,"estado_correcto":"pagada","monto":52500.0},{"nombre":"DIAZ LOLA","cuota":3,"estado_correcto":"pagada","monto":52500.0},{"nombre":"NUGHES, LEON","cuota":1,"estado_correcto":"pagada","monto":52500.0},{"nombre":"NUGHES, LEON","cuota":2,"estado_correcto":"pagada","monto":52500.0},{"nombre":"NUGHES, LEON","cuota":3,"estado_correcto":"pagada","monto":52500.0},{"nombre":"TRONCOSO ALMA","cuota":1,"estado_correcto":"pagada","monto":52500.0},{"nombre":"TRONCOSO ALMA","cuota":2,"estado_correcto":"pagada","monto":55000.0},{"nombre":"TRONCOSO ALMA","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"ALCALA, MATEO","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"ALCALA, MATEO","cuota":2,"estado_correcto":"pendiente","monto":0.0},{"nombre":"ALCALA, MATEO","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"APAZA BORELLI, VERONICA","cuota":1,"estado_correcto":"pagada","monto":81500.0},{"nombre":"APAZA BORELLI, VERONICA","cuota":2,"estado_correcto":"pagada","monto":81500.0},{"nombre":"APAZA BORELLI, VERONICA","cuota":3,"estado_correcto":"pagada","monto":81500.0},{"nombre":"GARCIA, NICOLE","cuota":1,"estado_correcto":"pagada","monto":81500.0},{"nombre":"GARCIA, NICOLE","cuota":2,"estado_correcto":"pagada","monto":81500.0},{"nombre":"GARCIA, NICOLE","cuota":3,"estado_correcto":"pagada","monto":81500.0},{"nombre":"GUZMAN, INAKI","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"GUZMAN, INAKI","cuota":2,"estado_correcto":"pagada","monto":81500.0},{"nombre":"GUZMAN, INAKI","cuota":3,"estado_correcto":"pagada","monto":81500.0},{"nombre":"LARA LUCIO","cuota":1,"estado_correcto":"pagada","monto":85500.0},{"nombre":"LARA LUCIO","cuota":2,"estado_correcto":"pagada","monto":81500.0},{"nombre":"LARA LUCIO","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"LOPEZ BERRUEZO, PILAR","cuota":1,"estado_correcto":"pagada","monto":81500.0},{"nombre":"LOPEZ BERRUEZO, PILAR","cuota":2,"estado_correcto":"pagada","monto":81500.0},{"nombre":"LOPEZ BERRUEZO, PILAR","cuota":3,"estado_correcto":"pagada","monto":81500.0},{"nombre":"RUSSO RADA, FRANCESCA","cuota":1,"estado_correcto":"pagada","monto":81500.0},{"nombre":"RUSSO RADA, FRANCESCA","cuota":2,"estado_correcto":"pagada","monto":81500.0},{"nombre":"RUSSO RADA, FRANCESCA","cuota":3,"estado_correcto":"pagada","monto":81500.0},{"nombre":"MORALES BELLIDO ALVARO","cuota":1,"estado_correcto":"pagada","monto":81500.0},{"nombre":"MORALES BELLIDO ALVARO","cuota":2,"estado_correcto":"pagada","monto":81500.0},{"nombre":"MORALES BELLIDO ALVARO","cuota":3,"estado_correcto":"pagada","monto":4000.0},{"nombre":"MARTINEZ RUIZ BAUTISTA","cuota":1,"estado_correcto":"pagada","monto":81500.0},{"nombre":"MARTINEZ RUIZ BAUTISTA","cuota":2,"estado_correcto":"pagada","monto":81500.0},{"nombre":"MARTINEZ RUIZ BAUTISTA","cuota":3,"estado_correcto":"pagada","monto":81500.0},{"nombre":"ALTOBELLI, ANA","cuota":1,"estado_correcto":"pagada","monto":81500.0},{"nombre":"ALTOBELLI, ANA","cuota":2,"estado_correcto":"pagada","monto":81500.0},{"nombre":"ALTOBELLI, ANA","cuota":3,"estado_correcto":"pagada","monto":81500.0},{"nombre":"MARTINEZ ARGANARAZ ARIEL","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"MARTINEZ ARGANARAZ ARIEL","cuota":2,"estado_correcto":"pagada","monto":171000.0},{"nombre":"MARTINEZ ARGANARAZ ARIEL","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"LOPEZ GARCIA VALENTINA","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"LOPEZ GARCIA VALENTINA","cuota":2,"estado_correcto":"pendiente","monto":0.0},{"nombre":"LOPEZ GARCIA VALENTINA","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"CARDENAS, ARACELI","cuota":1,"estado_correcto":"pagada","monto":81500.0},{"nombre":"CARDENAS, ARACELI","cuota":2,"estado_correcto":"pagada","monto":81500.0},{"nombre":"CARDENAS, ARACELI","cuota":3,"estado_correcto":"pagada","monto":81500.0},{"nombre":"MORALES, JUANA","cuota":1,"estado_correcto":"pagada","monto":85500.0},{"nombre":"MORALES, JUANA","cuota":2,"estado_correcto":"pagada","monto":81500.0},{"nombre":"MORALES, JUANA","cuota":3,"estado_correcto":"pagada","monto":81500.0},{"nombre":"MORALES, LAUTARO","cuota":1,"estado_correcto":"pagada","monto":73000.0},{"nombre":"MORALES, LAUTARO","cuota":2,"estado_correcto":"pagada","monto":73000.0},{"nombre":"MORALES, LAUTARO","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"VILLARREAL, MELANIE","cuota":1,"estado_correcto":"pagada","monto":81500.0},{"nombre":"VILLARREAL, MELANIE","cuota":2,"estado_correcto":"pagada","monto":81500.0},{"nombre":"VILLARREAL, MELANIE","cuota":3,"estado_correcto":"pagada","monto":81500.0},{"nombre":"VERCELLINO IGNACIO","cuota":1,"estado_correcto":"pagada","monto":85500.0},{"nombre":"VERCELLINO IGNACIO","cuota":2,"estado_correcto":"pendiente","monto":0.0},{"nombre":"VERCELLINO IGNACIO","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"PALACIOS ERNESTINA","cuota":1,"estado_correcto":"pagada","monto":81500.0},{"nombre":"PALACIOS ERNESTINA","cuota":2,"estado_correcto":"pagada","monto":81500.0},{"nombre":"PALACIOS ERNESTINA","cuota":3,"estado_correcto":"pagada","monto":81500.0},{"nombre":"CASAS, GUILLERMINA","cuota":1,"estado_correcto":"pagada","monto":82500.0},{"nombre":"CASAS, GUILLERMINA","cuota":2,"estado_correcto":"pagada","monto":82500.0},{"nombre":"CASAS, GUILLERMINA","cuota":3,"estado_correcto":"pagada","monto":82500.0},{"nombre":"DIAZ TORRES, JOSEFINA","cuota":1,"estado_correcto":"pagada","monto":82500.0},{"nombre":"DIAZ TORRES, JOSEFINA","cuota":2,"estado_correcto":"pagada","monto":82500.0},{"nombre":"DIAZ TORRES, JOSEFINA","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"LOPEZ, AGNES","cuota":1,"estado_correcto":"pagada","monto":82500.0},{"nombre":"LOPEZ, AGNES","cuota":2,"estado_correcto":"pagada","monto":82500.0},{"nombre":"LOPEZ, AGNES","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"MICOL, FRANCISCO","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"MICOL, FRANCISCO","cuota":2,"estado_correcto":"pendiente","monto":0.0},{"nombre":"MICOL, FRANCISCO","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"VITALE GUADALUPE","cuota":1,"estado_correcto":"pagada","monto":133000.0},{"nombre":"VITALE GUADALUPE","cuota":2,"estado_correcto":"pagada","monto":82500.0},{"nombre":"VITALE GUADALUPE","cuota":3,"estado_correcto":"pagada","monto":82500.0},{"nombre":"CAMACHO AMPARO","cuota":1,"estado_correcto":"pagada","monto":40500.0},{"nombre":"CAMACHO AMPARO","cuota":2,"estado_correcto":"pagada","monto":40500.0},{"nombre":"CAMACHO AMPARO","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"CANABIDES, ALLEGRA","cuota":1,"estado_correcto":"pagada","monto":40500.0},{"nombre":"CANABIDES, ALLEGRA","cuota":2,"estado_correcto":"pagada","monto":40500.0},{"nombre":"CANABIDES, ALLEGRA","cuota":3,"estado_correcto":"pagada","monto":40500.0},{"nombre":"FERNANDEZ AMARELIS","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FERNANDEZ AMARELIS","cuota":2,"estado_correcto":"pagada","monto":42500.0},{"nombre":"FERNANDEZ AMARELIS","cuota":3,"estado_correcto":"pagada","monto":42500.0},{"nombre":"LUNA, SANTINO","cuota":1,"estado_correcto":"pagada","monto":40500.0},{"nombre":"LUNA, SANTINO","cuota":2,"estado_correcto":"pagada","monto":40500.0},{"nombre":"LUNA, SANTINO","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"NUNEZ, ALEXANDER","cuota":1,"estado_correcto":"pagada","monto":40500.0},{"nombre":"NUNEZ, ALEXANDER","cuota":2,"estado_correcto":"pagada","monto":40500.0},{"nombre":"NUNEZ, ALEXANDER","cuota":3,"estado_correcto":"pagada","monto":40500.0},{"nombre":"QUIROGA AMPARO","cuota":1,"estado_correcto":"pagada","monto":40500.0},{"nombre":"QUIROGA AMPARO","cuota":2,"estado_correcto":"pagada","monto":40500.0},{"nombre":"QUIROGA AMPARO","cuota":3,"estado_correcto":"pagada","monto":40500.0},{"nombre":"SOSA, SANTIAGO","cuota":1,"estado_correcto":"pagada","monto":40500.0},{"nombre":"SOSA, SANTIAGO","cuota":2,"estado_correcto":"pagada","monto":40500.0},{"nombre":"SOSA, SANTIAGO","cuota":3,"estado_correcto":"pagada","monto":40500.0},{"nombre":"TOLABA CARABAJAL KARLA ARIANA","cuota":1,"estado_correcto":"pagada","monto":40500.0},{"nombre":"TOLABA CARABAJAL KARLA ARIANA","cuota":2,"estado_correcto":"pagada","monto":40500.0},{"nombre":"TOLABA CARABAJAL KARLA ARIANA","cuota":3,"estado_correcto":"pagada","monto":40500.0},{"nombre":"ZARATE LUCIA","cuota":1,"estado_correcto":"pagada","monto":40500.0},{"nombre":"ZARATE LUCIA","cuota":2,"estado_correcto":"pagada","monto":40500.0},{"nombre":"ZARATE LUCIA","cuota":3,"estado_correcto":"pagada","monto":40000.0},{"nombre":"ALVAREZ LOURDES","cuota":1,"estado_correcto":"pagada","monto":40500.0},{"nombre":"ALVAREZ LOURDES","cuota":2,"estado_correcto":"pagada","monto":40500.0},{"nombre":"ALVAREZ LOURDES","cuota":3,"estado_correcto":"pagada","monto":40500.0},{"nombre":"CABRERA AMADEO BENICIO","cuota":1,"estado_correcto":"pagada","monto":42500.0},{"nombre":"CABRERA AMADEO BENICIO","cuota":2,"estado_correcto":"pagada","monto":42500.0},{"nombre":"CABRERA AMADEO BENICIO","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"GUANCA PATRICIO MATIAS FEDERICO","cuota":1,"estado_correcto":"pagada","monto":40500.0},{"nombre":"GUANCA PATRICIO MATIAS FEDERICO","cuota":2,"estado_correcto":"pagada","monto":40500.0},{"nombre":"GUANCA PATRICIO MATIAS FEDERICO","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"CARRASCO, GAEL TIZIANO","cuota":1,"estado_correcto":"pagada","monto":40500.0},{"nombre":"CARRASCO, GAEL TIZIANO","cuota":2,"estado_correcto":"pagada","monto":42500.0},{"nombre":"CARRASCO, GAEL TIZIANO","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA AMADO RUSSO","cuota":1,"estado_correcto":"pagada","monto":155500.0},{"nombre":"FLIA AMADO RUSSO","cuota":2,"estado_correcto":"pagada","monto":155500.0},{"nombre":"FLIA AMADO RUSSO","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA BRITO","cuota":1,"estado_correcto":"pagada","monto":132500.0},{"nombre":"FLIA BRITO","cuota":2,"estado_correcto":"pagada","monto":144500.0},{"nombre":"FLIA BRITO","cuota":3,"estado_correcto":"pagada","monto":132500.0},{"nombre":"FLIA COTINI","cuota":1,"estado_correcto":"pagada","monto":100000.0},{"nombre":"FLIA COTINI","cuota":2,"estado_correcto":"pagada","monto":100000.0},{"nombre":"FLIA COTINI","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA CAYO E Y RAFAELA","cuota":1,"estado_correcto":"pagada","monto":101500.0},{"nombre":"FLIA CAYO E Y RAFAELA","cuota":2,"estado_correcto":"pagada","monto":101500.0},{"nombre":"FLIA CAYO E Y RAFAELA","cuota":3,"estado_correcto":"pagada","monto":101500.0},{"nombre":"FLIA CAYO A Y TAIEL","cuota":1,"estado_correcto":"pagada","monto":133000.0},{"nombre":"FLIA CAYO A Y TAIEL","cuota":2,"estado_correcto":"pagada","monto":267000.0},{"nombre":"FLIA CAYO A Y TAIEL","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA DIAZ MORALES","cuota":1,"estado_correcto":"pagada","monto":95000.0},{"nombre":"FLIA DIAZ MORALES","cuota":2,"estado_correcto":"pagada","monto":95000.0},{"nombre":"FLIA DIAZ MORALES","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA LACURI","cuota":1,"estado_correcto":"pagada","monto":87000.0},{"nombre":"FLIA LACURI","cuota":2,"estado_correcto":"pagada","monto":87000.0},{"nombre":"FLIA LACURI","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA MAMANI RUIZ","cuota":1,"estado_correcto":"pagada","monto":156500.0},{"nombre":"FLIA MAMANI RUIZ","cuota":2,"estado_correcto":"pagada","monto":156500.0},{"nombre":"FLIA MAMANI RUIZ","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA MARTINEZ","cuota":1,"estado_correcto":"pagada","monto":82000.0},{"nombre":"FLIA MARTINEZ","cuota":2,"estado_correcto":"pagada","monto":75500.0},{"nombre":"FLIA MARTINEZ","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA MOYA","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA MOYA","cuota":2,"estado_correcto":"pagada","monto":144500.0},{"nombre":"FLIA MOYA","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA ORTEGA","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA ORTEGA","cuota":2,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA ORTEGA","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA RAMIREZ ORTUNO","cuota":1,"estado_correcto":"pagada","monto":92500.0},{"nombre":"FLIA RAMIREZ ORTUNO","cuota":2,"estado_correcto":"pagada","monto":92500.0},{"nombre":"FLIA RAMIREZ ORTUNO","cuota":3,"estado_correcto":"pagada","monto":92500.0},{"nombre":"FLIA RIVERO","cuota":1,"estado_correcto":"pagada","monto":132500.0},{"nombre":"FLIA RIVERO","cuota":2,"estado_correcto":"pagada","monto":132500.0},{"nombre":"FLIA RIVERO","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA ROSAS","cuota":1,"estado_correcto":"pagada","monto":170500.0},{"nombre":"FLIA ROSAS","cuota":2,"estado_correcto":"pagada","monto":170500.0},{"nombre":"FLIA ROSAS","cuota":3,"estado_correcto":"pagada","monto":170500.0},{"nombre":"FLIA RUANO","cuota":1,"estado_correcto":"pagada","monto":89000.0},{"nombre":"FLIA RUANO","cuota":2,"estado_correcto":"pagada","monto":89000.0},{"nombre":"FLIA RUANO","cuota":3,"estado_correcto":"pagada","monto":89000.0},{"nombre":"FLIA OLIVEIRA BEJARANO","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA OLIVEIRA BEJARANO","cuota":2,"estado_correcto":"pagada","monto":118500.0},{"nombre":"FLIA OLIVEIRA BEJARANO","cuota":3,"estado_correcto":"pagada","monto":119000.0},{"nombre":"FLIA SANTAFE","cuota":1,"estado_correcto":"pagada","monto":101500.0},{"nombre":"FLIA SANTAFE","cuota":2,"estado_correcto":"pagada","monto":101500.0},{"nombre":"FLIA SANTAFE","cuota":3,"estado_correcto":"pagada","monto":101500.0},{"nombre":"FLIA GITIAN","cuota":1,"estado_correcto":"pagada","monto":87000.0},{"nombre":"FLIA GITIAN","cuota":2,"estado_correcto":"pagada","monto":261000.0},{"nombre":"FLIA GITIAN","cuota":3,"estado_correcto":"pagada","monto":128000.0},{"nombre":"FLIA SARAVIA","cuota":1,"estado_correcto":"pagada","monto":127000.0},{"nombre":"FLIA SARAVIA","cuota":2,"estado_correcto":"pagada","monto":127000.0},{"nombre":"FLIA SARAVIA","cuota":3,"estado_correcto":"pagada","monto":127000.0},{"nombre":"FLIA SUAREZ","cuota":1,"estado_correcto":"pagada","monto":87000.0},{"nombre":"FLIA SUAREZ","cuota":2,"estado_correcto":"pagada","monto":87000.0},{"nombre":"FLIA SUAREZ","cuota":3,"estado_correcto":"pagada","monto":87000.0},{"nombre":"FLIA TACTAGI","cuota":1,"estado_correcto":"pagada","monto":132500.0},{"nombre":"FLIA TACTAGI","cuota":2,"estado_correcto":"pagada","monto":132500.0},{"nombre":"FLIA TACTAGI","cuota":3,"estado_correcto":"pagada","monto":132500.0},{"nombre":"FLIA TEJERINA","cuota":1,"estado_correcto":"pagada","monto":133000.0},{"nombre":"FLIA TEJERINA","cuota":2,"estado_correcto":"pagada","monto":133000.0},{"nombre":"FLIA TEJERINA","cuota":3,"estado_correcto":"pagada","monto":133000.0},{"nombre":"FLIA TOLABA","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA TOLABA","cuota":2,"estado_correcto":"pagada","monto":202000.0},{"nombre":"FLIA TOLABA","cuota":3,"estado_correcto":"pagada","monto":106000.0},{"nombre":"FLIA VACA MONASTEROLO","cuota":1,"estado_correcto":"pagada","monto":156000.0},{"nombre":"FLIA VACA MONASTEROLO","cuota":2,"estado_correcto":"pagada","monto":156000.0},{"nombre":"FLIA VACA MONASTEROLO","cuota":3,"estado_correcto":"pagada","monto":156000.0},{"nombre":"FLIA VERCELLINO R","cuota":1,"estado_correcto":"pagada","monto":87000.0},{"nombre":"FLIA VERCELLINO R","cuota":2,"estado_correcto":"pagada","monto":87000.0},{"nombre":"FLIA VERCELLINO R","cuota":3,"estado_correcto":"pagada","monto":89000.0},{"nombre":"FLIA VILLAFANE GUITIAN","cuota":1,"estado_correcto":"pagada","monto":101500.0},{"nombre":"FLIA VILLAFANE GUITIAN","cuota":2,"estado_correcto":"pagada","monto":101500.0},{"nombre":"FLIA VILLAFANE GUITIAN","cuota":3,"estado_correcto":"pagada","monto":101500.0},{"nombre":"FLIA LIENDRO","cuota":1,"estado_correcto":"pagada","monto":167500.0},{"nombre":"FLIA LIENDRO","cuota":2,"estado_correcto":"pagada","monto":167500.0},{"nombre":"FLIA LIENDRO","cuota":3,"estado_correcto":"pagada","monto":167500.0},{"nombre":"FLIA CARI","cuota":1,"estado_correcto":"pagada","monto":101200.0},{"nombre":"FLIA CARI","cuota":2,"estado_correcto":"pagada","monto":97000.0},{"nombre":"FLIA CARI","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA RIOS","cuota":1,"estado_correcto":"pagada","monto":132500.0},{"nombre":"FLIA RIOS","cuota":2,"estado_correcto":"pagada","monto":132500.0},{"nombre":"FLIA RIOS","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA MARTINEZ ISAIAS TOBIAS","cuota":1,"estado_correcto":"pagada","monto":52500.0},{"nombre":"FLIA MARTINEZ ISAIAS TOBIAS","cuota":2,"estado_correcto":"pagada","monto":52500.0},{"nombre":"FLIA MARTINEZ ISAIAS TOBIAS","cuota":3,"estado_correcto":"pagada","monto":52500.0},{"nombre":"FLIA GASPAR GUITIAN","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA GASPAR GUITIAN","cuota":2,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA GASPAR GUITIAN","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA FECCIA","cuota":1,"estado_correcto":"pagada","monto":91500.0},{"nombre":"FLIA FECCIA","cuota":2,"estado_correcto":"pagada","monto":91500.0},{"nombre":"FLIA FECCIA","cuota":3,"estado_correcto":"pagada","monto":91500.0},{"nombre":"FLIA RIOS THIAGO RUTH","cuota":1,"estado_correcto":"pagada","monto":154000.0},{"nombre":"FLIA RIOS THIAGO RUTH","cuota":2,"estado_correcto":"pagada","monto":138500.0},{"nombre":"FLIA RIOS THIAGO RUTH","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLIA CASIMIRO","cuota":1,"estado_correcto":"pagada","monto":118000.0},{"nombre":"FLIA CASIMIRO","cuota":2,"estado_correcto":"pagada","monto":129000.0},{"nombre":"FLIA CASIMIRO","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"ANTUNA MAITENA","cuota":1,"estado_correcto":"pagada","monto":56000.0},{"nombre":"ANTUNA MAITENA","cuota":2,"estado_correcto":"pagada","monto":50000.0},{"nombre":"ANTUNA MAITENA","cuota":3,"estado_correcto":"pagada","monto":50000.0},{"nombre":"CABRAL SIMON","cuota":1,"estado_correcto":"pagada","monto":56000.0},{"nombre":"CABRAL SIMON","cuota":2,"estado_correcto":"pagada","monto":56000.0},{"nombre":"CABRAL SIMON","cuota":3,"estado_correcto":"pagada","monto":56000.0},{"nombre":"CARDENAS, MAILEN","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"CARDENAS, MAILEN","cuota":2,"estado_correcto":"pendiente","monto":0.0},{"nombre":"CARDENAS, MAILEN","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"CRUZ, LUDMILA","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"CRUZ, LUDMILA","cuota":2,"estado_correcto":"pendiente","monto":0.0},{"nombre":"CRUZ, LUDMILA","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"GUANCA, YAHIR","cuota":1,"estado_correcto":"pagada","monto":56000.0},{"nombre":"GUANCA, YAHIR","cuota":2,"estado_correcto":"pagada","monto":56000.0},{"nombre":"GUANCA, YAHIR","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"SORIA LIENDRO, LIA","cuota":1,"estado_correcto":"pagada","monto":56000.0},{"nombre":"SORIA LIENDRO, LIA","cuota":2,"estado_correcto":"pagada","monto":56000.0},{"nombre":"SORIA LIENDRO, LIA","cuota":3,"estado_correcto":"pagada","monto":56000.0},{"nombre":"CRUZ, EMA ISABELLA","cuota":1,"estado_correcto":"pagada","monto":56000.0},{"nombre":"CRUZ, EMA ISABELLA","cuota":2,"estado_correcto":"pagada","monto":5950.0},{"nombre":"CRUZ, EMA ISABELLA","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"ROJAS, JAZMIN","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"ROJAS, JAZMIN","cuota":2,"estado_correcto":"pagada","monto":56000.0},{"nombre":"ROJAS, JAZMIN","cuota":3,"estado_correcto":"pagada","monto":56000.0},{"nombre":"REALES, LAUTARO","cuota":1,"estado_correcto":"pagada","monto":59000.0},{"nombre":"REALES, LAUTARO","cuota":2,"estado_correcto":"pagada","monto":59000.0},{"nombre":"REALES, LAUTARO","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"SEGURA, VICTORIA","cuota":1,"estado_correcto":"pagada","monto":56000.0},{"nombre":"SEGURA, VICTORIA","cuota":2,"estado_correcto":"pagada","monto":56000.0},{"nombre":"SEGURA, VICTORIA","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"SOTILLO CATALINA","cuota":1,"estado_correcto":"pagada","monto":59000.0},{"nombre":"SOTILLO CATALINA","cuota":2,"estado_correcto":"pagada","monto":56000.0},{"nombre":"SOTILLO CATALINA","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"YAPURA, BAUTISTA","cuota":1,"estado_correcto":"pagada","monto":56000.0},{"nombre":"YAPURA, BAUTISTA","cuota":2,"estado_correcto":"pagada","monto":50000.0},{"nombre":"YAPURA, BAUTISTA","cuota":3,"estado_correcto":"pagada","monto":50000.0},{"nombre":"ROBLEDO MAXIMO","cuota":1,"estado_correcto":"pagada","monto":56000.0},{"nombre":"ROBLEDO MAXIMO","cuota":2,"estado_correcto":"pagada","monto":56000.0},{"nombre":"ROBLEDO MAXIMO","cuota":3,"estado_correcto":"pagada","monto":56000.0},{"nombre":"LAIME, DAIANA","cuota":1,"estado_correcto":"pagada","monto":56000.0},{"nombre":"LAIME, DAIANA","cuota":2,"estado_correcto":"pagada","monto":56000.0},{"nombre":"LAIME, DAIANA","cuota":3,"estado_correcto":"pagada","monto":112000.0},{"nombre":"ORELLANA, ORIANA","cuota":1,"estado_correcto":"pagada","monto":56000.0},{"nombre":"ORELLANA, ORIANA","cuota":2,"estado_correcto":"pagada","monto":56000.0},{"nombre":"ORELLANA, ORIANA","cuota":3,"estado_correcto":"pagada","monto":56000.0},{"nombre":"RICCO, TIZIANO","cuota":1,"estado_correcto":"pagada","monto":56000.0},{"nombre":"RICCO, TIZIANO","cuota":2,"estado_correcto":"pagada","monto":56000.0},{"nombre":"RICCO, TIZIANO","cuota":3,"estado_correcto":"pagada","monto":112000.0},{"nombre":"RODRIGUEZ, GENESIS","cuota":1,"estado_correcto":"pagada","monto":56000.0},{"nombre":"RODRIGUEZ, GENESIS","cuota":2,"estado_correcto":"pagada","monto":56000.0},{"nombre":"RODRIGUEZ, GENESIS","cuota":3,"estado_correcto":"pagada","monto":56000.0},{"nombre":"TOLABA, JEREMIAS","cuota":1,"estado_correcto":"pagada","monto":56000.0},{"nombre":"TOLABA, JEREMIAS","cuota":2,"estado_correcto":"pagada","monto":56000.0},{"nombre":"TOLABA, JEREMIAS","cuota":3,"estado_correcto":"pagada","monto":56000.0},{"nombre":"ALCALA BAUTISTA","cuota":1,"estado_correcto":"pagada","monto":56000.0},{"nombre":"ALCALA BAUTISTA","cuota":2,"estado_correcto":"pagada","monto":56000.0},{"nombre":"ALCALA BAUTISTA","cuota":3,"estado_correcto":"pagada","monto":56000.0},{"nombre":"MOLINA GUADALUPE","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"MOLINA GUADALUPE","cuota":2,"estado_correcto":"pendiente","monto":0.0},{"nombre":"MOLINA GUADALUPE","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"CARRASCO, MATEO","cuota":1,"estado_correcto":"pagada","monto":45500.0},{"nombre":"CARRASCO, MATEO","cuota":2,"estado_correcto":"pagada","monto":45500.0},{"nombre":"CARRASCO, MATEO","cuota":3,"estado_correcto":"pagada","monto":45500.0},{"nombre":"CESPEDES PUPPI, JUAN EMILIO","cuota":1,"estado_correcto":"pagada","monto":45500.0},{"nombre":"CESPEDES PUPPI, JUAN EMILIO","cuota":2,"estado_correcto":"pagada","monto":45500.0},{"nombre":"CESPEDES PUPPI, JUAN EMILIO","cuota":3,"estado_correcto":"pagada","monto":45500.0},{"nombre":"CHOQUE JESUS GABRIEL","cuota":1,"estado_correcto":"pagada","monto":45500.0},{"nombre":"CHOQUE JESUS GABRIEL","cuota":2,"estado_correcto":"pagada","monto":48000.0},{"nombre":"CHOQUE JESUS GABRIEL","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"GARCIA CARBAJAL, VALENTINO GABRIEL","cuota":1,"estado_correcto":"pagada","monto":45500.0},{"nombre":"GARCIA CARBAJAL, VALENTINO GABRIEL","cuota":2,"estado_correcto":"pendiente","monto":0.0},{"nombre":"GARCIA CARBAJAL, VALENTINO GABRIEL","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"FLORES LUCAS","cuota":1,"estado_correcto":"pagada","monto":45500.0},{"nombre":"FLORES LUCAS","cuota":2,"estado_correcto":"pagada","monto":48000.0},{"nombre":"FLORES LUCAS","cuota":3,"estado_correcto":"pagada","monto":45500.0},{"nombre":"GERON CARMEN","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"GERON CARMEN","cuota":2,"estado_correcto":"pagada","monto":96000.0},{"nombre":"GERON CARMEN","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"GUTIERREZ, EMMA","cuota":1,"estado_correcto":"pagada","monto":45500.0},{"nombre":"GUTIERREZ, EMMA","cuota":2,"estado_correcto":"pagada","monto":45500.0},{"nombre":"GUTIERREZ, EMMA","cuota":3,"estado_correcto":"pagada","monto":45500.0},{"nombre":"MONTES, LOLA","cuota":1,"estado_correcto":"pagada","monto":45500.0},{"nombre":"MONTES, LOLA","cuota":2,"estado_correcto":"pagada","monto":45500.0},{"nombre":"MONTES, LOLA","cuota":3,"estado_correcto":"pagada","monto":45000.0},{"nombre":"PARRILLA, VALENTINA","cuota":1,"estado_correcto":"pagada","monto":45500.0},{"nombre":"PARRILLA, VALENTINA","cuota":2,"estado_correcto":"pagada","monto":45500.0},{"nombre":"PARRILLA, VALENTINA","cuota":3,"estado_correcto":"pagada","monto":45500.0},{"nombre":"POSADAS, JEREMIAS","cuota":1,"estado_correcto":"pagada","monto":45500.0},{"nombre":"POSADAS, JEREMIAS","cuota":2,"estado_correcto":"pagada","monto":45500.0},{"nombre":"POSADAS, JEREMIAS","cuota":3,"estado_correcto":"pagada","monto":45500.0},{"nombre":"RIVERO, AGUSTIN","cuota":1,"estado_correcto":"pagada","monto":45500.0},{"nombre":"RIVERO, AGUSTIN","cuota":2,"estado_correcto":"pagada","monto":45500.0},{"nombre":"RIVERO, AGUSTIN","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"SANGUEZO MIRANDA, LUZ","cuota":1,"estado_correcto":"pagada","monto":45500.0},{"nombre":"SANGUEZO MIRANDA, LUZ","cuota":2,"estado_correcto":"pagada","monto":91000.0},{"nombre":"SANGUEZO MIRANDA, LUZ","cuota":3,"estado_correcto":"pagada","monto":45500.0},{"nombre":"TERCERO, MATEO","cuota":1,"estado_correcto":"pagada","monto":48000.0},{"nombre":"TERCERO, MATEO","cuota":2,"estado_correcto":"pendiente","monto":0.0},{"nombre":"TERCERO, MATEO","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"VEDIA, FELIPE","cuota":1,"estado_correcto":"pagada","monto":45500.0},{"nombre":"VEDIA, FELIPE","cuota":2,"estado_correcto":"pagada","monto":45500.0},{"nombre":"VEDIA, FELIPE","cuota":3,"estado_correcto":"pagada","monto":45500.0},{"nombre":"VELA, NAHIARA","cuota":1,"estado_correcto":"pagada","monto":45500.0},{"nombre":"VELA, NAHIARA","cuota":2,"estado_correcto":"pagada","monto":45500.0},{"nombre":"VELA, NAHIARA","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"ZARATE FRANCESCA","cuota":1,"estado_correcto":"pagada","monto":45500.0},{"nombre":"ZARATE FRANCESCA","cuota":2,"estado_correcto":"pagada","monto":45500.0},{"nombre":"ZARATE FRANCESCA","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"NERI SALVADOR","cuota":1,"estado_correcto":"pagada","monto":45500.0},{"nombre":"NERI SALVADOR","cuota":2,"estado_correcto":"pagada","monto":45500.0},{"nombre":"NERI SALVADOR","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"CARMEN GUILLERMINA","cuota":1,"estado_correcto":"pagada","monto":48000.0},{"nombre":"CARMEN GUILLERMINA","cuota":2,"estado_correcto":"pagada","monto":45500.0},{"nombre":"CARMEN GUILLERMINA","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"ABALOS, AYLEN","cuota":1,"estado_correcto":"pagada","monto":50500.0},{"nombre":"ABALOS, AYLEN","cuota":2,"estado_correcto":"pendiente","monto":0.0},{"nombre":"ABALOS, AYLEN","cuota":3,"estado_correcto":"pagada","monto":50500.0},{"nombre":"ACOSTA MIA","cuota":1,"estado_correcto":"pagada","monto":50500.0},{"nombre":"ACOSTA MIA","cuota":2,"estado_correcto":"pagada","monto":50500.0},{"nombre":"ACOSTA MIA","cuota":3,"estado_correcto":"pagada","monto":50500.0},{"nombre":"AGUILERA, MIA","cuota":1,"estado_correcto":"pagada","monto":50500.0},{"nombre":"AGUILERA, MIA","cuota":2,"estado_correcto":"pagada","monto":50500.0},{"nombre":"AGUILERA, MIA","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"ANTONELLI, DONATO","cuota":1,"estado_correcto":"pagada","monto":50500.0},{"nombre":"ANTONELLI, DONATO","cuota":2,"estado_correcto":"pagada","monto":50500.0},{"nombre":"ANTONELLI, DONATO","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"CAMPOS GIOVANI","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"CAMPOS GIOVANI","cuota":2,"estado_correcto":"pendiente","monto":0.0},{"nombre":"CAMPOS GIOVANI","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"CASTRO, AGUSTIN","cuota":1,"estado_correcto":"pagada","monto":50500.0},{"nombre":"CASTRO, AGUSTIN","cuota":2,"estado_correcto":"pagada","monto":50500.0},{"nombre":"CASTRO, AGUSTIN","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"GOMEZ, NAZARENO","cuota":1,"estado_correcto":"pagada","monto":50500.0},{"nombre":"GOMEZ, NAZARENO","cuota":2,"estado_correcto":"pagada","monto":50500.0},{"nombre":"GOMEZ, NAZARENO","cuota":3,"estado_correcto":"pagada","monto":50500.0},{"nombre":"GUTIERREZ, ZOEMI","cuota":1,"estado_correcto":"pagada","monto":45500.0},{"nombre":"GUTIERREZ, ZOEMI","cuota":2,"estado_correcto":"pagada","monto":45000.0},{"nombre":"GUTIERREZ, ZOEMI","cuota":3,"estado_correcto":"pagada","monto":45000.0},{"nombre":"PERALES, MARIA CECILIA","cuota":1,"estado_correcto":"pagada","monto":50500.0},{"nombre":"PERALES, MARIA CECILIA","cuota":2,"estado_correcto":"pagada","monto":50500.0},{"nombre":"PERALES, MARIA CECILIA","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"PERCINO, NAHIARA","cuota":1,"estado_correcto":"pagada","monto":50500.0},{"nombre":"PERCINO, NAHIARA","cuota":2,"estado_correcto":"pagada","monto":53000.0},{"nombre":"PERCINO, NAHIARA","cuota":3,"estado_correcto":"pagada","monto":50500.0},{"nombre":"TOLABA, ESTEFANIA","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"TOLABA, ESTEFANIA","cuota":2,"estado_correcto":"pagada","monto":53000.0},{"nombre":"TOLABA, ESTEFANIA","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"TOMASINI AGUSTIN","cuota":1,"estado_correcto":"pagada","monto":50500.0},{"nombre":"TOMASINI AGUSTIN","cuota":2,"estado_correcto":"pagada","monto":50500.0},{"nombre":"TOMASINI AGUSTIN","cuota":3,"estado_correcto":"pagada","monto":50500.0},{"nombre":"YURKINA, MISAEL","cuota":1,"estado_correcto":"pagada","monto":45000.0},{"nombre":"YURKINA, MISAEL","cuota":2,"estado_correcto":"pagada","monto":45500.0},{"nombre":"YURKINA, MISAEL","cuota":3,"estado_correcto":"pagada","monto":45500.0},{"nombre":"VARGAS THIAGO","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"VARGAS THIAGO","cuota":2,"estado_correcto":"pagada","monto":50500.0},{"nombre":"VARGAS THIAGO","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"TAGLIOLI ANA","cuota":1,"estado_correcto":"pagada","monto":53000.0},{"nombre":"TAGLIOLI ANA","cuota":2,"estado_correcto":"pagada","monto":50500.0},{"nombre":"TAGLIOLI ANA","cuota":3,"estado_correcto":"pagada","monto":50500.0},{"nombre":"VILCA ESPERANZA","cuota":1,"estado_correcto":"pagada","monto":50500.0},{"nombre":"VILCA ESPERANZA","cuota":2,"estado_correcto":"pagada","monto":50500.0},{"nombre":"VILCA ESPERANZA","cuota":3,"estado_correcto":"pagada","monto":50500.0},{"nombre":"FACCHIN, OLIVIA","cuota":1,"estado_correcto":"pagada","monto":50500.0},{"nombre":"FACCHIN, OLIVIA","cuota":2,"estado_correcto":"pagada","monto":50500.0},{"nombre":"FACCHIN, OLIVIA","cuota":3,"estado_correcto":"pagada","monto":50500.0},{"nombre":"LOPEZ ESTEFANIA","cuota":1,"estado_correcto":"pagada","monto":111000.0},{"nombre":"LOPEZ ESTEFANIA","cuota":2,"estado_correcto":"pagada","monto":90000.0},{"nombre":"LOPEZ ESTEFANIA","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"MANSILLA, ABRIL","cuota":1,"estado_correcto":"pagada","monto":50500.0},{"nombre":"MANSILLA, ABRIL","cuota":2,"estado_correcto":"pagada","monto":50500.0},{"nombre":"MANSILLA, ABRIL","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"MONDAQUE SABRINA","cuota":1,"estado_correcto":"pagada","monto":50500.0},{"nombre":"MONDAQUE SABRINA","cuota":2,"estado_correcto":"pagada","monto":50500.0},{"nombre":"MONDAQUE SABRINA","cuota":3,"estado_correcto":"pagada","monto":50500.0},{"nombre":"REMENTERIA ISABEL","cuota":1,"estado_correcto":"pagada","monto":93000.0},{"nombre":"REMENTERIA ISABEL","cuota":2,"estado_correcto":"pagada","monto":50500.0},{"nombre":"REMENTERIA ISABEL","cuota":3,"estado_correcto":"pagada","monto":50500.0},{"nombre":"MOSA, TADEO","cuota":1,"estado_correcto":"pagada","monto":50500.0},{"nombre":"MOSA, TADEO","cuota":2,"estado_correcto":"pagada","monto":50500.0},{"nombre":"MOSA, TADEO","cuota":3,"estado_correcto":"pagada","monto":50500.0},{"nombre":"OROZCO, LAUTARO","cuota":1,"estado_correcto":"pagada","monto":50500.0},{"nombre":"OROZCO, LAUTARO","cuota":2,"estado_correcto":"pagada","monto":50500.0},{"nombre":"OROZCO, LAUTARO","cuota":3,"estado_correcto":"pagada","monto":50500.0},{"nombre":"ORTEGA MARCOS","cuota":1,"estado_correcto":"pagada","monto":53000.0},{"nombre":"ORTEGA MARCOS","cuota":2,"estado_correcto":"pendiente","monto":0.0},{"nombre":"ORTEGA MARCOS","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"VILLANUEVA CARLOS","cuota":1,"estado_correcto":"pagada","monto":50500.0},{"nombre":"VILLANUEVA CARLOS","cuota":2,"estado_correcto":"pagada","monto":50500.0},{"nombre":"VILLANUEVA CARLOS","cuota":3,"estado_correcto":"pagada","monto":50500.0},{"nombre":"GUAYMAS ZERPA, CIRO","cuota":1,"estado_correcto":"pagada","monto":45000.0},{"nombre":"GUAYMAS ZERPA, CIRO","cuota":2,"estado_correcto":"pagada","monto":45000.0},{"nombre":"GUAYMAS ZERPA, CIRO","cuota":3,"estado_correcto":"pagada","monto":45000.0},{"nombre":"CABELLO ALMA","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"CABELLO ALMA","cuota":2,"estado_correcto":"pagada","monto":50500.0},{"nombre":"CABELLO ALMA","cuota":3,"estado_correcto":"pagada","monto":53000.0},{"nombre":"FIRME TIZIANO","cuota":1,"estado_correcto":"pagada","monto":53000.0},{"nombre":"FIRME TIZIANO","cuota":2,"estado_correcto":"pagada","monto":50500.0},{"nombre":"FIRME TIZIANO","cuota":3,"estado_correcto":"pagada","monto":50500.0},{"nombre":"CHAVEZ DI PAULI CATALINA","cuota":1,"estado_correcto":"pagada","monto":29000.0},{"nombre":"CHAVEZ DI PAULI CATALINA","cuota":2,"estado_correcto":"pagada","monto":27500.0},{"nombre":"CHAVEZ DI PAULI CATALINA","cuota":3,"estado_correcto":"pagada","monto":27500.0},{"nombre":"MAMANI, FELICITAS","cuota":1,"estado_correcto":"pagada","monto":27500.0},{"nombre":"MAMANI, FELICITAS","cuota":2,"estado_correcto":"pagada","monto":29000.0},{"nombre":"MAMANI, FELICITAS","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"ALANCAY DEMIR","cuota":1,"estado_correcto":"pendiente","monto":0.0},{"nombre":"ALANCAY DEMIR","cuota":2,"estado_correcto":"pagada","monto":27500.0},{"nombre":"ALANCAY DEMIR","cuota":3,"estado_correcto":"pendiente","monto":0.0},{"nombre":"RAMPULLA, GINO","cuota":1,"estado_correcto":"pagada","monto":27500.0},{"nombre":"RAMPULLA, GINO","cuota":2,"estado_correcto":"pagada","monto":27500.0},{"nombre":"RAMPULLA, GINO","cuota":3,"estado_correcto":"pagada","monto":27500.0},{"nombre":"ZERPA, MATHEO","cuota":1,"estado_correcto":"pagada","monto":24700.0},{"nombre":"ZERPA, MATHEO","cuota":2,"estado_correcto":"pagada","monto":24700.0},{"nombre":"ZERPA, MATHEO","cuota":3,"estado_correcto":"pagada","monto":24700.0},{"nombre":"APARICIO ROYANO NAHYARA","cuota":1,"estado_correcto":"pagada","monto":27500.0},{"nombre":"APARICIO ROYANO NAHYARA","cuota":2,"estado_correcto":"pagada","monto":27500.0},{"nombre":"APARICIO ROYANO NAHYARA","cuota":3,"estado_correcto":"pagada","monto":27500.0},{"nombre":"VILTE PAZ LORENA SOL","cuota":1,"estado_correcto":"pagada","monto":27500.0},{"nombre":"VILTE PAZ LORENA SOL","cuota":2,"estado_correcto":"pagada","monto":27500.0},{"nombre":"VILTE PAZ LORENA SOL","cuota":3,"estado_correcto":"pagada","monto":27500.0},{"nombre":"CORONEL LAUTARO","cuota":1,"estado_correcto":"pagada","monto":29000.0},{"nombre":"CORONEL LAUTARO","cuota":2,"estado_correcto":"pagada","monto":27500.0},{"nombre":"CORONEL LAUTARO","cuota":3,"estado_correcto":"pagada","monto":27500.0},{"nombre":"VILLANUEVA FRANCISCO","cuota":1,"estado_correcto":"pagada","monto":29000.0},{"nombre":"VILLANUEVA FRANCISCO","cuota":2,"estado_correcto":"pagada","monto":25000.0},{"nombre":"VILLANUEVA FRANCISCO","cuota":3,"estado_correcto":"pagada","monto":27500.0}];
-
-  let corregidas = 0;
-  const errores = [];
-
-  for (const item of ESTADOS_EXCEL) {
-    if (item.estado_correcto !== 'pendiente') continue;
-
-    // Buscar el alumno
-    const alumno = await q1('SELECT id FROM alumnos WHERE nombre = $1', [item.nombre]);
-    if (!alumno) { errores.push('No encontrado: ' + item.nombre); continue; }
-
-    // Verificar si la cuota está mal (pagada cuando debería ser pendiente)
-    const cuota = await q1('SELECT * FROM cuotas WHERE alumno_id=$1 AND numero_cuota=$2', [alumno.id, item.cuota]);
-    if (cuota && cuota.estado === 'pagada') {
-      await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE alumno_id=$4 AND numero_cuota=$5',
-        ['pendiente','',0,alumno.id,item.cuota]);
-      corregidas++;
-    }
-  }
-
-  res.json({ ok: true, corregidas, errores, mensaje: `${corregidas} cuotas corregidas al estado original del Excel` });
-});
-
-// Corregir cuota específica de un alumno
-app.get('/api/corregir-cuota/:alumnoId/:numCuota/:estado', async (req,res) => {
-  const { alumnoId, numCuota, estado } = req.params;
-  if (!['pagada','pendiente'].includes(estado)) return res.json({ ok: false, error: 'Estado inválido' });
-  if (estado === 'pendiente') {
-    await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE alumno_id=$4 AND numero_cuota=$5',
-      ['pendiente','',0,alumnoId,numCuota]);
-  }
-  res.json({ ok: true, alumnoId, numCuota, estado });
-});
-
-// Re-aplicar pagos bancarios que quedaron sin cuota asignada
-app.get('/api/reaplicar-pagos-banco', async (req,res) => {
-  const dia = 19; // Día de pago original del banco
-  let aplicados = 0;
-
-  // Buscar pagos bancarios cuyo concepto es "Transferencia bancaria" (sin cuota asignada)
-  const pagosHuerfanos = await q(
-    "SELECT p.*, a.precio_normal, a.precio_bonificado FROM pagos p JOIN alumnos a ON p.alumno_id=a.id WHERE p.origen LIKE '%Banco%' AND (p.concepto='Transferencia bancaria' OR p.concepto LIKE '%saldo%')"
-  );
-
-  for (const pago of pagosHuerfanos) {
-    const pendientes = await q(
-      'SELECT * FROM cuotas WHERE alumno_id=$1 AND estado=$2 ORDER BY numero_cuota',
-      [pago.alumno_id, 'pendiente']
-    );
-    if (!pendientes.length) continue;
-
-    let restante = parseFloat(pago.monto);
-    const conceptos = [];
-
-    for (const c of pendientes) {
-      if (restante <= 0) break;
-      const esBonif = MESES_TODO_EL_MES.includes(c.numero_cuota) || dia <= 10;
-      const precio = esBonif ? parseFloat(pago.precio_bonificado) : parseFloat(pago.precio_normal);
-      if (restante >= precio) {
-        await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4',
-          ['pagada', pago.fecha, precio, c.id]);
-        conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota-1]} 2026)`);
-        restante -= precio;
-      }
-    }
-
-    if (conceptos.length > 0) {
-      const nuevoConc = conceptos.join(', ') + (restante > 0 ? ` + saldo $${Math.round(restante).toLocaleString('es-AR')}` : '');
-      await q('UPDATE pagos SET concepto=$1 WHERE id=$2', [nuevoConc, pago.id]);
-      aplicados++;
-    }
-  }
-
-  res.json({ ok: true, pagosReaplicados: aplicados, mensaje: `${aplicados} pagos bancarios re-aplicados a cuotas` });
-});
-
-// Aplicar saldo disponible a cuotas pendientes para todos los alumnos con saldo sin aplicar
-app.get('/api/aplicar-saldos-pendientes', async (req,res) => {
-  const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
-  let corregidos = 0;
-  const detalle = [];
-
-  for (const a of alumnos) {
-    const totalPagado = parseFloat((await q1('SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE alumno_id=$1',[a.id]))?.t||0);
-    const cuotas = await q('SELECT * FROM cuotas WHERE alumno_id=$1 ORDER BY numero_cuota',[a.id]);
-    const totalAplicado = cuotas.filter(c=>c.estado==='pagada').reduce((s,c)=>s+parseFloat(c.monto_pagado||0),0);
-    let saldo = totalPagado - totalAplicado;
-
-    if (saldo < 100) continue;
-
-    const pendientes = cuotas.filter(c=>c.estado==='pendiente').sort((a,b)=>a.numero_cuota-b.numero_cuota);
-    if (!pendientes.length) continue;
-
-    const dia = 19; // Día de referencia para precios
-    const cuotasAplicadas = [];
-
-    for (const c of pendientes) {
-      if (saldo <= 0) break;
-      const esBonif = MESES_TODO_EL_MES.includes(c.numero_cuota) || dia <= 10;
-      const precio = esBonif ? parseFloat(a.precio_bonificado) : parseFloat(a.precio_normal);
-      if (saldo >= precio * 0.9) { // 90% mínimo para cubrir la cuota
-        await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4',
-          ['pagada', '19/5/2026', precio, c.id]);
-        cuotasAplicadas.push(c.numero_cuota);
-        saldo -= precio;
-      }
-    }
-
-    if (cuotasAplicadas.length > 0) {
-      // Actualizar concepto del último pago bancario
-      const ultimoPago = await q1(
-        "SELECT * FROM pagos WHERE alumno_id=$1 AND origen LIKE '%Banco%' ORDER BY id DESC LIMIT 1",
-        [a.id]
-      );
-      if (ultimoPago) {
-        const nuevoConc = ultimoPago.concepto + ', ' + cuotasAplicadas.map(n=>`Cuota ${n} (${MESES_NOMBRE_ALL[n-1]} 2026)`).join(', ');
-        await q('UPDATE pagos SET concepto=$1 WHERE id=$2',[nuevoConc, ultimoPago.id]);
-      }
-      corregidos++;
-      detalle.push({ nombre: a.nombre, cuotasAplicadas });
-    }
-  }
-
-  res.json({ ok: true, corregidos, detalle });
-});
-
-// Verificar qué alumnos tienen saldo sin aplicar (pagos sin cuota asignada)
-app.get('/api/diagnostico/saldos-sin-aplicar', async (req,res) => {
-  const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
-  const resultado = [];
-  for (const a of alumnos) {
-    const totalPagado = parseFloat((await q1('SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE alumno_id=$1',[a.id]))?.t||0);
-    const cuotas = await q('SELECT * FROM cuotas WHERE alumno_id=$1',[a.id]);
-    const totalAplicado = cuotas.filter(c=>c.estado==='pagada').reduce((s,c)=>s+parseFloat(c.monto_pagado||0),0);
-    const saldo = totalPagado - totalAplicado;
-    if (saldo >= 100) {
-      const pendientes = cuotas.filter(c=>c.estado==='pendiente').map(c=>c.numero_cuota);
-      resultado.push({ nombre: a.nombre, id: a.id, totalPagado, totalAplicado, saldo, cuotasPendientes: pendientes });
-    }
-  }
-  res.json({ total: resultado.length, alumnos: resultado });
-});
-
-// Ruta manual para ejecutar backup
-app.get('/api/backup', (req,res) => {
-  res.set('Content-Type','application/json');
-  res.send('{"ok":true}');
-  // Ejecutar backup después de responder
-  ejecutarBackup().catch(e => console.error('Error backup:', e));
-});
-
-// ================================================================
-// BACKUP AUTOMÁTICO A GOOGLE SHEETS
-// ================================================================
-const SHEET_ID = '16aU_TffL58PWkSGIIMj3JkSCtj1kh682bsF8zshexsE';
-const SERVICE_ACCOUNT = {
-  client_email: 'cobranzas-backup@crypto-trail-496813-t8.iam.gserviceaccount.com',
-  private_key: '-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCwwZw/OdSOveeU\nu34q2g3Z3h8CsvfqgR8RqqA7t7c8xMTeT5/poK1IF2tNRcVUIsE77zplj11bgdmD\nkG/hPgGamq6HYJNwMYuahOFwB79p6ei0NMz0ecxzta2CVmjuNhVL0QlelGGumEby\nCxnphxywOhi+z+26PjFS4CGbw+zzgSLVBXg8JCthyUcdnIh0zb2057an8d+9tQ+3\nmlLDg1NYh6dg5VVXzbmK4GoNwoPT7O0c7UXoj08KW1ptLgIekOTxLqPOv/Go9B84\n1juPJdljqCWe43OPhiC/Rh730UIwowPW0qqopxKmi5R7FJcPXOC4VpB5VgaeF2KL\nWh2/tHTTAgMBAAECggEAAY+7RCmRAazH86LLQSArIswC/uNxFSx1WXiuOQX1P4oN\nj1+pd9rpIk1dH0aUb3Oo4/VLIzUoX4k2jqxJBnoH4TzPzxFf+z0oF0B1noAFe6i8\nLTIh5/Dt3iKUwhhV/TkJpsPVsW5uZIecTzFiRYzoL/97Lv5koBQHL+CfQYmz1V9A\neQ5CDsLUh0vhOJl++lb0+V+/RuG2YT7p6vkau+WwhrUfJhNzo9Kg1z3ubedPLkCA\nRxFZ/E6FwerSaFNAEmjBnS+VBp3svFpBwEL7Ve9T4vsvfshWjJwMwHBw8cYGp3iO\ni0ktfoZxISVxDZPuCJiCEfTtfEbAXTF6lxCN7mN3YQKBgQDfPt72mkEa/ZR1VKqc\nAaapn26NLeRKVqIa2+5lQWnZ5dHlGuw5G5Od44zOhWTqr7BHgRQkyddvgft0EsQs\ngNz4cGKHCLSv3y9IybCuKTFPo/8H59Oe8uh3Gbm1x+g4upoUSUfAMMzw/ORlmPG0\n5ckMTHixB6vHluzYSyhVgoW6AwKBgQDKsJieRmTP+ywZN7S87+BfR0G/vocc7rpM\n8o2XmYSUEGsJhkEvyQcq+7a7v7J1rXnxo5vNJ5v8xYlDtobpKnXWlBCC7nC5KAk6\nUbTtzs9qyL6Sf7oVBfPrwe7NXX2dAlQN85gQKYjyE/RrgpwwrBZgIFhu+MnJ6JbP\nt1xS9irI8QKBgQC8/aORjsrZB517qr54Lami5XaYjCY8jJTVOiTakYMD1VxYoO8j\n9WWFf5K/bwwc5bjM/8hG0JzSKG7wN8bdigYHSFUQzdzxGncUHrK07ehx7HrFfYuY\nfzkvQpcF/gNoqwgvbk4QtP96cA0GuXC93N3TzJVMARt6bxl4jj/KDCIbcwKBgC/G\nFgLgRqy63/cFqUULKRBsBDREnSYVorW2SedcmOIpSIFTMpQnxte7wqNYGKEiBWcO\nEA/38Q1QJf1ezUex6VptRcMGnm0V4a7sST/wCfV6YWi4UEzaPVbpO/cNvSi/vr4X\nF1Vf5NZiG68ndtcGCLQZi56EZ1N+zeUhq9ImEYmRAoGBAKKRux+H25C/MZW56cuu\n2JgZfmQKNyC+myt+oZQrB1MggETr7h4i0Z9oarYj0nfd3IAsStU5NMJvZAAPj6iz\ncJr9JzLihSMDadPxLYVInoUx/pwWC02ivHikAINrDQXYCrMmvbae44Rhs4QnScEA\n5iojtl3Rkc4jyxvX4jKKtHfc\n-----END PRIVATE KEY-----\n'
-};
-
-async function getAccessToken() {
-  const now = Math.floor(Date.now() / 1000);
-  const header = Buffer.from(JSON.stringify({alg:'RS256',typ:'JWT'})).toString('base64url');
-  const payload = Buffer.from(JSON.stringify({
-    iss: SERVICE_ACCOUNT.client_email,
-    scope: 'https://www.googleapis.com/auth/spreadsheets',
-    aud: 'https://oauth2.googleapis.com/token',
-    exp: now + 3600, iat: now
-  })).toString('base64url');
-
-  const crypto = require('crypto');
-  const sign = crypto.createSign('RSA-SHA256');
-  sign.update(`${header}.${payload}`);
-  const signature = sign.sign(SERVICE_ACCOUNT.private_key, 'base64url');
-  const jwt = `${header}.${payload}.${signature}`;
-
-  const resp = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: {'Content-Type':'application/x-www-form-urlencoded'},
-    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`
-  });
-  const data = await resp.json();
-  return data.access_token;
 }
 
-async function sheetsRequest(token, method, path, body) {
-  const resp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}${path}`, {
-    method, headers: {'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
-    body: body ? JSON.stringify(body) : undefined
+function nuevoCobro(){
+  document.getElementById('recibo').classList.remove('visible');
+  document.getElementById('rec-ph').style.display='block';
+  document.getElementById('rec-btns').style.display='none';
+}
+
+// BANCO
+function cargarBanco(ev){var f=ev.target.files[0];if(f)leerBanco(f);}
+function leerBanco(file){
+  var r=new FileReader();
+  r.onload=function(e){
+    try{
+      var wb=XLSX.read(e.target.result,{type:'array'});
+      var ws=wb.Sheets[wb.SheetNames[0]];
+
+      // --- DETECCION AUTOMATICA: formato extracto bancario (Macro/BNA etc.) ---
+      // Buscar fila con headers buscando "Descripción" y "Caja de Ahorro"
+      var rawRows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      var headerRow=-1, colFecha=-1, colDesc=-1, colMonto=-1;
+      for(var i=0;i<rawRows.length;i++){
+        var row=rawRows[i];
+        for(var j=0;j<row.length;j++){
+          var v=String(row[j]||'').toLowerCase();
+          if(v==='fecha') colFecha=j;
+          if(v.indexOf('descripci')>=0) colDesc=j;
+          if(v.indexOf('caja de ahorro')>=0||v.indexOf('haber')>=0) colMonto=j;
+        }
+        if(colFecha>=0 && colDesc>=0 && colMonto>=0){headerRow=i;break;}
+      }
+
+      if(headerRow>=0){
+        // Formato bancario detectado — extraer CUIT desde descripción
+        var procesadas=[];
+        var cuitRegex=/(?:var|cuo)\s*\/\s*(\d{8,11})/i;
+        for(var i=headerRow+1;i<rawRows.length;i++){
+          var row=rawRows[i];
+          var fecha=row[colFecha], desc=String(row[colDesc]||''), monto=row[colMonto];
+          if(!fecha||!desc||!monto) continue;
+          if(typeof monto!=='number'||monto<=0) continue;
+          if(desc.toLowerCase().indexOf('recibida')<0) continue;
+          var cuitMatch=cuitRegex.exec(desc);
+          var cuit=cuitMatch?cuitMatch[1]:'';
+          // Formatear fecha
+          var fechaStr='';
+          if(typeof fecha==='number'){
+            var d=new Date(Math.round((fecha-25569)*86400*1000));
+            fechaStr=d.toLocaleDateString('es-AR');
+          } else { fechaStr=String(fecha).slice(0,10); }
+          // Extraer nombre del remitente desde descripción
+          var nombreMatch=desc.match(/De\s+([^/\-]+?)\s*\/|De\s+(.+?)\s*-\s*var/i);
+          var nombre=nombreMatch?(nombreMatch[1]||nombreMatch[2]||'').trim():'';
+          procesadas.push({'CUIT':cuit,'FECHA':fechaStr,'IMPORTE':monto,'DESCRIPCION':nombre});
+        }
+        if(procesadas.length>0){
+          bancoData=procesadas;
+          document.getElementById('banco-msg').innerHTML=
+            'Archivo: <strong>'+file.name+'</strong> — <span style="color:var(--s);font-weight:600">✓ Formato bancario detectado automáticamente</span> — '+procesadas.length+' transferencias recibidas extraídas';
+          // Preview
+          var h='<table style="font-size:11px"><thead><tr><th>CUIT</th><th>FECHA</th><th>IMPORTE</th><th>DESCRIPCION</th></tr></thead><tbody>';
+          procesadas.slice(0,5).forEach(function(row){
+            h+='<tr><td>'+row.CUIT+'</td><td>'+row.FECHA+'</td><td>$'+row.IMPORTE.toLocaleString('es-AR')+'</td><td>'+row.DESCRIPCION+'</td></tr>';
+          });
+          h+='</tbody></table>';
+          document.getElementById('banco-prev').innerHTML=h;
+          // Pre-setear columnas
+          ['bc-cuit','bc-monto'].forEach(function(id){
+            var s=document.getElementById(id);s.innerHTML='';
+            ['CUIT','FECHA','IMPORTE','DESCRIPCION'].forEach(function(c){s.innerHTML+='<option value="'+c+'">'+c+'</option>';});
+          });
+          document.getElementById('bc-cuit').value='CUIT';
+          document.getElementById('bc-monto').value='IMPORTE';
+          // Agregar FECHA al map de filas para que el servidor la use
+          bstep(2);
+          return;
+        }
+      }
+
+      // --- Formato estandar (con columnas ya mapeadas) ---
+      bancoData=XLSX.utils.sheet_to_json(ws,{defval:''});
+      if(!bancoData||bancoData.length===0){toast('Archivo vacío o sin datos','e');return;}
+
+      var cols=Object.keys(bancoData[0]||{});
+      document.getElementById('banco-msg').innerHTML='Archivo: <strong>'+file.name+'</strong> — '+bancoData.length+' filas · Columnas: '+cols.join(', ');
+
+      // Preview
+      var h='<table style="font-size:11px"><thead><tr>';
+      cols.forEach(function(c){h+='<th>'+c+'</th>';});
+      h+='</tr></thead><tbody>';
+      bancoData.slice(0,4).forEach(function(row){
+        h+='<tr>';
+        cols.forEach(function(c){
+          var v=row[c];
+          if(v instanceof Date) v=v.toLocaleDateString('es-AR');
+          h+='<td>'+String(v||'').slice(0,30)+'</td>';
+        });
+        h+='</tr>';
+      });
+      h+='</tbody></table>';
+      document.getElementById('banco-prev').innerHTML=h;
+
+      // Poblar selectores
+      ['bc-cuit','bc-monto'].forEach(function(id){
+        var s=document.getElementById(id);s.innerHTML='';
+        cols.forEach(function(c){s.innerHTML+='<option value="'+c+'">'+c+'</option>';});
+      });
+
+      // Auto-detectar columnas
+      cols.forEach(function(c){
+        var cl=c.toUpperCase();
+        if(cl==='CUIT'||cl.indexOf('CUIT')>=0) document.getElementById('bc-cuit').value=c;
+        if(cl==='IMPORTE'||cl==='MONTO'||cl==='HABER') document.getElementById('bc-monto').value=c;
+      });
+
+      bstep(2);
+    }catch(err){console.error(err);toast('Error al leer el archivo: '+err.message,'e');}
+  };
+  r.readAsArrayBuffer(file);
+}
+
+var _noEncontradosData = [];
+
+var _bancoColC='', _bancoColM='';
+
+async function procesarBanco(){
+  if(!bancoData)return;
+  _bancoColC=document.getElementById('bc-cuit').value;
+  _bancoColM=document.getElementById('bc-monto').value;
+
+  // Mostrar preview primero
+  toast('Analizando archivo...','i');
+  var prev=await api('POST','/api/banco/preview',{filas:bancoData,colCuit:_bancoColC,colMonto:_bancoColM});
+  if(!prev||!prev.ok){toast('Error al analizar','e');return;}
+
+  // Armar modal de preview
+  document.getElementById('banco-prev-stats').innerHTML=
+    '<div class="is ok"><div class="n">'+prev.nuevos+'</div><div class="l">Pagos nuevos</div></div>'+
+    '<div class="is ww"><div class="n">'+prev.noEncontrados.length+'</div><div class="l">CUITs no encontrados</div></div>'+
+    '<div class="is ii"><div class="n">'+(prev.sinCuit||[]).length+'</div><div class="l">Sin CUIT</div></div>'+
+    '<div class="is" style="background:var(--gl)"><div class="n" style="color:var(--m)">'+prev.duplicados.length+'</div><div class="l">Ya importados</div></div>';
+
+  var det='';
+  if(prev.nuevos>0){
+    det+='<div style="font-weight:700;color:var(--s);margin-bottom:4px">✓ '+prev.nuevos+' pagos nuevos a importar — Total: $'+prev.totalNuevo.toLocaleString('es-AR')+'</div>';
+  }
+  if(prev.duplicados.length>0){
+    det+='<div style="font-weight:700;color:var(--m);margin:8px 0 4px">Ya registrados (se omitirán):</div>';
+    det+='<table style="width:100%;font-size:11px"><thead><tr><th>Alumno</th><th>Monto</th><th>Fecha</th></tr></thead><tbody>';
+    prev.duplicados.forEach(function(x){
+      det+='<tr><td>'+x.alumno+'</td><td>$'+x.monto.toLocaleString('es-AR')+'</td><td>'+x.fecha+'</td></tr>';
+    });
+    det+='</tbody></table>';
+  }
+  if(prev.noEncontrados.length>0){
+    det+='<div style="font-weight:700;color:var(--d);margin:8px 0 4px">CUITs no encontrados (se omitirán):</div>';
+    det+='<table style="width:100%;font-size:11px"><thead><tr><th>CUIT</th><th>Monto</th><th>Descripción</th></tr></thead><tbody>';
+    prev.noEncontrados.forEach(function(x){
+      det+='<tr><td>'+x.cuit+'</td><td>$'+x.monto.toLocaleString('es-AR')+'</td><td>'+x.descrip+'</td></tr>';
+    });
+    det+='</tbody></table>';
+  }
+  document.getElementById('banco-prev-detalle').innerHTML=det;
+  abrirM('m-banco-preview');
+}
+
+async function confirmarImportarBanco(){
+  cerrarM('m-banco-preview');
+  var colC=_bancoColC, colM=_bancoColM;
+  var r=await api('POST','/api/banco',{filas:bancoData,colCuit:colC,colMonto:colM});
+  if(!r||!r.ok){toast('Error al procesar','e');return;}
+
+  document.getElementById('imp-stats').innerHTML=
+    '<div class="is ok"><div class="n">'+r.aplicados+'</div><div class="l">Pagos aplicados</div></div>'+
+    '<div class="is ww"><div class="n">'+r.noEncontrados.length+'</div><div class="l">CUITs no encontrados</div></div>'+
+    '<div class="is ii"><div class="n">'+(r.sinCuit||[]).length+'</div><div class="l">Sin CUIT</div></div>'+
+    '<div class="is" style="background:var(--gl)"><div class="n" style="color:var(--m)">'+(r.duplicados?r.duplicados.length:0)+'</div><div class="l">Ya importados</div></div>';
+
+  var noEncDiv = document.getElementById('imp-noenc');
+  var tablaDiv = document.getElementById('imp-tabla');
+
+  if(r.noEncontrados.length > 0 || (r.sinCuit && r.sinCuit.length > 0)){
+    noEncDiv.style.display='block';
+    var h='';
+
+    if(r.noEncontrados.length > 0){
+      _noEncontradosData = r.noEncontrados;
+      h+='<div style="font-weight:700;font-size:11px;color:var(--d);margin-bottom:6px">CUITs no vinculados a ningún alumno:</div>';
+      h+='<table style="font-size:11.5px;width:100%"><thead><tr><th>CUIT</th><th>Fecha</th><th>Monto</th><th>Descripcion</th></tr></thead><tbody>';
+      r.noEncontrados.forEach(function(x){
+        h+='<tr>'+
+          '<td style="font-weight:600">'+x.cuit+'</td>'+
+          '<td style="color:var(--m)">'+( x.fecha||'—')+'</td>'+
+          '<td style="color:var(--w)">$'+(x.monto||0).toLocaleString('es-AR')+'</td>'+
+          '<td style="font-size:10.5px;color:var(--m)">'+(x.descrip||x.detalle||'—')+'</td>'+
+          '</tr>';
+      });
+      h+='</tbody></table>';
+      var totalNoApl = r.noEncontrados.reduce(function(s,x){return s+(x.monto||0);},0);
+      h+='<div style="margin-top:6px;font-size:11px;color:var(--d);font-weight:600">Total no aplicado: $'+totalNoApl.toLocaleString('es-AR')+'</div>';
+      h+='<button class="btn bob" style="font-size:11px;margin-top:8px" onclick="exportarNoEncontrados()">Exportar a Excel</button>';
+    }
+
+    if(r.sinCuit && r.sinCuit.length > 0){
+      h+='<div style="font-weight:700;font-size:11px;color:var(--m);margin:12px 0 6px">Registros sin CUIT detectado:</div>';
+      h+='<table style="font-size:11px;width:100%"><thead><tr><th>Detalle</th><th>Monto</th></tr></thead><tbody>';
+      r.sinCuit.forEach(function(x){
+        h+='<tr><td style="font-size:10px;color:var(--m)">'+x.detalle+'</td><td>$'+(x.monto||0).toLocaleString('es-AR')+'</td></tr>';
+      });
+      h+='</tbody></table>';
+    }
+
+    tablaDiv.innerHTML = h;
+  } else {
+    noEncDiv.style.display='none';
+  }
+
+  // Mostrar duplicados
+  if(r.duplicados && r.duplicados.length>0){
+    _duplicadosData = r.duplicados;
+    var hd='<div style="margin-top:14px">';
+    hd+='<div style="font-weight:700;font-size:11px;color:var(--m);margin-bottom:6px">Pagos ya registrados (no duplicados):</div>';
+    hd+='<table style="font-size:11.5px;width:100%"><thead><tr><th>Alumno</th><th>Curso</th><th>Monto</th><th>Fecha banco</th><th>Pago existente</th></tr></thead><tbody>';
+    r.duplicados.forEach(function(x){
+      hd+='<tr>'+
+        '<td style="font-weight:600">'+x.alumno+'</td>'+
+        '<td style="color:var(--m)">'+(x.curso||'--')+'</td>'+
+        '<td style="color:var(--m)">$'+(x.monto||0).toLocaleString('es-AR')+'</td>'+
+        '<td style="color:var(--m)">'+(x.fecha||'--')+'</td>'+
+        '<td style="font-size:10.5px;color:var(--m)">'+(x.pagoExistente?x.pagoExistente.fecha+' - '+x.pagoExistente.origen:'--')+'</td>'+
+        '</tr>';
+    });
+    hd+='</tbody></table>';
+    var totalDup = r.duplicados.reduce(function(s,x){return s+(x.monto||0);},0);
+    hd+='<div style="margin-top:6px;font-size:11px;color:var(--m);font-weight:600">Total: $'+totalDup.toLocaleString('es-AR')+'</div>';
+    hd+='<button class="btn bob" style="font-size:11px;margin-top:8px" onclick="exportarDuplicados()">Exportar a Excel</button>';
+    hd+='</div>';
+    document.getElementById('imp-tabla').innerHTML += hd;
+    noEncDiv.style.display='block';
+  }
+
+  _pagos=await api('GET','/api/pagos');
+  bstep(3);
+  var msg = r.aplicados+' de '+r.totalFilas+' pagos aplicados';
+  if(r.duplicados&&r.duplicados.length>0) msg += ' - '+r.duplicados.length+' ya existian (no duplicados)';
+  toast(msg,'s');
+}
+
+var _duplicadosData = [];
+
+function exportarDuplicados() {
+  if(!_duplicadosData||!_duplicadosData.length){toast('Sin datos para exportar','e');return;}
+  var rows = _duplicadosData.map(function(x){
+    return {
+      'Alumno': x.alumno,
+      'Curso': x.curso||'',
+      'CUIT': String(x.cuit),
+      'Monto': x.monto,
+      'Fecha banco': x.fecha||'',
+      'Fecha pago existente': x.pagoExistente?x.pagoExistente.fecha:'',
+      'Origen pago existente': x.pagoExistente?x.pagoExistente.origen:''
+    };
   });
-  return resp.json();
+  var ws = XLSX.utils.json_to_sheet(rows);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Ya importados');
+  XLSX.writeFile(wb, 'duplicados_banco_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  toast('Exportado correctamente','s');
+}
+
+function exportarNoEncontrados() {
+  if(!_noEncontradosData||!_noEncontradosData.length){toast('Sin datos para exportar','e');return;}
+  var rows = _noEncontradosData.map(function(x){ return {'CUIT': String(x.cuit), 'Fecha': x.fecha||'', 'Monto': x.monto, 'Descripcion': x.descrip||''}; });
+  var ws = XLSX.utils.json_to_sheet(rows);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'No encontrados');
+  XLSX.writeFile(wb, 'cuits_no_encontrados_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  toast('Exportado correctamente','s');
+}
+
+function resetBanco(){
+  bancoData=null;
+  document.getElementById('bp1').style.display='block';
+  document.getElementById('bp2').style.display='none';
+  document.getElementById('bp3').style.display='none';
+  document.getElementById('f-banco').value='';
+  document.getElementById('imp-noenc').style.display='none';
+  bstep(1);
+}
+function bstep(n){for(var i=1;i<=3;i++){document.getElementById('bst'+i).className='step'+(i<n?' done':i===n?' active':'');document.getElementById('bp'+i).style.display=i===n?'block':'none';}}
+
+// HISTORIAL
+var _todosLosPagos = [];
+
+async function cargarHistorial(){
+  _pagos = await api('GET','/api/pagos');
+  _todosLosPagos = _pagos || [];
+  document.getElementById('hist-q').value = '';
+  document.getElementById('hist-origen').value = '';
+  filtrarHistorial();
+}
+
+function filtrarHistorial(){
+  var q = (document.getElementById('hist-q').value || '').toLowerCase();
+  var origen = document.getElementById('hist-origen').value;
+  var lista = _todosLosPagos.filter(function(p){
+    var matchNombre = !q || (p.alumno_nombre||'').toLowerCase().indexOf(q) >= 0;
+    var matchOrigen = !origen || (p.origen||'').indexOf(origen) >= 0;
+    return matchNombre && matchOrigen;
+  });
+  var list = document.getElementById('hist-list');
+  var empty = document.getElementById('hist-empty');
+  var cnt = document.getElementById('hist-cnt');
+  if (!lista.length) {
+    list.innerHTML = '';
+    empty.style.display = 'block';
+    cnt.textContent = '';
+    return;
+  }
+  empty.style.display = 'none';
+  cnt.textContent = lista.length + ' de ' + _todosLosPagos.length + ' registros';
+  list.innerHTML = lista.map(function(p){
+    var esM = (p.origen||'').indexOf('Manual') >= 0;
+    var esI = (p.origen||'').indexOf('Importado') >= 0;
+    var iconClass = esM ? 'hi-m' : 'hi-b';
+    var icon = esM
+      ? '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>'
+      : '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+    var origenBadge = esI
+      ? '<span class="badge bp" style="font-size:9px;margin-left:4px">Importado</span>'
+      : esM ? '' : '<span class="badge bs" style="font-size:9px;margin-left:4px">Banco</span>';
+    return '<div class="hist-entry" style="cursor:pointer" onclick="abrirDetalleDesdeHistorial('+p.alumno_id+',event)">'+
+      '<div class="hist-icon '+iconClass+'">'+icon+'</div>'+
+      '<div class="hist-info">'+
+        '<div class="hn">'+p.alumno_nombre+' <span class="badge bp" style="margin-left:4px;font-size:9px">'+p.curso+'</span>'+origenBadge+'</div>'+
+        '<div class="hd">'+p.fecha+' · '+p.concepto+' · Recibo #'+p.id+'</div>'+
+      '</div>'+
+      '<div class="hm">+'+pesos(p.monto)+'</div>'+
+      '<div style="display:flex;gap:5px;margin-left:10px;flex-shrink:0" onclick="event.stopPropagation()">'+
+        '<button class="btn bob" style="padding:2px 8px;font-size:10.5px" onclick=\'reimprimirRecibo('+JSON.stringify(p)+')\'>Reimprimir</button>'+
+        '<button class="btn bob" style="padding:2px 8px;font-size:10.5px" onclick=\'abrirEditPago('+JSON.stringify(p)+')\'>Editar</button>'+
+        '<button class="btn bob" style="padding:2px 8px;font-size:10.5px;color:var(--d)" onclick="abrirEliminarPago('+p.id+','+p.alumno_id+')">Eliminar</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+async function abrirDetalleDesdeHistorial(alumnoId, event){
+  // No abrir si el click fue en un botón
+  if(event && event.target && (event.target.tagName==='BUTTON'||event.target.closest('button'))) return;
+  // Buscar en reporte si ya está cargado
+  if(_reporte && _reporte.length){
+    var a=_reporte.find(function(x){return x.id===alumnoId;});
+    if(a){ abrirDetalleAlumno(alumnoId); return; }
+  }
+  // Si no, cargar reporte primero
+  showSpinner('Cargando detalle...');
+  _reporte = await api('GET','/api/reporte');
+  hideSpinner();
+  abrirDetalleAlumno(alumnoId);
+}
+
+// EDITAR / ELIMINAR PAGOS
+var _pagoEdit = null;
+
+function abrirEditPago(p) {
+  _pagoEdit = p;
+  document.getElementById('ep-id').value = p.id;
+  document.getElementById('ep-alumno').textContent = p.alumno_nombre + ' — Recibo #' + p.id;
+  document.getElementById('ep-monto').value = p.monto;
+  document.getElementById('ep-concepto').value = p.concepto || '';
+  document.getElementById('ep-medio').value = p.medio || 'Efectivo';
+  document.getElementById('ep-fecha').value = (p.fecha || '').slice(0,10);
+  abrirM('m-edit-pago');
+}
+
+async function guardarEditPago() {
+  var id = document.getElementById('ep-id').value;
+  var monto = parseFloat(document.getElementById('ep-monto').value) || 0;
+  var concepto = document.getElementById('ep-concepto').value;
+  var medio = document.getElementById('ep-medio').value;
+  var fecha = document.getElementById('ep-fecha').value;
+  if (!monto) { toast('El monto no puede ser 0', 'e'); return; }
+  var r = await api('PUT', '/api/pagos/' + id, { monto, concepto, medio, fecha });
+  if (!r || !r.ok) { toast('Error al guardar', 'e'); return; }
+  cerrarM('m-edit-pago');
+  cargarHistorial();
+  toast('Pago actualizado', 's');
+}
+
+function reimprimirRecibo(p) {
+  // Buscar el alumno para obtener el curso
+  var alumno = (_alumnos||[]).find(function(a){ return a.id == p.alumno_id; });
+  var curso = alumno ? alumno.curso : (p.curso||'');
+  var medio = (p.medio||'') + (p.origen && p.origen.indexOf('·')>=0 ? ' — ' + p.origen.split('·').slice(1).join('·').trim() : '');
+  imprimirReciboDuplicado(p.id, p.fecha, p.alumno_nombre, curso, p.concepto, medio, pesos(p.monto));
+}
+
+function abrirEliminarPago(pagoId, alumnoId) {
+  document.getElementById('del-pago-id').value = pagoId;
+  document.getElementById('del-alumno-id').value = alumnoId;
+  abrirM('m-del-pago');
+}
+
+async function confirmarEliminarPago(revertir) {
+  var pagoId = document.getElementById('del-pago-id').value;
+  var r = await api('DELETE', '/api/pagos/' + pagoId + '?revertir=' + (revertir ? '1' : '0'));
+  if (!r || !r.ok) { toast('Error al eliminar', 'e'); return; }
+  cerrarM('m-del-pago');
+  cargarHistorial();
+  toast('Pago eliminado' + (revertir ? ' — cuotas revertidas a pendiente' : ''), 'i');
+}
+
+async function eliminarPago(pagoId, alumnoId, revertirCuotas) {
+  var r = await api('DELETE', '/api/pagos/' + pagoId + '?revertir=' + (revertirCuotas ? '1' : '0'));
+  if (!r || !r.ok) { toast('Error al eliminar', 'e'); return; }
+  cargarHistorial();
+  toast('Pago eliminado' + (revertirCuotas ? ' — cuotas revertidas a pendiente' : ''), 'i');
+}
+
+async function aplicarSaldosPendientes() {
+  if (!confirm('Esto aplica el saldo disponible de cada alumno a sus cuotas pendientes. ¿Continuar?')) return;
+  showSpinner('Aplicando saldos...');
+  var r = await api('GET', '/api/aplicar-saldos-pendientes');
+  hideSpinner();
+  if (!r || !r.ok) { toast('Error al aplicar saldos', 'e'); return; }
+  if (r.corregidos === 0) { toast('No hay saldos pendientes para aplicar', 's'); return; }
+  toast(r.corregidos + ' alumnos con saldos aplicados', 's');
 }
 
 async function ejecutarBackup() {
-  console.log('Iniciando backup a Google Sheets...');
-  const token = await getAccessToken();
+  if (!confirm('¿Ejecutar backup manual a Google Sheets ahora?')) return;
+  showSpinner('Ejecutando backup...');
+  var r = await api('GET', '/api/backup');
+  hideSpinner();
+  if (!r || !r.ok) { toast('Error en el backup: ' + (r ? r.error : ''), 'e'); return; }
+  toast('Backup ejecutado correctamente en Google Sheets', 's');
+}
 
-  // Obtener hojas existentes
-  const meta = await sheetsRequest(token, 'GET', '', null);
-  const hojas = (meta.sheets||[]).map(s=>s.properties.title);
+async function reprocesarHistoricos() {
+  if (!confirm('Esto re-aplica la lógica de saldo a todos los pagos importados del Excel.\n\nSi alguien pagó de más, el excedente se aplicará automáticamente a cuotas siguientes.\n\nEjecutar?')) return;
+  showSpinner('Reprocesando pagos historicos...');
+  var r = await api('POST', '/api/reprocesar-historicos', {});
+  hideSpinner();
+  if (!r || !r.ok) { toast('Error al reprocesar', 'e'); return; }
+  cargarHistorial();
+  toast(r.mensaje, 's');
+}
 
-  // Función para crear hoja si no existe
-  async function asegurarHoja(nombre) {
-    if (!hojas.includes(nombre)) {
-      await sheetsRequest(token, 'POST', ':batchUpdate', {
-        requests:[{addSheet:{properties:{title:nombre}}}]
+async function migrarFechas() {
+  if (!confirm('Esto actualiza las fechas y montos de las cuotas 1, 2 y 3 con los datos reales del Excel original. Solo hace falta ejecutarlo una vez. Continuar?')) return;
+  showSpinner('Migrando fechas historicas...');
+  var r = await api('POST', '/api/migrar-fechas', {});
+  hideSpinner();
+  if (!r || !r.ok) { toast('Error al migrar', 'e'); return; }
+  if (r.errores && r.errores.length > 0) console.warn('Errores:', r.errores);
+  cargarHistorial();
+  toast('Fechas migradas: ' + r.actualizados + ' cuotas actualizadas', 's');
+}
+
+async function backfillPagos() {
+  showSpinner('Sincronizando pagos importados...');
+  var r = await api('POST', '/api/backfill-pagos', {});
+  hideSpinner();
+  if (!r || !r.ok) { toast('Error al sincronizar', 'e'); return; }
+  cargarHistorial();
+  toast('Sincronizacion completa — ' + r.insertados + ' registros generados', 's');
+}
+
+// CAMBIO DE CLAVES
+var _cambiarClaveTipo = '';
+function abrirCambiarClave(tipo){
+  _cambiarClaveTipo = tipo;
+  document.getElementById('cambiar-clave-tit').textContent = tipo==='admin' ? '🔐 Cambiar clave de administración' : '🔑 Cambiar clave del sistema';
+  document.getElementById('cc-actual').value='';
+  document.getElementById('cc-nueva').value='';
+  document.getElementById('cc-confirmar').value='';
+  document.getElementById('cc-err').style.display='none';
+  abrirM('m-cambiar-clave');
+  setTimeout(function(){ document.getElementById('cc-actual').focus(); }, 200);
+}
+async function cambiarClave(){
+  var actual=document.getElementById('cc-actual').value;
+  var nueva=document.getElementById('cc-nueva').value;
+  var confirmar=document.getElementById('cc-confirmar').value;
+  var err=document.getElementById('cc-err');
+  err.style.display='none';
+  if(!actual||!nueva||!confirmar){ err.textContent='Completá todos los campos.'; err.style.display='block'; return; }
+  if(nueva!==confirmar){ err.textContent='Las claves nuevas no coinciden.'; err.style.display='block'; return; }
+  if(nueva.length<4){ err.textContent='La clave debe tener al menos 4 caracteres.'; err.style.display='block'; return; }
+  var ruta=_cambiarClaveTipo==='admin'?'/api/admin/cambiar-clave':'/api/sistema/cambiar-clave';
+  var r=await api('POST',ruta,{claveActual:actual,nuevaClave:nueva});
+  if(r&&r.ok){ cerrarM('m-cambiar-clave'); toast('Clave actualizada correctamente','s'); }
+  else { err.textContent=r&&r.error?r.error:'Clave actual incorrecta.'; err.style.display='block'; document.getElementById('cc-actual').value=''; document.getElementById('cc-actual').focus(); }
+}
+
+// ADMINISTRACIÓN
+var _adminAutenticado = false;
+var _adminLoginTime = 0;
+var _ADMIN_TIMEOUT = 5 * 60 * 1000; // 5 minutos en ms
+var _adminTimeoutTimer = null;
+
+function _resetAdminTimeout() {
+  clearTimeout(_adminTimeoutTimer);
+  _adminTimeoutTimer = setTimeout(function(){
+    if (_adminAutenticado) {
+      _adminAutenticado = false;
+      _adminLoginTime = 0;
+      // Si el usuario está en el panel admin, volver a pedir clave
+      if (document.getElementById('s-admin') && document.getElementById('s-admin').classList.contains('active')) {
+        toast('Sesión de administración expirada. Ingresá la clave nuevamente.', 'w');
+        setTimeout(function(){ abrirAdmin(); }, 1200);
+      }
+    }
+  }, _ADMIN_TIMEOUT);
+}
+
+function abrirAdmin() {
+  if (_adminAutenticado && (Date.now() - _adminLoginTime < _ADMIN_TIMEOUT)) {
+    nav('admin'); cargarStatsAdmin(); return;
+  }
+  _adminAutenticado = false;
+  document.getElementById('admin-pwd').value='';
+  document.getElementById('admin-login-err').style.display='none';
+  abrirM('m-admin-login');
+  setTimeout(function(){ document.getElementById('admin-pwd').focus(); }, 200);
+}
+
+async function loginAdmin() {
+  var pwd = document.getElementById('admin-pwd').value;
+  if (!pwd) return;
+  var r = await api('POST', '/api/admin/login', { password: pwd });
+  if (r && r.ok) {
+    _adminAutenticado = true;
+    _adminLoginTime = Date.now();
+    _resetAdminTimeout();
+    cerrarM('m-admin-login');
+    nav('admin');
+    cargarStatsAdmin();
+  } else {
+    var err = document.getElementById('admin-login-err');
+    err.textContent = 'Clave incorrecta';
+    err.style.display = 'block';
+    document.getElementById('admin-pwd').value = '';
+    document.getElementById('admin-pwd').focus();
+  }
+}
+
+function cerrarAdmin() {
+  _adminAutenticado = false;
+  nav('dashboard');
+}
+
+function mostrarRecuperar() {
+  cerrarM('m-admin-login');
+  document.getElementById('rec-paso1').style.display='block';
+  document.getElementById('rec-paso2').style.display='none';
+  abrirM('m-admin-recuperar');
+}
+
+async function solicitarCodigo() {
+  var r = await api('POST', '/api/admin/recuperar', {});
+  if (r && r.ok) {
+    toast(r.mensaje, 's');
+    document.getElementById('rec-paso1').style.display='none';
+    document.getElementById('rec-paso2').style.display='block';
+  } else { toast('Error al enviar', 'e'); }
+}
+
+async function verificarCodigo() {
+  var codigo = document.getElementById('rec-codigo').value.trim();
+  var nueva = document.getElementById('rec-nueva-clave').value;
+  var confirmar = document.getElementById('rec-confirmar-clave').value;
+  var err = document.getElementById('rec-err');
+  if (!codigo || !nueva) { err.textContent='Completá todos los campos'; err.style.display='block'; return; }
+  if (nueva !== confirmar) { err.textContent='Las claves no coinciden'; err.style.display='block'; return; }
+  if (nueva.length < 6) { err.textContent='La clave debe tener al menos 6 caracteres'; err.style.display='block'; return; }
+  var r = await api('POST', '/api/admin/verificar-codigo', { codigo, nuevaClave: nueva });
+  if (r && r.ok) {
+    cerrarM('m-admin-recuperar');
+    toast('Clave actualizada correctamente', 's');
+  } else {
+    err.textContent = r ? r.error : 'Error';
+    err.style.display = 'block';
+  }
+}
+
+var _detalleCursoData = [];
+
+function abrirDetalleCurso(curso) {
+  _detalleCursoData = _reporte.filter(function(a){ return a.curso === curso; })
+    .sort(function(a,b){ return a.nombre.localeCompare(b.nombre); });
+  
+  document.getElementById('det-curso-title').textContent = 'Detalle — ' + curso + ' (' + _detalleCursoData.length + ' alumnos)';
+  
+  var totalDeuda = _detalleCursoData.reduce(function(s,a){ return s + (a.deudaReal||0); }, 0);
+  var conDeuda = _detalleCursoData.filter(function(a){ return a.deudaReal > 0; }).length;
+  var alDia = _detalleCursoData.length - conDeuda;
+
+  var h = '<div class="r2" style="margin-bottom:14px">' +
+    '<div style="background:var(--gl);padding:10px;border-radius:var(--rs);text-align:center"><div style="font-size:10px;color:var(--m)">Total alumnos</div><div style="font-weight:700;font-size:18px;color:var(--p)">' + _detalleCursoData.length + '</div></div>' +
+    '<div style="background:var(--dl);padding:10px;border-radius:var(--rs);text-align:center"><div style="font-size:10px;color:var(--m)">Con deuda</div><div style="font-weight:700;font-size:18px;color:var(--d)">' + conDeuda + '</div></div>' +
+    '<div style="background:var(--sl);padding:10px;border-radius:var(--rs);text-align:center"><div style="font-size:10px;color:var(--m)">Al día</div><div style="font-weight:700;font-size:18px;color:var(--s)">' + alDia + '</div></div>' +
+    '<div style="background:var(--dl);padding:10px;border-radius:var(--rs);text-align:center"><div style="font-size:10px;color:var(--m)">Deuda total</div><div style="font-weight:700;font-size:16px;color:var(--d)">' + pesos(totalDeuda) + '</div></div>' +
+  '</div>';
+
+  h += '<table style="width:100%;font-size:12px;border-collapse:collapse">' +
+    '<thead><tr>' +
+    '<th style="text-align:left;padding:6px 8px;background:var(--gl);border-bottom:2px solid var(--b)">Alumno</th>' +
+    '<th style="text-align:center;padding:6px 8px;background:var(--gl);border-bottom:2px solid var(--b)">Estado</th>';
+  CUOTAS.forEach(function(c){ h += '<th style="text-align:center;padding:4px;background:var(--gl);border-bottom:2px solid var(--b);font-size:10px">C'+c.num+'<br><span style="font-weight:400">'+c.mes.slice(0,3)+'</span></th>'; });
+  h += '<th style="text-align:right;padding:6px 8px;background:var(--gl);border-bottom:2px solid var(--b)">Deuda</th>' +
+    '</tr></thead><tbody>';
+
+  _detalleCursoData.forEach(function(a){
+    var est = a.estadoCuotas || {};
+    var hayDeuda = a.deudaReal > 0;
+    h += '<tr style="cursor:pointer;border-bottom:1px solid var(--b)" onclick="cerrarM(\'m-det-curso\');abrirDetalleAlumno('+a.id+')">';
+    h += '<td style="padding:6px 8px;font-weight:500">'+a.nombre+'</td>';
+    h += '<td style="padding:6px 8px;text-align:center">';
+    if(hayDeuda) h += '<span class="badge bd" style="font-size:10px">Debe</span>';
+    else h += '<span class="badge bs" style="font-size:10px">Al día</span>';
+    h += '</td>';
+    CUOTAS.forEach(function(c){
+      var e = est[c.num] || est[String(c.num)] || 'futura';
+      if(e==='futura') h += '<td style="text-align:center;color:var(--m);font-size:10px">—</td>';
+      else if(e==='pagada') h += '<td style="text-align:center;background:var(--sl)"><span style="color:var(--s);font-size:11px">✓</span></td>';
+      else if(e==='compensada') h += '<td style="text-align:center;background:#FFF3E0"><span style="font-size:9px;color:#E65100;font-weight:700">↔</span></td>';
+      else if(e==='gratis') h += '<td style="text-align:center;background:#c8f7c5"><span style="font-size:9px;color:#1a7a1a;font-weight:700">★</span></td>';
+      else {
+        var mp = a.montosPago&&(a.montosPago[c.num]||a.montosPago[String(c.num)])||0;
+        if(mp>0) h += '<td style="text-align:center;background:var(--wl)"><span style="font-size:9px;color:var(--w);font-weight:700">⚠</span></td>';
+        else h += '<td style="text-align:center;background:var(--dl)"><span style="font-size:9px;color:var(--d);font-weight:700">$</span></td>';
+      }
+    });
+    h += '<td style="padding:6px 8px;text-align:right;font-weight:700;color:'+(hayDeuda?'var(--d)':'var(--s)')+'">'+( hayDeuda?pesos(a.deudaReal):'Al día')+'</td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table>';
+  document.getElementById('det-curso-body').innerHTML = h;
+  abrirM('m-det-curso');
+}
+
+function exportarDetalleCurso() {
+  if(!_detalleCursoData.length){toast('Sin datos','e');return;}
+  var rows = _detalleCursoData.map(function(a){
+    var fila = {'Alumno':a.nombre, 'Estado': a.deudaReal>0?'Con deuda':'Al día', 'Deuda': a.deudaReal||0};
+    var est = a.estadoCuotas||{};
+    CUOTAS.forEach(function(c){
+      var e=est[c.num]||est[String(c.num)]||'futura';
+      fila['C'+c.num+' '+c.mes] = e==='pagada'?'✓':e==='pendiente'?'DEBE':e==='compensada'?'COMP':e==='gratis'?'GRATIS':'—';
+    });
+    return fila;
+  });
+  var ws=XLSX.utils.json_to_sheet(rows);
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Detalle');
+  XLSX.writeFile(wb,'detalle_curso_'+(_detalleCursoData[0]&&_detalleCursoData[0].curso||'curso')+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  toast('Exportado','s');
+}
+
+async function cargarMora(){
+  var r=await api('GET','/api/mora');
+  if(r&&r.ok) document.getElementById('mora-pct').value=r.porcentaje||0;
+}
+
+async function guardarMora(){
+  var pct=parseFloat(document.getElementById('mora-pct').value)||0;
+  var r=await api('POST','/api/mora',{porcentaje:pct});
+  if(r&&r.ok){toast('Mora guardada: '+pct+'%','s');}
+  else{toast('Error al guardar','e');}
+}
+
+async function bonificarMora(alumnoId, moraMonto) {
+  var clave=prompt('Ingresá la clave de administración para bonificar la mora:');
+  if(!clave)return;
+  var rv=await api('POST','/api/verificar-clave',{clave,tipo:'admin'});
+  if(!rv||!rv.ok){toast('Clave incorrecta','e');return;}
+  var motivo=prompt('Motivo de la bonificación de mora (opcional):');
+  var r=await api('POST','/api/bonificar-mora',{alumnoId,moraMonto,motivo:motivo||''});
+  if(r&&r.ok){toast('Mora bonificada correctamente','s');cerrarM('m-det-alumno');cargarReporte();}
+  else{toast('Error: '+(r?r.error:''),'e');}
+}
+
+async function cargarVencimientos(){
+  var r = await api('GET','/api/vencimientos');
+  if(!r||!r.ok) return;
+  var meses=['Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var h='<table style="width:100%;font-size:12px;border-collapse:collapse">';
+  h+='<thead><tr><th style="text-align:left;padding:6px 8px;background:var(--gl);border:1px solid var(--b)">Cuota</th><th style="text-align:left;padding:6px 8px;background:var(--gl);border:1px solid var(--b)">Mes</th><th style="text-align:left;padding:6px 8px;background:var(--gl);border:1px solid var(--b)">Vence bonificado</th></tr></thead><tbody>';
+  r.vencimientos.forEach(function(v,i){
+    var iso=v.split('/').reverse().join('-');
+    h+='<tr>';
+    h+='<td style="padding:6px 8px;border:1px solid var(--b);font-weight:600">C'+(i+1)+'</td>';
+    h+='<td style="padding:6px 8px;border:1px solid var(--b);color:var(--m)">'+meses[i]+'</td>';
+    h+='<td style="padding:6px 8px;border:1px solid var(--b)"><input type="date" id="venc-'+(i+1)+'" value="'+iso+'" style="font-size:12px;border:1px solid var(--b);border-radius:4px;padding:3px 6px"></td>';
+    h+='</tr>';
+  });
+  h+='</tbody></table>';
+  document.getElementById('venc-tabla').innerHTML=h;
+}
+
+async function guardarVencimientos(){
+  var vencimientos=[];
+  for(var i=1;i<=10;i++){
+    var inp=document.getElementById('venc-'+i);
+    if(!inp||!inp.value){toast('Completa todas las fechas','e');return;}
+    var p=inp.value.split('-');
+    vencimientos.push(p[2]+'/'+p[1]+'/'+p[0]);
+  }
+  var r=await api('POST','/api/vencimientos',{vencimientos});
+  if(r&&r.ok){toast('Fechas guardadas','s');}
+  else{toast('Error al guardar','e');}
+}
+
+async function cargarStatsAdmin() {
+  var r = await api('GET', '/api/admin/stats');
+  if (!r) return;
+  var html =
+    '<div class="r2" style="margin-bottom:20px">'+
+      '<div style="background:var(--sl);padding:14px;border-radius:var(--rs);text-align:center"><div style="font-size:11px;color:var(--m)">Total alumnos</div><div style="font-weight:700;font-size:22px;color:var(--p)">'+r.totalAlumnos+'</div></div>'+
+      '<div style="background:var(--dl);padding:14px;border-radius:var(--rs);text-align:center"><div style="font-size:11px;color:var(--m)">Con deuda</div><div style="font-weight:700;font-size:22px;color:var(--d)">'+r.conDeuda+'</div></div>'+
+      '<div style="background:var(--sl);padding:14px;border-radius:var(--rs);text-align:center"><div style="font-size:11px;color:var(--m)">Al dia</div><div style="font-weight:700;font-size:22px;color:var(--s)">'+r.alDia+'</div></div>'+
+      '<div style="background:var(--dl);padding:14px;border-radius:var(--rs);text-align:center"><div style="font-size:11px;color:var(--m)">Deuda total</div><div style="font-weight:700;font-size:22px;color:var(--d)">'+pesos(r.totalDeuda||0)+'</div></div>'+
+      '<div style="background:#e8f5e9;padding:14px;border-radius:var(--rs);text-align:center"><div style="font-size:11px;color:var(--m)">Total cobrado</div><div style="font-weight:700;font-size:22px;color:var(--s)">'+pesos(r.totalCobrado)+'</div></div>'+
+      '<div style="background:var(--gl);padding:14px;border-radius:var(--rs);text-align:center"><div style="font-size:11px;color:var(--m)">Pagos</div><div style="font-weight:700;font-size:22px;color:var(--p)">'+r.totalPagos+'</div></div>'+
+    '</div>'+
+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">'+
+
+    '<div><div style="font-weight:700;font-size:12px;color:var(--m);margin-bottom:8px;text-transform:uppercase">Por medio de pago</div>'+
+    '<table style="width:100%;font-size:12px;border-collapse:collapse">'+
+    '<thead><tr><th style="text-align:left;padding:5px 8px;background:var(--gl)">Medio</th><th style="text-align:right;padding:5px 8px;background:var(--gl)">Pagos</th><th style="text-align:right;padding:5px 8px;background:var(--gl)">Total</th></tr></thead><tbody>';
+  (r.porMedio||[]).forEach(function(m){
+    html+='<tr style="border-bottom:1px solid var(--b)"><td style="padding:5px 8px">'+m.medio+'</td><td style="padding:5px 8px;text-align:right">'+m.cantidad+'</td><td style="padding:5px 8px;text-align:right;font-weight:600;color:var(--s)">'+pesos(m.total)+'</td></tr>';
+  });
+  html+='</tbody></table></div>'+
+
+    '<div><div style="font-weight:700;font-size:12px;color:var(--m);margin-bottom:8px;text-transform:uppercase">Por curso</div>'+
+    '<table style="width:100%;font-size:12px;border-collapse:collapse">'+
+    '<thead><tr><th style="text-align:left;padding:5px 8px;background:var(--gl)">Curso</th><th style="text-align:right;padding:5px 8px;background:var(--gl)">Alumnos</th><th style="text-align:right;padding:5px 8px;background:var(--gl)">Cobrado</th></tr></thead><tbody>';
+  (r.porCurso||[]).forEach(function(c){
+    html+='<tr style="border-bottom:1px solid var(--b)"><td style="padding:5px 8px"><span class="badge bp">'+c.curso+'</span></td><td style="padding:5px 8px;text-align:right">'+c.alumnos+'</td><td style="padding:5px 8px;text-align:right;font-weight:600;color:var(--s)">'+pesos(c.cobrado)+'</td></tr>';
+  });
+  html+='</tbody></table></div></div>';
+
+  document.getElementById('admin-stats').innerHTML = html;
+
+  // Cargar vencimientos y aranceles en el panel admin
+  cargarMora();
+  cargarVencimientos();
+  // Cargar aranceles en el panel admin
+  await cargarAranceles();
+}
+
+// SALDOS SIN IMPUTAR
+var _saldosPendientesData = [];
+
+async function cargarSaldosPendientes() {
+  showSpinner('Calculando saldos...');
+  var r = await api('GET', '/api/diagnostico/saldos-sin-aplicar');
+  hideSpinner();
+  if (!r) { toast('Error al cargar', 'e'); return; }
+  _saldosPendientesData = r.alumnos || [];
+
+  var totalSaldo = _saldosPendientesData.reduce(function(s,a){return s+(a.saldo||0);},0);
+  var conCuotasPend = _saldosPendientesData.filter(function(a){return a.cuotasPendientes&&a.cuotasPendientes.length>0;});
+
+  document.getElementById('sp-resumen').innerHTML =
+    rsc('Alumnos con saldo', _saldosPendientesData.length+' alumnos', 'w') +
+    rsc('Total sin imputar', pesos(totalSaldo), 'd') +
+    rsc('Pueden aplicarse', conCuotasPend.length+' alumnos', 'p');
+
+  if (!_saldosPendientesData.length) {
+    document.getElementById('sp-tabla').innerHTML = '<div style="text-align:center;padding:40px;color:var(--m)">No hay saldos sin imputar</div>';
+    return;
+  }
+
+  var h = '<table style="width:100%;font-size:12.5px;border-collapse:collapse"><thead><tr>'+
+    '<th style="text-align:left;padding:6px 10px;background:var(--gl)">Alumno</th>'+
+    '<th style="text-align:right;padding:6px 10px;background:var(--gl)">Total pagado</th>'+
+    '<th style="text-align:right;padding:6px 10px;background:var(--gl)">Aplicado</th>'+
+    '<th style="text-align:right;padding:6px 10px;background:var(--gl)">Saldo</th>'+
+    '<th style="text-align:left;padding:6px 10px;background:var(--gl)">Cuotas pendientes</th>'+
+  '</tr></thead><tbody>';
+
+  _saldosPendientesData.forEach(function(a){
+    var tienePend = a.cuotasPendientes && a.cuotasPendientes.length > 0;
+    h += '<tr style="border-bottom:1px solid var(--b);background:'+(tienePend?'var(--wl)':'')+'">'+
+      '<td style="padding:6px 10px;font-weight:500">'+
+        '<span style="cursor:pointer;color:var(--p);text-decoration:underline" onclick="abrirDetalleDesdeReporte('+a.id+')">'+a.nombre+'</span>'+
+      '</td>'+
+      '<td style="padding:6px 10px;text-align:right;color:var(--s)">'+pesos(a.totalPagado)+'</td>'+
+      '<td style="padding:6px 10px;text-align:right">'+pesos(a.totalAplicado)+'</td>'+
+      '<td style="padding:6px 10px;text-align:right;font-weight:700;color:var(--w)">'+pesos(a.saldo)+'</td>'+
+      '<td style="padding:6px 10px;font-size:11px;color:var(--m)">'+
+        (tienePend ? 'C'+a.cuotasPendientes.join(', C') : '<span style="color:var(--s)">Sin cuotas pendientes</span>')+
+      '</td>'+
+      '<td style="padding:6px 10px">'+
+        '<button class="btn bob" style="padding:2px 8px;font-size:10.5px" onclick="abrirDetalleDesdeReporte('+a.id+')">Ver detalle</button>'+
+      '</td>'+
+    '</tr>';
+  });
+  h += '</tbody></table>';
+  document.getElementById('sp-tabla').innerHTML = h;
+}
+
+async function abrirDetalleDesdeReporte(id) {
+  if (_reporte && _reporte.length) {
+    var a = _reporte.find(function(x){ return x.id === id; });
+    if (a) { abrirDetalleAlumno(id); return; }
+  }
+  showSpinner('Cargando detalle...');
+  _reporte = await api('GET', '/api/reporte');
+  _pagos = await api('GET', '/api/pagos');
+  hideSpinner();
+  abrirDetalleAlumno(id);
+}
+
+function exportarSaldosPendientes() {
+  if (!_saldosPendientesData.length) { toast('No hay datos para exportar', 'e'); return; }
+  var rows = _saldosPendientesData.map(function(a){
+    return { Alumno: a.nombre, 'Total Pagado': a.totalPagado, 'Aplicado': a.totalAplicado, 'Saldo Sin Imputar': a.saldo, 'Cuotas Pendientes': a.cuotasPendientes.join(', ') };
+  });
+  var ws = XLSX.utils.json_to_sheet(rows);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Saldos sin imputar');
+  XLSX.writeFile(wb, 'saldos_sin_imputar_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  toast('Exportado correctamente', 's');
+}
+
+// REPORTE POR MEDIO DE PAGO
+var _reporteMediosData = null;
+
+function rmCambioFiltro() {
+  var mes = document.getElementById('rm-mes').value;
+  var desde = document.getElementById('rm-desde').value;
+  var hasta = document.getElementById('rm-hasta').value;
+  if (mes && (desde || hasta)) { document.getElementById('rm-desde').value=''; document.getElementById('rm-hasta').value=''; }
+}
+
+function rmFiltrarPagos() {
+  var mes=document.getElementById('rm-mes').value;
+  var desde=document.getElementById('rm-desde').value;
+  var hasta=document.getElementById('rm-hasta').value;
+  var curso=document.getElementById('rm-curso').value;
+  var pagos=_pagos||[];
+  if(mes){
+    var partes=mes.split('/'); var m=parseInt(partes[0]); var a=parseInt(partes[1]);
+    pagos=pagos.filter(function(p){
+      var f=p.fecha||'',pm,pa;
+      if(f.includes('/')){var fp=f.split('/');pm=parseInt(fp[1]);pa=parseInt(fp[2]||'');}
+      else if(f.includes('-')){var fp=f.split('-');pa=parseInt(fp[0]);pm=parseInt(fp[1]);}
+      return pm===m&&pa===a;
+    });
+  } else if(desde||hasta){
+    pagos=pagos.filter(function(p){
+      var f=p.fecha||'',fd;
+      if(f.includes('/')){var fp=f.split('/');fd=new Date(fp[2].slice(0,4),parseInt(fp[1])-1,parseInt(fp[0]));}
+      else{fd=new Date(f.slice(0,10));}
+      if(desde&&fd<new Date(desde))return false;
+      if(hasta&&fd>new Date(hasta))return false;
+      return true;
+    });
+  }
+  if(curso) pagos=pagos.filter(function(p){return p.curso===curso;});
+  return pagos;
+}
+
+function cargarCursosReporteMedios() {
+  var sel=document.getElementById('rm-curso');
+  if(!sel||sel.options.length>1)return;
+  var cursos=[...new Set((_pagos||[]).map(function(p){return p.curso;}).filter(Boolean))].sort();
+  cursos.forEach(function(c){
+    var o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o);
+  });
+}
+
+function generarReporteMedios(){
+  var pagos=rmFiltrarPagos();
+  if(!pagos.length){document.getElementById('rm-resultado').innerHTML='<div style="padding:20px;color:var(--m);text-align:center">No hay pagos en el período seleccionado</div>';return;}
+  var transferencias=pagos.filter(function(p){return (p.medio||'').toLowerCase().includes('transf')||(p.origen||'').toLowerCase().includes('banco');});
+  var efectivo=pagos.filter(function(p){return (p.medio||'').toLowerCase().includes('efectivo');});
+  var otros=pagos.filter(function(p){return !transferencias.includes(p)&&!efectivo.includes(p);});
+  var totalTransf=transferencias.reduce(function(s,p){return s+parseFloat(p.monto||0);},0);
+  var totalEfect=efectivo.reduce(function(s,p){return s+parseFloat(p.monto||0);},0);
+  var totalOtros=otros.reduce(function(s,p){return s+parseFloat(p.monto||0);},0);
+  var totalGeneral=totalTransf+totalEfect+totalOtros;
+  _reporteMediosData={transferencias,efectivo,otros};
+  function tablaGrupo(lista,titulo,color){
+    if(!lista.length)return '';
+    var tot=lista.reduce(function(s,p){return s+parseFloat(p.monto||0);},0);
+    var h='<div style="margin-bottom:20px"><div style="font-weight:700;font-size:13px;color:'+color+';margin-bottom:8px;padding:6px 10px;background:'+color+'22;border-radius:6px">'+titulo+' — Total: '+pesos(tot)+'</div>'+
+      '<table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr>'+
+      '<th style="text-align:left;padding:5px 8px;background:var(--gl)">Fecha</th>'+
+      '<th style="text-align:left;padding:5px 8px;background:var(--gl)">Alumno</th>'+
+      '<th style="text-align:left;padding:5px 8px;background:var(--gl)">Concepto</th>'+
+      '<th style="text-align:right;padding:5px 8px;background:var(--gl)">Monto</th>'+
+      '</tr></thead><tbody>';
+    lista.forEach(function(p){h+='<tr style="border-bottom:1px solid var(--b)"><td style="padding:5px 8px;color:var(--m);white-space:nowrap">'+p.fecha+'</td><td style="padding:5px 8px;font-weight:500">'+p.alumno_nombre+'</td><td style="padding:5px 8px;font-size:11px;color:var(--m)">'+p.concepto+'</td><td style="padding:5px 8px;text-align:right;font-weight:600;color:var(--s)">'+pesos(p.monto)+'</td></tr>';});
+    h+='</tbody></table></div>';return h;
+  }
+  var html='<div class="r2" style="margin-bottom:16px">'+
+    '<div style="background:var(--sl);padding:12px;border-radius:var(--rs);text-align:center"><div style="font-size:11px;color:var(--m)">Transferencias</div><div style="font-weight:700;font-size:18px;color:var(--s)">'+pesos(totalTransf)+'</div><div style="font-size:10px;color:var(--m)">'+transferencias.length+' pagos</div></div>'+
+    '<div style="background:#FFF3E0;padding:12px;border-radius:var(--rs);text-align:center"><div style="font-size:11px;color:var(--m)">Efectivo</div><div style="font-weight:700;font-size:18px;color:#E65100">'+pesos(totalEfect)+'</div><div style="font-size:10px;color:var(--m)">'+efectivo.length+' pagos</div></div>'+
+    (otros.length?'<div style="background:var(--gl);padding:12px;border-radius:var(--rs);text-align:center"><div style="font-size:11px;color:var(--m)">Otros</div><div style="font-weight:700;font-size:18px">'+pesos(totalOtros)+'</div><div style="font-size:10px;color:var(--m)">'+otros.length+' pagos</div></div>':'')+
+    '<div style="background:var(--pl,#e8f4fd);padding:12px;border-radius:var(--rs);text-align:center"><div style="font-size:11px;color:var(--m)">Total general</div><div style="font-weight:700;font-size:18px;color:#1565C0">'+pesos(totalGeneral)+'</div><div style="font-size:10px;color:var(--m)">'+(transferencias.length+efectivo.length+otros.length)+' pagos</div></div>'+
+    '</div>'+
+    tablaGrupo(transferencias,'🏦 Transferencias bancarias','var(--s)')+
+    tablaGrupo(efectivo,'💵 Efectivo','#E65100')+
+    tablaGrupo(otros,'📋 Otros medios','var(--m)');
+  document.getElementById('rm-resultado').innerHTML=html;
+}
+
+function exportarReporteMedios(){
+  if(!_reporteMediosData){toast('Generá el reporte primero','e');return;}
+  var wb=XLSX.utils.book_new();
+  function crearHoja(lista,nombre){
+    if(!lista.length)return;
+    var rows=lista.map(function(p){return{Fecha:p.fecha,Alumno:p.alumno_nombre,Concepto:p.concepto,Monto:parseFloat(p.monto),Medio:p.medio,Origen:p.origen};});
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),nombre);
+  }
+  crearHoja(_reporteMediosData.transferencias,'Transferencias');
+  crearHoja(_reporteMediosData.efectivo,'Efectivo');
+  if(_reporteMediosData.otros.length)crearHoja(_reporteMediosData.otros,'Otros');
+  XLSX.writeFile(wb,'reporte_medios_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  toast('Exportado correctamente','s');
+}
+
+// REPORTE
+var _moraPorcentaje = 0;
+
+async function cargarReporte(){
+  _reporte=await api('GET','/api/reporte');
+  var mr=await api('GET','/api/mora');
+  _moraPorcentaje=mr&&mr.ok?mr.porcentaje:0;
+  var cursos=[];_reporte.forEach(function(a){if(cursos.indexOf(a.curso)<0)cursos.push(a.curso);});cursos.sort();
+  var sel=document.getElementById('rep-curso');var first=sel.options[0];sel.innerHTML='';sel.appendChild(first);
+  cursos.forEach(function(c){var o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o);});
+  filtrarReporte();
+}
+
+function filtrarReporte(){
+  var q=(document.getElementById('rep-q').value||'').toLowerCase();
+  var curso=document.getElementById('rep-curso').value;
+  var estado=document.getElementById('rep-estado').value;
+  var lista=_reporte.filter(function(a){
+    if(q&&a.nombre.toLowerCase().indexOf(q)<0)return false;
+    if(curso&&a.curso!==curso)return false;
+    var est=a.estadoCuotas||{};
+    var hayDeuda=Object.keys(est).some(function(k){return est[k]==='pendiente';});
+    var hayComp=Object.keys(est).some(function(k){return est[k]==='compensada';});
+    if(estado==='deuda'&&!hayDeuda)return false;
+    if(estado==='comp'&&!hayComp)return false;
+    if(estado==='aldia'&&(hayDeuda||hayComp))return false;
+    return true;
+  });
+  var totalDeuda=0,conDeuda=0,conComp=0;
+  lista.forEach(function(a){var est=a.estadoCuotas||{};
+    var hayComp=Object.keys(est).some(function(k){return est[k]==='compensada';});
+    totalDeuda+=a.deudaReal||0;if(a.deudaReal>0)conDeuda++;if(hayComp)conComp++;});
+  document.getElementById('rep-resumen').innerHTML=
+    rsc('Con deuda',conDeuda+' alumnos','d')+rsc('Compensados',conComp+' alumnos','p')+rsc('Al dia',(lista.length-conDeuda-conComp)+' alumnos','s');
+  var h='<table><thead><tr><th>Alumno</th><th>Curso</th>';
+  CUOTAS.forEach(function(c){h+='<th style="font-size:10px;text-align:center;min-width:52px">C'+c.num+'<br><span style="font-weight:400">'+c.mes.slice(0,3)+'</span></th>';});
+  h+='<th>Deuda real</th>'+(_moraPorcentaje>0?'<th style="color:var(--w)">Mora '+_moraPorcentaje+'%</th>':'')+'<th style="width:80px">WA</th></tr></thead><tbody>';
+  lista.forEach(function(a){
+    var est=a.estadoCuotas||{};
+    var fechas=a.fechasPago||{};
+    h+='<tr style="cursor:pointer" onclick="abrirDetalleAlumno('+a.id+')" title="Clic para ver detalle completo">';
+    h+='<td style="font-weight:500;font-size:12px;white-space:nowrap">'+a.nombre+'</td>';
+    h+='<td><span class="badge bp" style="font-size:9px">'+a.curso+'</span></td>';
+    CUOTAS.forEach(function(c){
+      var e=est[c.num]||est[String(c.num)]||'futura';
+      var _fk2=c.num; var _fs2=String(c.num);
+      var fecha=fechas.hasOwnProperty(_fk2)?fechas[_fk2]:(fechas.hasOwnProperty(_fs2)?fechas[_fs2]:'');
+      var fechaCorta=fecha&&fecha!==''?String(fecha).slice(0,10):'';
+      if(e==='futura'){h+='<td style="text-align:center;color:var(--m);font-size:10px">—</td>';}
+      else if(e==='pagada'){h+='<td style="text-align:center;background:var(--sl)"><span style="color:var(--s);font-size:12px">✓</span>'+(fechaCorta?'<div style="font-size:9px;color:var(--s);margin-top:1px">'+fechaCorta+'</div>':'')+'</td>';}
+      else if(e==='compensada'){h+='<td style="text-align:center;background:#FFF3E0;border:1px solid #FFB74D" title="Compensada por saldo"><div style="font-size:9px;color:#E65100;font-weight:700">↔<br>COMP</div></td>';}
+      else if(e==='gratis'){h+='<td style="text-align:center;background:#c8f7c5;border:1px solid #5cb85c"><div style="font-size:9px;color:#1a7a1a;font-weight:700">★<br>GRATIS</div></td>';}
+      else{
+        var numCuota=c.num;var dia=new Date().getDate();
+        var precioCuota=(MESES_TODO_EL_MES.indexOf(numCuota)>=0||dia<=10)?parseFloat(a.precio_bonificado)||0:parseFloat(a.precio_normal)||0;
+        var montoParcial=a.montosPago&&(a.montosPago[numCuota]||a.montosPago[String(numCuota)])||0;
+        if(montoParcial>0&&montoParcial<precioCuota){
+          h+='<td style="text-align:center;background:var(--wl);border:1px solid var(--w)" title="Pago parcial: '+pesos(montoParcial)+' de '+pesos(precioCuota)+'"><div style="font-size:9px;color:var(--w);font-weight:700">⚠ PARCIAL</div><div style="font-size:8px;color:var(--w)">'+pesos(montoParcial)+'</div></td>';
+        } else {
+          h+='<td style="text-align:center;background:var(--dl)"><span style="font-size:10px;font-weight:700;color:var(--d)">'+pesos(precioCuota)+'</span></td>';
+        }
+      }
+    });
+    var moraMonto=(_moraPorcentaje>0&&a.tienesMora&&a.deudaReal>0)?Math.round(a.deudaReal*_moraPorcentaje/100):0;
+    var saldoFavor=parseFloat(a.saldo_favor)||0;
+    var deudaCell;
+    if(saldoFavor>0){
+      deudaCell='<td style="font-weight:700;color:#1565C0;background:#E3F2FD">✦ '+pesos(saldoFavor)+'<br><span style="font-size:9px;font-weight:400">a favor</span></td>';
+    } else {
+      deudaCell='<td style="font-weight:700;color:'+(a.deudaReal>0?'var(--d)':'var(--s)')+'">'+( a.deudaReal>0?pesos(a.deudaReal):'Al día')+'</td>';
+    }
+    h+=deudaCell;
+    if(_moraPorcentaje>0){h+='<td style="font-weight:700;color:var(--w);text-align:center">'+(moraMonto>0?pesos(moraMonto):'—')+'</td>';}
+    // Botón WhatsApp
+    if(a.deudaReal>0){
+      var tel=(a.telefono||'').replace(/[^0-9]/g,'');
+      var dia=new Date().getDate();
+      var lineasPend=[];
+      MESES_NOMBRE_ALL.forEach(function(mes,i){
+        var n=i+1;
+        if(a.estadoCuotas&&a.estadoCuotas[n]==='pendiente'){
+          var precio=(MESES_TODO_EL_MES.indexOf(n)>=0||dia<=10)?parseFloat(a.precio_bonificado):parseFloat(a.precio_normal);
+          lineasPend.push(mes+': '+pesos(precio));
+        }
+      });
+      var msg=encodeURIComponent('Hola! Le recordamos que tiene las siguientes cuotas pendientes en el Instituto Cultural Cerrillos:\n'+lineasPend.join('\n')+'\nTotal: '+pesos(a.deudaReal)+'\nPor favor comuniquese para regularizar su situacion. Gracias!');
+      var waLink=tel?'https://wa.me/549'+tel+'?text='+msg:'https://wa.me/?text='+msg;
+      h+='<td style="text-align:center"><a href="'+waLink+'" target="_blank" onclick="event.stopPropagation()" style="background:#25D366;color:#fff;border-radius:6px;padding:3px 7px;font-size:11px;font-weight:700;text-decoration:none;display:inline-block">WA</a></td>';
+    } else {
+      h+='<td></td>';
+    }
+    h+='</tr>';
+  });
+  h+='</tbody></table>';
+  document.getElementById('rep-tabla-wrap').innerHTML=h;
+}
+function rsc(l,v,c){return '<div class="sc" style="padding:8px 12px"><div class="sc-l">'+l+'</div><div class="sc-v '+c+'" style="font-size:15px">'+v+'</div></div>';}
+
+async function abrirDetalleAlumno(id){
+  var a=_reporte.find(function(x){return x.id===id;});
+  if(!a)return;
+  var est=a.estadoCuotas||{};
+  var fechas=a.fechasPago||{};
+  var montos=a.montosPago||{};
+  var dia=new Date().getDate();
+  var tel=(a.telefono||'').replace(/[^0-9]/g,'');
+  var dia2=new Date().getDate();
+  var lineasPend2=[];
+  MESES_NOMBRE_ALL.forEach(function(mes,i){
+    var n=i+1;
+    if(est[n]==='pendiente'){
+      var precio=(MESES_TODO_EL_MES.indexOf(n)>=0||dia2<=10)?parseFloat(a.precio_bonificado):parseFloat(a.precio_normal);
+      lineasPend2.push(mes+': '+pesos(precio));
+    }
+  });
+  var msg=encodeURIComponent('Hola! Le recordamos que tiene las siguientes cuotas pendientes en el Instituto Cultural Cerrillos:\n'+(lineasPend2.length?lineasPend2.join('\n'):'cuotas pendientes')+'\nTotal: '+pesos(a.deudaReal)+'\nPor favor comuniquese para regularizar su situacion. Gracias!');
+  var waLink=tel?'https://wa.me/549'+tel+'?text='+msg:'';
+
+  var cuotasHtml='<table style="width:100%;font-size:12.5px;border-collapse:collapse"><thead><tr>'+
+    '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Cuota</th>'+
+    '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Mes</th>'+
+    '<th style="text-align:center;padding:6px 10px;background:var(--gl);color:var(--m)">Estado</th>'+
+    '<th style="text-align:right;padding:6px 10px;background:var(--gl);color:var(--m)">Monto</th>'+
+    '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Fecha de pago</th>'+
+    '<th style="padding:6px 10px;background:var(--gl)"></th>'+
+    '</tr></thead><tbody>';
+
+  CUOTAS.forEach(function(c){
+    var e=est[c.num]||est[String(c.num)]||'futura';
+    // Buscar fecha — puede venir como numero de cuota entero o string
+    var _fk = c.num; var _fs = String(c.num);
+    var fecha = fechas.hasOwnProperty(_fk) ? fechas[_fk] : (fechas.hasOwnProperty(_fs) ? fechas[_fs] : '');
+    var monto = montos.hasOwnProperty(_fk) ? montos[_fk] : (montos.hasOwnProperty(_fs) ? montos[_fs] : 0);
+    var fechaCorta = fecha && fecha !== '' ? String(fecha).slice(0,10) : '—';
+    var estadoHtml='',bg='var(--gl)',montoTxt='—',accion='';
+    if(e==='futura'){bg='';estadoHtml='<span style="color:var(--m)">No generada</span>';montoTxt='—';}
+    else if(e==='pagada'){
+      bg='var(--sl)';estadoHtml='<span style="color:var(--s);font-weight:600">✓ Pagada</span>';
+      montoTxt=monto?pesos(monto):'—';
+      accion='<button class="btn bob" style="padding:2px 7px;font-size:10px" onclick="event.stopPropagation();abrirReimputar('+a.id+','+c.num+')">Reimputar</button>';
+    }
+    else if(e==='compensada'){bg='#FFF3E0';estadoHtml='<span style="color:#E65100;font-weight:600">↔ Compensada</span>';montoTxt='—';}
+    else if(e==='gratis'){bg='#c8f7c5';estadoHtml='<span style="color:#1a7a1a;font-weight:600">★ Gratis</span>';montoTxt='$0';}
+    else{
+      bg='var(--dl)';
+      var precioCuota=(MESES_TODO_EL_MES.indexOf(c.num)>=0||dia<=10)?parseFloat(a.precio_bonificado)||0:parseFloat(a.precio_normal)||0;
+      // Verificar si hay pago parcial (monto_pagado > 0 pero cuota pendiente)
+      if(monto && monto > 0 && monto < precioCuota){
+        var saldoRest=precioCuota-monto;
+        estadoHtml='<span style="color:var(--w);font-weight:600">⚠ Pago parcial</span>';
+        montoTxt='<span style="color:var(--w)">'+pesos(monto)+'</span><span style="color:var(--d);font-size:10px"> (falta '+pesos(saldoRest)+')</span>';
+        fechaCorta=fecha?String(fecha).slice(0,10):'—';
+        bg='var(--wl)';
+      } else {
+        montoTxt=pesos(precioCuota); fechaCorta='—';
+      }
+      accion='<button class="btn bob" style="padding:2px 7px;font-size:10px;background:#FF9800;color:#fff;border-color:#FF9800" onclick="event.stopPropagation();abrirBonificar('+a.id+','+c.num+','+precioCuota+')">Bonificar</button>';
+    }
+    cuotasHtml+='<tr style="background:'+bg+'">'+
+      '<td style="padding:6px 10px;font-weight:600">'+c.num+'</td>'+
+      '<td style="padding:6px 10px">'+c.mes+' 2026</td>'+
+      '<td style="padding:6px 10px;text-align:center">'+estadoHtml+'</td>'+
+      '<td style="padding:6px 10px;text-align:right;font-weight:600">'+montoTxt+'</td>'+
+      '<td style="padding:6px 10px;color:var(--m)">'+fechaCorta+'</td>'+
+      '<td style="padding:6px 10px">'+accion+'</td>'+
+    '</tr>';
+  });
+  cuotasHtml+='</tbody></table>';
+
+  // Cargar pagos del alumno para cuenta corriente
+  var pagosAlumno = await api('GET', '/api/pagos?alumnoId=' + id) || [];
+  // Filtrar pagos de este alumno del historial
+  pagosAlumno = (_pagos || []).filter(function(p){ return p.alumno_id === id || p.alumno_id === String(id); })
+    .sort(function(a,b){ return a.id - b.id; });
+
+  var cuentaCorriente = '';
+  if (pagosAlumno.length > 0) {
+    cuentaCorriente = '<div style="margin-top:14px">'+
+      '<div class="ctitle">Cuenta corriente</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
+
+      // Columna izquierda: Ingresos
+      '<div>'+
+        '<div style="font-size:11px;font-weight:700;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Ingresos</div>'+
+        '<table style="width:100%;font-size:12px;border-collapse:collapse">'+
+        '<thead><tr>'+
+          '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Fecha</th>'+
+          '<th style="text-align:right;padding:5px 8px;background:var(--gl);color:var(--m)">Monto</th>'+
+          '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Origen</th>'+
+        '</tr></thead><tbody>';
+
+    var totalIngresos = 0;
+    pagosAlumno.forEach(function(p){
+      totalIngresos += parseFloat(p.monto)||0;
+      var origenCorto = (p.origen||'')
+        .replace('Importado desde planilla','Excel')
+        .replace('Manual · ','')
+        .replace('Transferencia','Transfer.')
+        .slice(0,25);
+      cuentaCorriente +=
+        '<tr style="border-bottom:1px solid var(--b)">'+
+          '<td style="padding:5px 8px;color:var(--m);white-space:nowrap">'+p.fecha+'</td>'+
+          '<td style="padding:5px 8px;text-align:right;font-weight:600;color:var(--s)">+'+pesos(p.monto)+'</td>'+
+          '<td style="padding:5px 8px;font-size:10.5px;color:var(--m)">'+origenCorto+'</td>'+
+        '</tr>';
+    });
+    cuentaCorriente +=
+        '</tbody>'+
+        '<tfoot><tr style="background:var(--gl)">'+
+          '<td style="padding:6px 8px;font-weight:700">Total</td>'+
+          '<td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--s)">'+pesos(totalIngresos)+'</td>'+
+          '<td></td>'+
+        '</tr></tfoot>'+
+        '</table>'+
+      '</div>'+
+
+      // Columna derecha: Aplicaciones
+      '<div>'+
+        '<div style="font-size:11px;font-weight:700;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Aplicado a cuotas</div>'+
+        '<table style="width:100%;font-size:12px;border-collapse:collapse">'+
+        '<thead><tr>'+
+          '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Cuota</th>'+
+          '<th style="text-align:right;padding:5px 8px;background:var(--gl);color:var(--m)">Monto</th>'+
+          '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Fecha</th>'+
+        '</tr></thead><tbody>';
+
+    var totalAplicado = 0;
+    CUOTAS.forEach(function(c){
+      var _fk=c.num; var _fs=String(c.num);
+      var e=est[_fk]||est[_fs]||'futura';
+      var fecha=fechas.hasOwnProperty(_fk)?fechas[_fk]:(fechas.hasOwnProperty(_fs)?fechas[_fs]:'');
+      var monto=montos.hasOwnProperty(_fk)?montos[_fk]:(montos.hasOwnProperty(_fs)?montos[_fs]:0);
+      if(e==='pagada'||e==='compensada'){
+        totalAplicado += parseFloat(monto)||0;
+        var fechaCorta = fecha?String(fecha).slice(0,10):'—';
+        cuentaCorriente +=
+          '<tr style="border-bottom:1px solid var(--b)">'+
+            '<td style="padding:5px 8px;font-weight:600">C'+c.num+' '+c.mes+'</td>'+
+            '<td style="padding:5px 8px;text-align:right;color:var(--s)">'+( monto?pesos(monto):'—')+'</td>'+
+            '<td style="padding:5px 8px;font-size:10.5px;color:var(--m)">'+fechaCorta+'</td>'+
+          '</tr>';
+      }
+    });
+
+    var saldoPendiente = totalIngresos - totalAplicado;
+    cuentaCorriente +=
+        '</tbody>'+
+        '<tfoot>'+
+          '<tr style="background:var(--gl)">'+
+            '<td style="padding:6px 8px;font-weight:700">Aplicado</td>'+
+            '<td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--s)">'+pesos(totalAplicado)+'</td>'+
+            '<td></td>'+
+          '</tr>'+
+          (saldoPendiente > 100 ?
+            '<tr style="background:var(--wl)">'+
+              '<td style="padding:6px 8px;font-weight:700;color:var(--w)">Saldo sin aplicar</td>'+
+              '<td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--w)">'+pesos(saldoPendiente)+'</td>'+
+              '<td></td>'+
+            '</tr>' : '')+
+        '</tfoot>'+
+        '</table>'+
+      '</div>'+
+
+      '</div></div>'; // cierre grid y cuenta corriente
+  }
+
+  document.getElementById('det-body').innerHTML=
+    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">'+
+      '<div class="avatar" style="width:44px;height:44px;font-size:13px">'+a.nombre.split(/[\s,]+/).filter(Boolean).slice(0,2).map(function(x){return x[0];}).join('').toUpperCase()+'</div>'+
+      '<div style="flex:1">'+
+        '<div style="font-weight:700;font-size:14px">'+a.nombre+'</div>'+
+        '<div style="font-size:12px;color:var(--m)">'+a.curso+' · Tel: '+(a.telefono||'no registrado')+'</div>'+
+      '</div>'+
+      (a.deudaReal>0&&waLink?'<a href="'+waLink+'" target="_blank" style="background:#25D366;color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;text-decoration:none">WhatsApp</a>':'<span class="badge bs">Al dia</span>')+
+    '</div>'+
+    '<div class="r2" style="margin-bottom:14px">'+
+      '<div style="background:var(--gl);padding:10px;border-radius:var(--rs)"><div style="font-size:11px;color:var(--m)">Total pagado</div><div style="font-weight:700;font-size:15px;color:var(--s)">'+pesos(a.totalPagado)+'</div></div>'+
+      '<div style="background:'+(a.deudaReal>0?'var(--dl)':'var(--sl)')+';padding:10px;border-radius:var(--rs)"><div style="font-size:11px;color:var(--m)">Deuda real</div><div style="font-weight:700;font-size:15px;color:'+(a.deudaReal>0?'var(--d)':'var(--s)')+'">'+( a.deudaReal>0?pesos(a.deudaReal):'Al dia')+'</div></div>'+
+    '</div>'+
+    (parseFloat(a.saldo_favor)>0?
+      '<div style="background:#E3F2FD;padding:10px;border-radius:var(--rs);margin-bottom:14px;border:1px solid #90CAF9;display:flex;gap:12px;align-items:center">'+
+        '<div style="flex:1"><div style="font-size:11px;color:#1565C0;font-weight:700">✦ Saldo a favor</div>'+
+        '<div style="font-size:15px;font-weight:700;color:#1565C0">'+pesos(parseFloat(a.saldo_favor))+'</div></div>'+
+        '<div style="font-size:10px;color:#1565C0">Se aplicará automáticamente<br>a la próxima cuota</div>'+
+      '</div>'
+    :'')+
+    '<div style="background:var(--gl);padding:10px;border-radius:var(--rs);margin-bottom:14px;display:flex;gap:24px;align-items:center">'+
+      '<div style="font-size:11px;color:var(--m)">Valor de cuota:</div>'+
+      '<div style="display:flex;gap:16px">'+
+        '<div><span style="font-size:10px;color:var(--m)">Con descuento </span><strong style="color:var(--s);font-size:13px">'+pesos(a.precio_bonificado)+'</strong></div>'+
+        '<div style="color:var(--b)">|</div>'+
+        '<div><span style="font-size:10px;color:var(--m)">Sin descuento </span><strong style="color:var(--d);font-size:13px">'+pesos(a.precio_normal)+'</strong></div>'+
+      '</div>'+
+    '</div>'+
+    ((_moraPorcentaje>0&&a.tienesMora&&a.deudaReal>0)?
+      (function(){var moraDet=Math.round(a.deudaReal*_moraPorcentaje/100);return '<div style="background:#fff3e0;padding:10px;border-radius:var(--rs);margin-bottom:14px;display:flex;gap:12px;align-items:center;border:1px solid #FFB74D">'+
+        '<div style="flex:1">'+
+          '<div style="font-size:11px;color:#E65100;font-weight:700">⚠ Mora por cuotas vencidas ('+_moraPorcentaje+'%)</div>'+
+          '<div style="font-size:13px;font-weight:700;color:#E65100">'+pesos(moraDet)+'</div>'+
+        '</div>'+
+        '<button class="btn" style="font-size:10px;padding:3px 8px;background:#FF9800;color:#fff;border-color:#FF9800" onclick="event.stopPropagation();bonificarMora('+a.id+','+moraDet+')">Bonificar mora</button>'+
+      '</div>';})()
+    :'')+
+    cuotasHtml +
+    cuentaCorriente;
+  abrirM('m-det-alumno');
+}
+
+// BONIFICAR CUOTA
+var _bonifAlumnoId = null;
+var _bonifCuota = null;
+var _bonifPrecioNormal = 0;
+
+var _pendingBonifAlumnoId=null, _pendingBonifCuota=null, _pendingBonifPrecioNormal=null;
+
+function abrirBonificar(alumnoId, numCuota, precioNormal) {
+  // Pedir clave admin antes de continuar
+  _pendingBonifAlumnoId=alumnoId;
+  _pendingBonifCuota=numCuota;
+  _pendingBonifPrecioNormal=precioNormal;
+  var clave=prompt('Ingresá la clave de administración para bonificar:');
+  if(!clave){return;}
+  // Verificar clave
+  api('POST','/api/verificar-clave',{clave,tipo:'admin'}).then(function(r){
+    if(!r||!r.ok){toast('Clave incorrecta','e');return;}
+    // Clave correcta — abrir modal
+    _bonifAlumnoId=_pendingBonifAlumnoId;
+    _bonifCuota=_pendingBonifCuota;
+    _bonifPrecioNormal=_pendingBonifPrecioNormal;
+    var a=_reporte.find(function(x){return x.id===_bonifAlumnoId;});
+    document.getElementById('bonif-info').textContent=(a?a.nombre:'')+' — Cuota '+_bonifCuota+' ('+CUOTAS[_bonifCuota-1].mes+' 2026) — Precio normal: '+pesos(_bonifPrecioNormal);
+    document.getElementById('bonif-tipo').value='gratis';
+    document.getElementById('bonif-monto').value='';
+    document.getElementById('bonif-motivo').value='';
+    document.getElementById('bonif-monto-div').style.display='none';
+    document.getElementById('bonif-aviso').textContent='La cuota quedará marcada como pagada en $0.';
+    abrirM('m-bonificar');
+  });
+}
+
+function bonifCambiarTipo() {
+  var tipo = document.getElementById('bonif-tipo').value;
+  var montoDiv = document.getElementById('bonif-monto-div');
+  var aviso = document.getElementById('bonif-aviso');
+  if (tipo === 'gratis') {
+    montoDiv.style.display = 'none';
+    aviso.textContent = 'La cuota quedará marcada como pagada en $0.';
+  } else {
+    montoDiv.style.display = 'block';
+    aviso.textContent = 'La cuota quedará marcada como pagada con el monto ingresado.';
+    document.getElementById('bonif-monto').focus();
+  }
+}
+
+async function confirmarBonificar() {
+  var tipo = document.getElementById('bonif-tipo').value;
+  var motivo = document.getElementById('bonif-motivo').value.trim();
+  var monto = tipo === 'gratis' ? 0 : parseFloat(document.getElementById('bonif-monto').value) || 0;
+  if (tipo === 'monto' && monto <= 0) { toast('Ingresá un monto válido', 'e'); return; }
+  if (tipo === 'monto' && monto >= _bonifPrecioNormal) {
+    if (!confirm('El monto ingresado (' + pesos(monto) + ') es igual o mayor al precio normal. ¿Querés continuar?')) return;
+  }
+  var r = await api('POST', '/api/bonificar', {
+    alumnoId: _bonifAlumnoId,
+    numCuota: _bonifCuota,
+    monto,
+    motivo
+  });
+  if (!r || !r.ok) { toast('Error: ' + (r ? r.error : ''), 'e'); return; }
+  cerrarM('m-bonificar');
+  cerrarM('m-det-alumno');
+  await cargarReporte();
+  _pagos = await api('GET', '/api/pagos');
+  toast('Cuota bonificada correctamente', 's');
+}
+
+// REIMPUTAR
+var _reimputarAlumnoId = null;
+var _reimputarCuotaOrigen = null;
+
+function abrirReimputar(alumnoId, cuotaOrigen) {
+  _reimputarAlumnoId = alumnoId;
+  _reimputarCuotaOrigen = cuotaOrigen;
+  var a = _reporte.find(function(x){ return x.id === alumnoId; });
+  document.getElementById('reim-info').textContent = (a ? a.nombre : '') + ' — Cuota ' + cuotaOrigen + ' (' + CUOTAS[cuotaOrigen-1].mes + ' 2026)';
+  // Poblar selector de destino con cuotas disponibles (1-10 excepto la origen)
+  var sel = document.getElementById('reim-destino');
+  sel.innerHTML = '';
+  CUOTAS.forEach(function(c){
+    if (c.num === cuotaOrigen) return;
+    var o = document.createElement('option');
+    o.value = c.num;
+    o.textContent = 'Cuota ' + c.num + ' — ' + c.mes + ' 2026';
+    sel.appendChild(o);
+  });
+  abrirM('m-reimputar');
+}
+
+async function confirmarReimputar() {
+  var destino = parseInt(document.getElementById('reim-destino').value);
+  if (!destino || !_reimputarAlumnoId || !_reimputarCuotaOrigen) return;
+  var r = await api('POST', '/api/reimputar', {
+    alumnoId: _reimputarAlumnoId,
+    cuotaOrigen: _reimputarCuotaOrigen,
+    cuotaDestino: destino
+  });
+  if (!r || !r.ok) { toast('Error: ' + (r ? r.error : 'desconocido'), 'e'); return; }
+  cerrarM('m-reimputar');
+  cerrarM('m-det-alumno');
+  // Recargar reporte
+  await cargarReporte();
+  toast('Cuota reimputada correctamente', 's');
+}
+
+// CURSOS
+async function renderCursos(){
+  _cursos=await api('GET','/api/cursos');
+  poblarSelects();
+  var h=_cursos.map(function(c){
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--b)">'+
+      '<span style="font-weight:500">'+c.nombre+'</span>'+
+      '<button class="btn bob" style="font-size:10.5px;padding:2px 8px;color:var(--d)" onclick="eliminarCurso('+c.id+')">Dar de baja</button></div>';
+  }).join('');
+  document.getElementById('lista-cursos').innerHTML=h||'<p style="color:var(--m);font-size:13px">Sin cursos.</p>';
+}
+
+async function agregarCurso(){
+  var nombre=document.getElementById('nuevo-curso').value.trim();
+  if(!nombre){toast('Ingresa un nombre','e');return;}
+  await api('POST','/api/cursos',{nombre});
+  document.getElementById('nuevo-curso').value='';
+  renderCursos();toast('Curso agregado','s');
+}
+
+async function eliminarCurso(id){
+  if(!confirm('Dar de baja este curso?'))return;
+  await api('DELETE','/api/cursos/'+id);
+  renderCursos();toast('Curso dado de baja','i');
+}
+
+// EXPORT - corregido
+async function exportarPagos(){
+  showSpinner('Exportando...');
+  try {
+    var pagos = await api('GET','/api/exportar/pagos');
+    if(!pagos||!pagos.length){toast('Sin pagos para exportar','e');return;}
+    var datos=pagos.map(function(p){return{'N Recibo':p.id,'Fecha':p.fecha,'Alumno':p.alumno_nombre,'Curso':p.curso,'Monto':p.monto,'Concepto':p.concepto,'Medio':p.medio,'Origen':p.origen};});
+    var ws=XLSX.utils.json_to_sheet(datos);var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Pagos');
+    XLSX.writeFile(wb,'pagos_'+new Date().toISOString().slice(0,10)+'.xlsx');
+    toast('Exportado correctamente','s');
+  } catch(e){ toast('Error al exportar','e'); }
+}
+
+// ARANCELES
+var _aranceles=[], editVigId=null, _aplicarCursoData={};
+
+async function cargarAranceles(){
+  _aranceles=await api('GET','/api/aranceles');
+  renderVigencias();
+}
+
+function renderVigencias(){
+  var hoy=new Date().toISOString().slice(0,10);
+  var h='<table><thead><tr><th>Desde</th><th>Descripcion</th><th>Estado</th><th></th></tr></thead><tbody>';
+  if(!_aranceles.length){ h+='<tr><td colspan="4" style="text-align:center;color:var(--m);padding:20px">Sin vigencias. Crea la primera.</td></tr>'; }
+  _aranceles.forEach(function(v){
+    var act=v.desde<=hoy;
+    h+='<tr><td style="font-weight:600">'+v.desde+'</td><td>'+(v.descripcion||'—')+'</td>'+
+      '<td><span class="badge '+(act?'bs':'bp')+'">'+(act?'Activa':'Futura')+'</span></td>'+
+      '<td style="white-space:nowrap">'+
+        '<button class="btn bob" style="font-size:11px;padding:4px 9px;background:var(--gl)" onclick="verPreciosVig('+v.id+')">👁 Ver precios</button> '+
+        '<button class="btn bob" style="font-size:11px;padding:4px 9px" onclick="abrirEditVig('+v.id+')">Editar precios</button> '+
+        (_aranceles.length>1?'<button class="btn bob" style="font-size:11px;padding:4px 9px;color:var(--d)" onclick="eliminarVig('+v.id+')">Eliminar</button>':'')+
+      '</td></tr>';
+  });
+  h+='</tbody></table>';
+  var t1=document.getElementById('tabla-vig');
+  var t2=document.getElementById('tabla-vig-admin');
+  if(t1)t1.innerHTML=h;
+  if(t2)t2.innerHTML=h;
+}
+
+function nuevaVigencia(){
+  // Precargar la fecha de hoy y la descripción de la vigencia activa
+  var hoy=new Date().toISOString().slice(0,10);
+  document.getElementById('vig-desde').value=hoy;
+  // Mostrar vigencia actual en el modal
+  var vigActual=_aranceles.find(function(v){return v.desde<=hoy;});
+  var infoEl=document.getElementById('vig-actual-info');
+  if(infoEl){
+    if(vigActual){
+      infoEl.textContent='Vigencia actual: '+vigActual.desde+(vigActual.descripcion?' — '+vigActual.descripcion:'');
+      infoEl.style.display='block';
+    } else {
+      infoEl.style.display='none';
+    }
+  }
+  document.getElementById('vig-desc').value='';
+  abrirM('m-vig');
+}
+
+async function crearVigencia(){
+  var desde=document.getElementById('vig-desde').value;
+  if(!desde){toast('Indica una fecha','e');return;}
+  var desc=document.getElementById('vig-desc').value;
+  await api('POST','/api/aranceles',{desde,descripcion:desc});
+  cerrarM('m-vig');
+  cargarAranceles();
+  toast('Vigencia creada. Edita los precios si es necesario.','s');
+}
+
+async function verPreciosVig(id){
+  var v=_aranceles.find(function(x){return x.id===id;});
+  var cursos=await api('GET','/api/aranceles/'+id+'/cursos');
+  var precios=await api('GET','/api/aranceles/'+id+'/precios');
+  // Contar alumnos por curso y detectar especiales
+  var conteo={};
+  var especiales=[];
+  precios.forEach(function(p){
+    var c=p.curso||'Sin curso';
+    if(!conteo[c]) conteo[c]=0;
+    conteo[c]++;
+    if(p.precio_especial) especiales.push(p);
+  });
+  var h='<div style="font-size:12px;color:var(--m);margin-bottom:14px">Vigente desde <strong>'+v.desde+'</strong>'+(v.descripcion?' — '+v.descripcion:'')+'</div>';
+  // Tabla por curso
+  h+='<table style="width:100%"><thead><tr><th>Curso</th><th style="text-align:right">P. Normal</th><th style="text-align:right">P. Bonificado</th><th style="text-align:center">Alumnos</th></tr></thead><tbody>';
+  if(cursos.length){
+    cursos.forEach(function(c){
+      var cant=conteo[c.curso]||0;
+      h+='<tr>'+
+        '<td style="font-weight:600;font-size:13px">'+c.curso+'</td>'+
+        '<td style="text-align:right">$'+Number(c.precio_normal).toLocaleString('es-AR')+'</td>'+
+        '<td style="text-align:right;color:var(--s);font-weight:600">$'+Number(c.precio_bonificado).toLocaleString('es-AR')+'</td>'+
+        '<td style="text-align:center;color:var(--m);font-size:12px">'+cant+'</td>'+
+      '</tr>';
+    });
+    // FAMILIA (precio individual)
+    var famAlumnos=precios.filter(function(p){return p.curso==='FAMILIA';});
+    if(famAlumnos.length){
+      h+='<tr><td colspan="4" style="padding-top:8px;font-size:11px;color:var(--m);font-style:italic">FAMILIA — precio individual por grupo familiar</td></tr>';
+      famAlumnos.forEach(function(p){
+        h+='<tr style="background:var(--gl)">'+
+          '<td style="font-size:12px;padding-left:16px">'+p.nombre+'</td>'+
+          '<td style="text-align:right;font-size:12px">$'+Number(p.precio_normal).toLocaleString('es-AR')+'</td>'+
+          '<td style="text-align:right;font-size:12px;color:var(--s);font-weight:600">$'+Number(p.precio_bonificado).toLocaleString('es-AR')+'</td>'+
+          '<td></td></tr>';
       });
     }
-  }
-
-  const fecha = new Date().toLocaleDateString('es-AR');
-  const hora = new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
-
-  // 1. BACKUP ALUMNOS
-  await asegurarHoja('Alumnos_Backup');
-  const alumnos = await q('SELECT * FROM alumnos ORDER BY nombre');
-  const rowsAlumnos = [
-    ['ID','Nombre','Curso','CUITs','Precio Normal','Precio Bonificado','Activo','Telefono','Backup: '+fecha+' '+hora],
-    ...alumnos.map(a=>[a.id,a.nombre,a.curso,a.cuits,parseFloat(a.precio_normal),parseFloat(a.precio_bonificado),a.activo?'Si':'No',a.telefono||''])
-  ];
-  await sheetsRequest(token,'PUT',`/values/Alumnos_Backup!A1:I${rowsAlumnos.length}?valueInputOption=RAW`,{values:rowsAlumnos});
-
-  // 2. BACKUP PAGOS
-  await asegurarHoja('Pagos_Backup');
-  const pagos = await q('SELECT * FROM pagos ORDER BY id');
-  const rowsPagos = [
-    ['ID','Fecha','Alumno','Curso','Monto','Concepto','Medio','Origen','Backup: '+fecha+' '+hora],
-    ...pagos.map(p=>[p.id,p.fecha,p.alumno_nombre,p.curso,parseFloat(p.monto),p.concepto,p.medio,p.origen])
-  ];
-  await sheetsRequest(token,'PUT',`/values/Pagos_Backup!A1:I${rowsPagos.length}?valueInputOption=RAW`,{values:rowsPagos});
-
-  // 3. BACKUP CUOTAS
-  await asegurarHoja('Cuotas_Backup');
-  const cuotas = await q('SELECT c.*,a.nombre FROM cuotas c JOIN alumnos a ON c.alumno_id=a.id ORDER BY a.nombre,c.numero_cuota');
-  const rowsCuotas = [
-    ['ID','Alumno','Cuota','Estado','Fecha Pago','Monto Pagado','Backup: '+fecha+' '+hora],
-    ...cuotas.map(c=>[c.id,c.nombre,c.numero_cuota,c.estado,c.fecha_pago||'',parseFloat(c.monto_pagado)||0])
-  ];
-  await sheetsRequest(token,'PUT',`/values/Cuotas_Backup!A1:G${rowsCuotas.length}?valueInputOption=RAW`,{values:rowsCuotas});
-
-  console.log(`Backup completado: ${alumnos.length} alumnos, ${pagos.length} pagos, ${cuotas.length} cuotas`);
-}
-
-// Ejecutar backup cada 24 horas
-function programarBackup() {
-  // Primer backup a las 3 AM hora Argentina (UTC-3 = 6 AM UTC)
-  const ahora = new Date();
-  const proximoBackup = new Date();
-  proximoBackup.setUTCHours(6, 0, 0, 0);
-  if (proximoBackup <= ahora) proximoBackup.setUTCDate(proximoBackup.getUTCDate() + 1);
-  const msHasta = proximoBackup - ahora;
-  console.log(`Próximo backup automático en ${Math.round(msHasta/1000/60)} minutos`);
-  setTimeout(() => {
-    ejecutarBackup().catch(e => console.error('Error backup:', e));
-    setInterval(() => ejecutarBackup().catch(e => console.error('Error backup:', e)), 24*60*60*1000);
-  }, msHasta);
-}
-
-// ================================================================
-// MODO DEMO — variables ya declaradas al inicio
-// ================================================================
-let systemRecoveryCode = null;
-let systemRecoveryExpiry = null;
-
-// Verificar clave para acciones sensibles (bonificar, etc.)
-app.post('/api/verificar-clave', (req, res) => {
-  const {clave, tipo} = req.body;
-  if (tipo === 'admin') return res.json({ok: clave === adminPassword});
-  if (tipo === 'sistema') return res.json({ok: clave === systemPassword});
-  res.json({ok: false, error: 'Tipo desconocido'});
-});
-
-app.post('/api/login', (req, res) => {
-  const { password } = req.body;
-  res.json({ ok: password === systemPassword });
-});
-
-app.post('/api/login/recuperar', async (req, res) => {
-  systemRecoveryCode = Math.floor(100000 + Math.random() * 900000).toString();
-  systemRecoveryExpiry = Date.now() + 15 * 60 * 1000;
-  console.log(`=== CÓDIGO RECUPERACIÓN SISTEMA: ${systemRecoveryCode} (válido 15 min) ===`);
-  res.json({ ok: true });
-});
-
-app.post('/api/login/verificar', (req, res) => {
-  const { codigo, nuevaClave } = req.body;
-  if (!systemRecoveryCode || Date.now() > systemRecoveryExpiry)
-    return res.json({ ok: false, error: 'El código expiró. Solicitá uno nuevo.' });
-  if (codigo !== systemRecoveryCode)
-    return res.json({ ok: false, error: 'Código incorrecto.' });
-  systemPassword = nuevaClave;
-  systemRecoveryCode = null;
-  systemRecoveryExpiry = null;
-  res.json({ ok: true });
-});
-
-// ================================================================
-// ADMINISTRACIÓN — AUTH Y ESTADÍSTICAS
-// ================================================================
-const ADMIN_EMAIL = 'jzitelli@gmail.com';
-let adminPassword = process.env.ADMIN_PASSWORD || (DEMO_MODE ? 'DEMO2024' : 'Stefano2008');
-let systemPassword = process.env.SYSTEM_PASSWORD || (DEMO_MODE ? 'DEMO' : '1997');
-let recoveryCode = null;
-let recoveryExpiry = null;
-
-app.post('/api/admin/cambiar-clave', (req,res) => {
-  const {claveActual, nuevaClave} = req.body;
-  if (claveActual !== adminPassword) return res.json({ok:false, error:'Clave actual incorrecta.'});
-  if (!nuevaClave || nuevaClave.length < 4) return res.json({ok:false, error:'La nueva clave debe tener al menos 4 caracteres.'});
-  adminPassword = nuevaClave;
-  res.json({ok:true});
-});
-
-app.post('/api/sistema/cambiar-clave', (req,res) => {
-  const {claveActual, nuevaClave} = req.body;
-  if (claveActual !== systemPassword) return res.json({ok:false, error:'Clave actual incorrecta.'});
-  if (!nuevaClave || nuevaClave.length < 4) return res.json({ok:false, error:'La nueva clave debe tener al menos 4 caracteres.'});
-  systemPassword = nuevaClave;
-  res.json({ok:true});
-});
-
-app.post('/api/admin/login', (req, res) => {
-  const { password } = req.body;
-  res.json({ ok: password === adminPassword });
-});
-
-app.post('/api/admin/recuperar', async (req, res) => {
-  recoveryCode = Math.floor(100000 + Math.random() * 900000).toString();
-  recoveryExpiry = Date.now() + 15 * 60 * 1000;
-  console.log(`=== CÓDIGO DE RECUPERACIÓN ADMIN: ${recoveryCode} (válido 15 min) ===`);
-  try {
-    await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ service_id: 'service_gmail', template_id: 'template_recovery', user_id: 'placeholder', template_params: { to_email: ADMIN_EMAIL, code: recoveryCode } })
+  } else {
+    // Sin precios por curso — mostrar por alumno agrupado
+    var porCurso={};
+    precios.forEach(function(p){
+      var c=p.curso||'Sin curso';
+      if(!porCurso[c])porCurso[c]=[];
+      porCurso[c].push(p);
     });
-  } catch(e) { console.log('Email no enviado:', e.message); }
-  res.json({ ok: true, mensaje: `Código enviado a ${ADMIN_EMAIL.slice(0,2)}***@gmail.com. Si no llega, revisá los logs de Render.` });
-});
-
-app.post('/api/admin/verificar-codigo', (req, res) => {
-  const { codigo, nuevaClave } = req.body;
-  if (!recoveryCode || Date.now() > recoveryExpiry) return res.json({ ok: false, error: 'El código expiró. Solicitá uno nuevo.' });
-  if (codigo !== recoveryCode) return res.json({ ok: false, error: 'Código incorrecto.' });
-  adminPassword = nuevaClave;
-  recoveryCode = null; recoveryExpiry = null;
-  res.json({ ok: true });
-});
-
-app.get('/api/admin/stats', async (req, res) => {
-  const [totalAlumnos, totalPagos, porMedio, deudores, porCurso] = await Promise.all([
-    q1('SELECT COUNT(*) as n FROM alumnos WHERE activo=TRUE'),
-    q1('SELECT COUNT(*) as n, COALESCE(SUM(monto),0) as total FROM pagos'),
-    q('SELECT medio, COUNT(*) as cantidad, SUM(monto) as total FROM pagos GROUP BY medio ORDER BY total DESC'),
-    q1('SELECT COUNT(DISTINCT alumno_id) as n FROM cuotas WHERE estado=$1', ['pendiente']),
-    q(`SELECT a.curso, COUNT(DISTINCT a.id) as alumnos, COALESCE(SUM(p.monto),0) as cobrado FROM alumnos a LEFT JOIN pagos p ON a.id=p.alumno_id WHERE a.activo=TRUE GROUP BY a.curso ORDER BY cobrado DESC`)
-  ]);
-  const alDia = parseInt(totalAlumnos?.n||0) - parseInt(deudores?.n||0);
-
-  // Calcular deuda total con consultas masivas
-  const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE');
-  const todasCuotas = await q('SELECT * FROM cuotas WHERE alumno_id=ANY($1)', [alumnos.map(a=>a.id)]);
-  const todosPagos = await q('SELECT alumno_id, COALESCE(SUM(monto),0) as total FROM pagos WHERE alumno_id=ANY($1) GROUP BY alumno_id', [alumnos.map(a=>a.id)]);
-  const mapPagos = {};
-  todosPagos.forEach(p => { mapPagos[p.alumno_id] = parseFloat(p.total||0); });
-  const hoy = new Date();
-  const mesActual = hoy.getMonth();
-  const dia = hoy.getDate();
-  let totalDeuda = 0;
-  for (const a of alumnos) {
-    const cuotas = todasCuotas.filter(c => c.alumno_id === a.id);
-    const totalPagadoA = mapPagos[a.id] || 0;
-    let totalDebido = 0;
-    for (let i = 0; i < 10; i++) {
-      if (MESES_IDX[i] > mesActual) continue;
-      totalDebido += getPrecio(a, i+1, dia);
-    }
-    const saldo = totalPagadoA - totalDebido;
-    if (saldo < 0) totalDeuda += Math.abs(saldo);
+    Object.keys(porCurso).sort().forEach(function(curso){
+      var pp=porCurso[curso][0];
+      h+='<tr>'+
+        '<td style="font-weight:600">'+curso+'</td>'+
+        '<td style="text-align:right">$'+Number(pp.precio_normal).toLocaleString('es-AR')+'</td>'+
+        '<td style="text-align:right;color:var(--s);font-weight:600">$'+Number(pp.precio_bonificado).toLocaleString('es-AR')+'</td>'+
+        '<td style="text-align:center;color:var(--m);font-size:12px">'+porCurso[curso].length+'</td>'+
+      '</tr>';
+    });
   }
-
-  res.json({ totalAlumnos: parseInt(totalAlumnos?.n||0), totalPagos: parseInt(totalPagos?.n||0), totalCobrado: parseFloat(totalPagos?.total||0), conDeuda: parseInt(deudores?.n||0), alDia, totalDeuda, porMedio, porCurso });
-});
-
-app.get('*', (req,res) => { res.sendFile(path.join(__dirname,'public','index.html')); });
-
-async function inicializarConRetry(intentos=5, delay=5000) {
-  for (let i = 1; i <= intentos; i++) {
-    try {
-      console.log(`Intento ${i} de conexión a la DB...`);
-      await inicializarDB();
-      console.log('DB conectada OK');
-      return;
-    } catch(err) {
-      console.error(`Error intento ${i}:`, err.message);
-      if (i === intentos) { console.error('No se pudo conectar a la DB'); process.exit(1); }
-      console.log(`Reintentando en ${delay/1000}s...`);
-      await new Promise(r => setTimeout(r, delay));
-    }
+  h+='</tbody></table>';
+  // Precios especiales (no familia)
+  var espNofam=especiales.filter(function(p){return p.curso!=='FAMILIA';});
+  if(espNofam.length){
+    h+='<div style="margin-top:14px;font-size:11px;font-weight:700;color:var(--w);text-transform:uppercase">★ Precios especiales</div>';
+    h+='<table style="width:100%;margin-top:6px"><tbody>';
+    espNofam.forEach(function(p){
+      h+='<tr><td style="font-size:12px">'+p.nombre+'</td><td style="font-size:10px;color:var(--m)">'+p.curso+'</td>'+
+        '<td style="text-align:right;font-size:12px">$'+Number(p.precio_normal).toLocaleString('es-AR')+'</td>'+
+        '<td style="text-align:right;font-size:12px;color:var(--s);font-weight:600">$'+Number(p.precio_bonificado).toLocaleString('es-AR')+'</td></tr>';
+    });
+    h+='</tbody></table>';
   }
+  document.getElementById('ver-vig-body').innerHTML=h;
+  abrirM('m-ver-vig');
 }
 
-function keepAliveDB() {
-  setInterval(async () => {
-    try { await q('SELECT 1'); } catch(e) {}
-  }, 4 * 60 * 1000); // cada 4 minutos
-}
-
-inicializarConRetry().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Servidor en puerto ${PORT}`);
-    programarBackup();
-    keepAliveDB();
+async function abrirEditVig(id){
+  editVigId=id;
+  var v=_aranceles.find(function(x){return x.id===id;});
+  document.getElementById('edit-vig-tit').textContent='Editar aranceles — '+v.desde+(v.descripcion?' ('+v.descripcion+')':'');
+  // Cargar precios por curso
+  var cursos=await api('GET','/api/aranceles/'+id+'/cursos');
+  var precios=await api('GET','/api/aranceles/'+id+'/precios');
+  // Tabla por curso
+  var hCursos='<thead><tr><th>Curso</th><th>P. Normal ($)</th><th>P. Bonificado ($)</th><th></th></tr></thead><tbody>';
+  cursos.forEach(function(c){
+    hCursos+='<tr>'+
+      '<td style="font-weight:600;font-size:12px">'+c.curso+'</td>'+
+      '<td><input type="number" data-curso="'+c.curso+'" data-f="precio_normal" value="'+c.precio_normal+'" step="500" style="width:110px;padding:5px;border:1px solid var(--b);border-radius:4px;font-size:12px"></td>'+
+      '<td><input type="number" data-curso="'+c.curso+'" data-f="precio_bonificado" value="'+c.precio_bonificado+'" step="500" style="width:110px;padding:5px;border:1px solid var(--b);border-radius:4px;font-size:12px"></td>'+
+      '<td><button class="btn bob" style="font-size:11px;padding:3px 8px" onclick="aplicarPrecioCurso(\''+c.curso+'\')">Aplicar</button></td>'+
+    '</tr>';
   });
+  hCursos+='</tbody>';
+  document.getElementById('edit-vig-cursos').innerHTML=hCursos;
+  // Tabla por alumno (excepciones)
+  var hAlumnos='<thead><tr><th>Alumno</th><th>Curso</th><th>P. Normal ($)</th><th>P. Bonificado ($)</th><th>Especial</th></tr></thead><tbody>';
+  precios.forEach(function(p){
+    var esp=p.precio_especial;
+    hAlumnos+='<tr style="'+(esp?'background:var(--wl)':'')+'">'+ 
+      '<td style="font-size:11px;font-weight:500">'+p.nombre+'</td>'+
+      '<td style="font-size:10px;color:var(--m)">'+p.curso+'</td>'+
+      '<td><input type="number" data-id="'+p.alumno_id+'" data-f="precio_normal" value="'+p.precio_normal+'" step="500" style="width:100px;padding:4px;border:1px solid var(--b);border-radius:4px;font-size:11px"></td>'+
+      '<td><input type="number" data-id="'+p.alumno_id+'" data-f="precio_bonificado" value="'+p.precio_bonificado+'" step="500" style="width:100px;padding:4px;border:1px solid var(--b);border-radius:4px;font-size:11px"></td>'+
+      '<td style="text-align:center"><input type="checkbox" data-id="'+p.alumno_id+'" class="chk-especial" '+(esp?'checked':'')+' title="Precio especial (no se actualiza con el curso)"></td>'+
+    '</tr>';
+  });
+  hAlumnos+='</tbody>';
+  document.getElementById('edit-vig-table').innerHTML=hAlumnos;
+  abrirM('m-edit-vig');
+}
+
+async function aplicarPrecioCurso(curso){
+  var pnInput=document.querySelector('#edit-vig-cursos input[data-curso="'+curso+'"][data-f="precio_normal"]');
+  var pbInput=document.querySelector('#edit-vig-cursos input[data-curso="'+curso+'"][data-f="precio_bonificado"]');
+  if(!pnInput||!pbInput) return;
+  var pn=parseFloat(pnInput.value)||0;
+  var pb=parseFloat(pbInput.value)||0;
+  // Preguntar desde qué cuota aplicar
+  document.getElementById('aplica-curso-nombre').textContent=curso;
+  document.getElementById('aplica-pn').textContent='$'+pn.toLocaleString('es-AR');
+  document.getElementById('aplica-pb').textContent='$'+pb.toLocaleString('es-AR');
+  _aplicarCursoData={curso,precio_normal:pn,precio_bonificado:pb};
+  abrirM('m-aplica-curso');
+}
+
+async function confirmarAplicarCurso(){
+  var desdeCuota=document.getElementById('aplica-desde').value;
+  var r=await api('PUT','/api/aranceles/'+editVigId+'/cursos',{
+    curso:_aplicarCursoData.curso,
+    precio_normal:_aplicarCursoData.precio_normal,
+    precio_bonificado:_aplicarCursoData.precio_bonificado,
+    desde_cuota:desdeCuota
+  });
+  cerrarM('m-aplica-curso');
+  cerrarM('m-edit-vig');
+  _alumnos=await api('GET','/api/alumnos');
+  toast('Precios actualizados para '+r.afectados+' alumnos de '+_aplicarCursoData.curso,'s');
+}
+
+async function guardarEditVig(){
+  // Guardar precios individuales
+  var inputs=document.querySelectorAll('#edit-vig-table input[type=number]');
+  var mapa={};
+  inputs.forEach(function(inp){
+    var id=inp.dataset.id;
+    var f=inp.dataset.f;
+    if(!mapa[id]) mapa[id]={alumno_id:parseInt(id)};
+    mapa[id][f]=parseFloat(inp.value)||0;
+  });
+  // Guardar checkboxes precio especial
+  var chks=document.querySelectorAll('#edit-vig-table .chk-especial');
+  chks.forEach(function(chk){
+    var id=chk.dataset.id;
+    if(mapa[id]) mapa[id].precio_especial=chk.checked;
+  });
+  var precios=Object.values(mapa);
+  await api('PUT','/api/aranceles/'+editVigId+'/precios',{precios});
+  // Actualizar precio_especial de cada alumno
+  for(var p of precios){
+    if(p.precio_especial!==undefined){
+      await api('PUT','/api/alumnos/'+p.alumno_id+'/precio-especial',{precio_especial:p.precio_especial,precio_normal:p.precio_normal,precio_bonificado:p.precio_bonificado});
+    }
+  }
+  cerrarM('m-edit-vig');
+  _alumnos=await api('GET','/api/alumnos');
+  toast('Precios actualizados','s');
+}
+
+async function eliminarVig(id){
+  if(!confirm('Eliminar esta vigencia?'))return;
+  await api('DELETE','/api/aranceles/'+id);
+  cargarAranceles();
+  toast('Vigencia eliminada','i');
+}
+
+function exportarReporte(){
+  if(!_reporte.length){toast('Sin datos','e');return;}
+  var datos=_reporte.map(function(a){
+    var est=a.estadoCuotas||{};var fila={'Alumno':a.nombre,'Curso':a.curso};
+    CUOTAS.forEach(function(c){var e=est[c.num]||est[String(c.num)]||'futura';fila['C'+c.num+' '+c.mes]=e==='pagada'?'Pagada':e==='compensada'?'COMPENSADA':e==='pendiente'?'DEBE':'—';});
+    fila['Deuda Real']=a.deudaReal||0;return fila;
+  });
+  var ws=XLSX.utils.json_to_sheet(datos);var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Reporte');
+  XLSX.writeFile(wb,'reporte_'+new Date().toISOString().slice(0,10)+'.xlsx');
+}
+
+function abrirM(id){document.getElementById(id).classList.add('open');}
+function cerrarM(id){document.getElementById(id).classList.remove('open');}
+function showSpinner(txt){document.getElementById('spin-txt').textContent=txt||'Procesando...';document.getElementById('spinner').classList.add('show');}
+function hideSpinner(){document.getElementById('spinner').classList.remove('show');}
+var toastTimer;
+function toast(msg,tipo){
+  tipo=tipo||'i';var el=document.getElementById('toast');
+  el.className='toast show t'+tipo;
+  el.innerHTML='<span>'+(tipo==='s'?'✓':tipo==='e'?'✕':'ℹ')+'</span><span>'+msg+'</span>';
+  clearTimeout(toastTimer);toastTimer=setTimeout(function(){el.classList.remove('show');},3500);
+}
+document.querySelectorAll('.modal-bg').forEach(function(m){m.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});});
+
+// LOGIN DEL SISTEMA
+var _sistemaAutenticado = sessionStorage.getItem('auth') === '1';
+
+function mostrarRecuperarSistema() {
+  document.getElementById('login-form').style.display='none';
+  document.getElementById('login-recuperar').style.display='block';
+  document.getElementById('login-rec-paso1').style.display='block';
+  document.getElementById('login-rec-paso2').style.display='none';
+}
+
+async function loginSistema() {
+  var pwd=document.getElementById('login-pwd').value;
+  if(!pwd)return;
+  try{
+    var r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pwd})});
+    var data=await r.json();
+    if(data.ok){
+      _sistemaAutenticado=true;
+      sessionStorage.setItem('auth','1');
+      document.getElementById('login-screen').style.display='none';
+      init();
+    } else {
+      var err=document.getElementById('login-err');
+      err.textContent='Clave incorrecta';err.style.display='block';
+      document.getElementById('login-pwd').value='';
+      document.getElementById('login-pwd').focus();
+    }
+  }catch(e){document.getElementById('login-err').textContent='Error de conexión';document.getElementById('login-err').style.display='block';}
+}
+
+async function solicitarCodigoSistema() {
+  await fetch('/api/login/recuperar',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  document.getElementById('login-rec-paso1').style.display='none';
+  document.getElementById('login-rec-paso2').style.display='block';
+  alert('Código generado. Revisá los logs de Render (Dashboard → Logs) para obtenerlo.');
+}
+
+async function verificarCodigoSistema() {
+  var codigo=document.getElementById('login-rec-codigo').value.trim();
+  var nueva=document.getElementById('login-rec-nueva').value;
+  var confirmar=document.getElementById('login-rec-confirmar').value;
+  var err=document.getElementById('login-rec-err');
+  if(!codigo||!nueva){err.textContent='Completá todos los campos';err.style.display='block';return;}
+  if(nueva!==confirmar){err.textContent='Las claves no coinciden';err.style.display='block';return;}
+  var r=await fetch('/api/login/verificar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({codigo,nuevaClave:nueva})});
+  var data=await r.json();
+  if(data.ok){
+    document.getElementById('login-recuperar').style.display='none';
+    document.getElementById('login-form').style.display='block';
+    alert('Clave actualizada. Podés ingresar con la nueva clave.');
+  } else {
+    err.textContent=data.error||'Error';err.style.display='block';
+  }
+}
+
+window.addEventListener('load', function(){
+  if(_sistemaAutenticado){
+    document.getElementById('login-screen').style.display='none';
+    init();
+  } else {
+    document.getElementById('login-screen').style.display='flex';
+    setTimeout(function(){document.getElementById('login-pwd').focus();},200);
+  }
 });
+</script>
+</body>
+</html>
