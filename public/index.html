@@ -1169,25 +1169,49 @@ function renderCuotas(a, cuotas){
   var hoyMesIdx=new Date().getMonth();
   var mesesIdx=[2,3,4,5,6,7,8,9,10,11];
   var pendientes=cuotas.filter(function(c){return c.estado==='pendiente';}).sort(function(a,b){return a.numero_cuota-b.numero_cuota;});
-  if(pendientes.length===0){cont.innerHTML='';sinD.style.display='flex';return;}
+  
+  // Cuotas futuras: las que no existen en la lista de cuotas (no generadas)
+  var numsPendientes=pendientes.map(function(c){return c.numero_cuota;});
+  var todasLasCuotas=[];
+  for(var n=1;n<=10;n++){
+    var existente=cuotas.find(function(c){return c.numero_cuota===n;});
+    if(existente && existente.estado==='pendiente'){
+      todasLasCuotas.push({numero_cuota:n, estado:'pendiente', esFutura:false});
+    } else if(!existente || existente.estado==='futura'){
+      todasLasCuotas.push({numero_cuota:n, estado:'futura', esFutura:true});
+    }
+    // pagadas/compensadas/gratis no se muestran
+  }
+  
+  if(todasLasCuotas.length===0){cont.innerHTML='';sinD.style.display='flex';return;}
   sinD.style.display='none';
-  cont.innerHTML=pendientes.map(function(c){
+  
+  cont.innerHTML=todasLasCuotas.map(function(c){
     var numC=c.numero_cuota;
-    var precio=getPrecio(a, numC, cuotas);
+    var esFutura=c.esFutura;
+    // Precio: futuras siempre bonificado (pago anticipado)
+    var precio=esFutura ? parseFloat(a.precio_bonificado)||0 : getPrecio(a, numC, cuotas);
     var esGratis=precio===0;
     var esBon=!esGratis && precio===(parseFloat(a.precio_bonificado)||0);
     var todoElMes=MESES_TODO_EL_MES.indexOf(numC)>=0;
-    var vencida=mesesIdx[numC-1]<hoyMesIdx;
+    var vencida=!esFutura && mesesIdx[numC-1]<hoyMesIdx;
+    var tagEstado=esFutura
+      ? '<span class="ctag" style="background:#e8f4fd;color:#1565C0">Anticipado</span>'
+      : '<span class="ctag '+(vencida?'ctag-v':'ctag-b')+'">'+(vencida?'Vencida':'Vigente')+'</span>';
     var tagBonif=esGratis
       ? '<span class="ctag ctag-b" style="background:#c8f7c5;color:#1a7a1a;font-weight:700">¡GRATIS!</span>'
       : '<span class="ctag '+(esBon?'ctag-b':'ctag-n')+'">'+(todoElMes?'Todo el mes':(esBon?'Bonificada':'Normal'))+'</span>';
-    return '<div class="cuota-row sel" id="crow-'+numC+'">' +
-      '<input type="checkbox" data-num="'+numC+'" checked onchange="toggleCuotaCheck(this)">' +
+    // Futuras: desmarcadas por defecto
+    var checked=esFutura?'':'checked';
+    var opacity=esFutura?'0.4':'1';
+    var disabled=esFutura?'disabled':'';
+    return '<div class="cuota-row '+(esFutura?'':'sel')+'" id="crow-'+numC+'" style="'+(esFutura?'opacity:0.7':'')+'">'+
+      '<input type="checkbox" data-num="'+numC+'" '+checked+' onchange="toggleCuotaCheck(this)">'+
       '<div class="cuota-mes">Cuota '+numC+' — '+CUOTAS[numC-1].mes+' 2026</div>'+
-      '<span class="ctag '+(vencida?'ctag-v':'ctag-b')+'">'+(vencida?'Vencida':'Vigente')+'</span>'+
+      tagEstado+
       tagBonif+
-      '<input type="number" class="cuota-monto-input" data-num="'+numC+'" data-precio-base="'+precio+'" value="'+precio+'" min="0" step="100" '+
-        'style="width:110px;padding:4px 7px;border:1px solid var(--b);border-radius:var(--rs);font-size:12.5px;font-weight:700;color:'+(esGratis?'var(--s)':esBon?'var(--s)':'var(--w)')+';" '+
+      '<input type="number" class="cuota-monto-input" data-num="'+numC+'" data-precio-base="'+precio+'" value="'+precio+'" min="0" step="100" '+disabled+
+        ' style="width:110px;padding:4px 7px;border:1px solid var(--b);border-radius:var(--rs);font-size:12.5px;font-weight:700;color:'+(esGratis?'var(--s)':esBon?'var(--s)':'var(--w)')+';opacity:'+opacity+';" '+
         'oninput="actualizarTotal()" title="Podes modificar el monto manualmente">'+
     '</div>';
   }).join('');
