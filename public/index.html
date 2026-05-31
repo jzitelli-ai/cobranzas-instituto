@@ -758,6 +758,18 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
 
 <!-- MODAL ELIMINAR PAGO -->
 <!-- MODAL PREVIEW BANCO -->
+<!-- MODAL DETALLE CURSO -->
+<div class="modal-bg" id="m-det-curso" style="z-index:500">
+  <div class="modal" style="width:720px;max-height:85vh;overflow-y:auto">
+    <div class="modal-title" id="det-curso-title">Detalle del curso</div>
+    <div id="det-curso-body"></div>
+    <div class="modal-btns">
+      <button class="btn bob" onclick="cerrarM('m-det-curso')">Cerrar</button>
+      <button class="btn bpb" onclick="exportarDetalleCurso()">📥 Exportar Excel</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="m-banco-preview" style="z-index:600">
   <div class="modal" style="width:620px">
     <div class="modal-title">Previsualización — Importar banco</div>
@@ -990,7 +1002,13 @@ async function actualizarDashboard(){
     if(Object.keys(a.estadoCuotas||{}).some(function(k){return a.estadoCuotas[k]==='pendiente';}))grupos[a.curso].deud++;});
   var tbl='<table style="font-size:12px"><thead><tr><th>Curso</th><th>Alumnos</th><th>Con deuda</th><th>Al dia</th><th>Avance</th></tr></thead><tbody>';
   Object.keys(grupos).sort().forEach(function(c){var g=grupos[c],pct=Math.round((g.tot-g.deud)/g.tot*100);
-    tbl+='<tr><td style="font-weight:600">'+c+'</td><td>'+g.tot+'</td><td><span class="badge bd">'+g.deud+'</span></td><td><span class="badge bs">'+(g.tot-g.deud)+'</span></td><td><div style="display:flex;align-items:center;gap:6px"><div style="width:70px;height:5px;background:var(--dl);border-radius:3px"><div style="width:'+pct+'%;height:100%;background:var(--s);border-radius:3px"></div></div><span style="font-size:10px;color:var(--m)">'+pct+'%</span></div></td></tr>';});
+    tbl+='<tr style="cursor:pointer" onclick="abrirDetalleCurso(''+c+'')" title="Ver detalle del curso">'+
+      '<td style="font-weight:600;color:var(--p);text-decoration:underline">'+c+'</td>'+
+      '<td>'+g.tot+'</td>'+
+      '<td><span class="badge bd">'+g.deud+'</span></td>'+
+      '<td><span class="badge bs">'+(g.tot-g.deud)+'</span></td>'+
+      '<td><div style="display:flex;align-items:center;gap:6px"><div style="width:70px;height:5px;background:var(--dl);border-radius:3px"><div style="width:'+pct+'%;height:100%;background:var(--s);border-radius:3px"></div></div><span style="font-size:10px;color:var(--m)">'+pct+'%</span></div></td>'+
+    '</tr>';});
   tbl+='</tbody></table>';
   document.getElementById('dash-cur').innerHTML=tbl;
 }
@@ -1947,6 +1965,80 @@ async function verificarCodigo() {
     err.textContent = r ? r.error : 'Error';
     err.style.display = 'block';
   }
+}
+
+var _detalleCursoData = [];
+
+function abrirDetalleCurso(curso) {
+  _detalleCursoData = _reporte.filter(function(a){ return a.curso === curso; })
+    .sort(function(a,b){ return a.nombre.localeCompare(b.nombre); });
+  
+  document.getElementById('det-curso-title').textContent = 'Detalle — ' + curso + ' (' + _detalleCursoData.length + ' alumnos)';
+  
+  var totalDeuda = _detalleCursoData.reduce(function(s,a){ return s + (a.deudaReal||0); }, 0);
+  var conDeuda = _detalleCursoData.filter(function(a){ return a.deudaReal > 0; }).length;
+  var alDia = _detalleCursoData.length - conDeuda;
+
+  var h = '<div class="r2" style="margin-bottom:14px">' +
+    '<div style="background:var(--gl);padding:10px;border-radius:var(--rs);text-align:center"><div style="font-size:10px;color:var(--m)">Total alumnos</div><div style="font-weight:700;font-size:18px;color:var(--p)">' + _detalleCursoData.length + '</div></div>' +
+    '<div style="background:var(--dl);padding:10px;border-radius:var(--rs);text-align:center"><div style="font-size:10px;color:var(--m)">Con deuda</div><div style="font-weight:700;font-size:18px;color:var(--d)">' + conDeuda + '</div></div>' +
+    '<div style="background:var(--sl);padding:10px;border-radius:var(--rs);text-align:center"><div style="font-size:10px;color:var(--m)">Al día</div><div style="font-weight:700;font-size:18px;color:var(--s)">' + alDia + '</div></div>' +
+    '<div style="background:var(--dl);padding:10px;border-radius:var(--rs);text-align:center"><div style="font-size:10px;color:var(--m)">Deuda total</div><div style="font-weight:700;font-size:16px;color:var(--d)">' + pesos(totalDeuda) + '</div></div>' +
+  '</div>';
+
+  h += '<table style="width:100%;font-size:12px;border-collapse:collapse">' +
+    '<thead><tr>' +
+    '<th style="text-align:left;padding:6px 8px;background:var(--gl);border-bottom:2px solid var(--b)">Alumno</th>' +
+    '<th style="text-align:center;padding:6px 8px;background:var(--gl);border-bottom:2px solid var(--b)">Estado</th>';
+  CUOTAS.forEach(function(c){ h += '<th style="text-align:center;padding:4px;background:var(--gl);border-bottom:2px solid var(--b);font-size:10px">C'+c.num+'<br><span style="font-weight:400">'+c.mes.slice(0,3)+'</span></th>'; });
+  h += '<th style="text-align:right;padding:6px 8px;background:var(--gl);border-bottom:2px solid var(--b)">Deuda</th>' +
+    '</tr></thead><tbody>';
+
+  _detalleCursoData.forEach(function(a){
+    var est = a.estadoCuotas || {};
+    var hayDeuda = a.deudaReal > 0;
+    h += '<tr style="cursor:pointer;border-bottom:1px solid var(--b)" onclick="cerrarM('m-det-curso');abrirDetalleAlumno('+a.id+')">';
+    h += '<td style="padding:6px 8px;font-weight:500">'+a.nombre+'</td>';
+    h += '<td style="padding:6px 8px;text-align:center">';
+    if(hayDeuda) h += '<span class="badge bd" style="font-size:10px">Debe</span>';
+    else h += '<span class="badge bs" style="font-size:10px">Al día</span>';
+    h += '</td>';
+    CUOTAS.forEach(function(c){
+      var e = est[c.num] || est[String(c.num)] || 'futura';
+      if(e==='futura') h += '<td style="text-align:center;color:var(--m);font-size:10px">—</td>';
+      else if(e==='pagada') h += '<td style="text-align:center;background:var(--sl)"><span style="color:var(--s);font-size:11px">✓</span></td>';
+      else if(e==='compensada') h += '<td style="text-align:center;background:#FFF3E0"><span style="font-size:9px;color:#E65100;font-weight:700">↔</span></td>';
+      else if(e==='gratis') h += '<td style="text-align:center;background:#c8f7c5"><span style="font-size:9px;color:#1a7a1a;font-weight:700">★</span></td>';
+      else {
+        var mp = a.montosPago&&(a.montosPago[c.num]||a.montosPago[String(c.num)])||0;
+        if(mp>0) h += '<td style="text-align:center;background:var(--wl)"><span style="font-size:9px;color:var(--w);font-weight:700">⚠</span></td>';
+        else h += '<td style="text-align:center;background:var(--dl)"><span style="font-size:9px;color:var(--d);font-weight:700">$</span></td>';
+      }
+    });
+    h += '<td style="padding:6px 8px;text-align:right;font-weight:700;color:'+(hayDeuda?'var(--d)':'var(--s)')+'">'+( hayDeuda?pesos(a.deudaReal):'Al día')+'</td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table>';
+  document.getElementById('det-curso-body').innerHTML = h;
+  abrirM('m-det-curso');
+}
+
+function exportarDetalleCurso() {
+  if(!_detalleCursoData.length){toast('Sin datos','e');return;}
+  var rows = _detalleCursoData.map(function(a){
+    var fila = {'Alumno':a.nombre, 'Estado': a.deudaReal>0?'Con deuda':'Al día', 'Deuda': a.deudaReal||0};
+    var est = a.estadoCuotas||{};
+    CUOTAS.forEach(function(c){
+      var e=est[c.num]||est[String(c.num)]||'futura';
+      fila['C'+c.num+' '+c.mes] = e==='pagada'?'✓':e==='pendiente'?'DEBE':e==='compensada'?'COMP':e==='gratis'?'GRATIS':'—';
+    });
+    return fila;
+  });
+  var ws=XLSX.utils.json_to_sheet(rows);
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Detalle');
+  XLSX.writeFile(wb,'detalle_curso_'+(_detalleCursoData[0]&&_detalleCursoData[0].curso||'curso')+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  toast('Exportado','s');
 }
 
 async function cargarMora(){
