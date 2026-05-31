@@ -2443,7 +2443,7 @@ async function abrirDetalleAlumno(id){
     var fecha = fechas.hasOwnProperty(_fk) ? fechas[_fk] : (fechas.hasOwnProperty(_fs) ? fechas[_fs] : '');
     var monto = montos.hasOwnProperty(_fk) ? montos[_fk] : (montos.hasOwnProperty(_fs) ? montos[_fs] : 0);
     var fechaCorta = fecha && fecha !== '' ? String(fecha).slice(0,10) : '—';
-    var estadoHtml,bg,montoTxt,accion='';
+    var estadoHtml='',bg='var(--gl)',montoTxt='—',accion='';
     if(e==='futura'){bg='';estadoHtml='<span style="color:var(--m)">No generada</span>';montoTxt='—';}
     else if(e==='pagada'){
       bg='var(--sl)';estadoHtml='<span style="color:var(--s);font-weight:600">✓ Pagada</span>';
