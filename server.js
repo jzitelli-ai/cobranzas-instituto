@@ -774,6 +774,7 @@ app.post('/api/backfill-pagos', async (req,res) => {
 app.get('/api/reporte', async (req,res) => {
   const alumnos=await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
   const mesActual=new Date().getMonth(), dia=new Date().getDate();
+  const vencimientosReporte=await getVencimientos();
   // Cargar TODAS las cuotas y pagos de una sola vez
   const todasCuotas=await q('SELECT * FROM cuotas WHERE alumno_id=ANY($1) ORDER BY numero_cuota',[alumnos.map(a=>a.id)]);
   const todosPagos=await q('SELECT alumno_id,COALESCE(SUM(monto),0) as total FROM pagos WHERE alumno_id=ANY($1) GROUP BY alumno_id',[alumnos.map(a=>a.id)]);
@@ -809,7 +810,35 @@ app.get('/api/reporte', async (req,res) => {
     const totalDebido=cuotasGen.reduce((s,[k])=>{const n=parseInt(k);return s+(n===10&&c10g?0:getPrecio(a,n,dia));},0);
     let saldo=totalPagado-totalDebido;
     if(saldo>0){let d=saldo;for(let i=0;i<10;i++){const n=i+1;if(estadoCuotas[n]==='pendiente'&&d>0){const p=n===10&&c10g?0:getPrecio(a,n,dia);if(p>0&&d>=p){estadoCuotas[n]='compensada';d-=p;}}}}
-    const deudaReal=Object.entries(estadoCuotas).reduce((s,[k,v])=>{if(v!=='pendiente')return s;const n=parseInt(k);const mp=montosPago[n]||0;const precio=n===10&&c10g?0:getPrecio(a,n,dia);return s+(precio-mp>0?precio-mp:0);},0);
+    // deudaReal: usar fecha de pago de la cuota para determinar precio bonif/normal
+    const deudaReal=Object.entries(estadoCuotas).reduce((s,[k,v])=>{
+      if(v!=='pendiente')return s;
+      const n=parseInt(k);
+      const mp=montosPago[n]||0;
+      let precio;
+      if(n===10&&c10g){
+        precio=0;
+      } else {
+        // Usar fecha de pago de la cuota si existe, sino fecha actual
+        const fpCuota=fechasPago[n];
+        if(fpCuota&&vencimientosReporte){
+          const venc=vencimientosReporte[n-1];
+          if(venc){
+            const [dv,mv,yv]=venc.split('/');
+            const dVenc=new Date(parseInt(yv),parseInt(mv)-1,parseInt(dv),23,59,59);
+            let dp;
+            if(String(fpCuota).includes('/')){const [d,m,y]=String(fpCuota).split('/');dp=new Date(parseInt(y),parseInt(m)-1,parseInt(d),12);}
+            else{const pts=String(fpCuota).split('-');dp=new Date(parseInt(pts[0]),parseInt(pts[1])-1,parseInt(pts[2]),12);}
+            precio=dp<=dVenc?parseFloat(a.precio_bonificado):parseFloat(a.precio_normal);
+          } else {
+            precio=getPrecio(a,n,dia);
+          }
+        } else {
+          precio=getPrecio(a,n,dia);
+        }
+      }
+      return s+(precio-mp>0?precio-mp:0);
+    },0);
     // Mora: aplica si hay cuotas pendientes cuyo mes ya paso (mes anterior o antes)
     // Una cuota "en mora" es la que debio pagarse en el mes anterior o antes y sigue pendiente
     let cuotasEnMora=0;
