@@ -786,8 +786,18 @@ app.get('/api/reporte', async (req,res) => {
     const estadoCuotas={},fechasPago={},montosPago={};
     for(let i=0;i<10;i++){
       const numC=i+1;
-      if(MESES_IDX[i]>mesActual){estadoCuotas[numC]='futura';continue;}
       const cuota=cuotas.find(c=>c.numero_cuota===numC);
+      // Si la cuota existe y está pagada (anticipada), mostrarla como pagada aunque sea mes futuro
+      if(MESES_IDX[i]>mesActual){
+        if(cuota&&cuota.estado==='pagada'){
+          estadoCuotas[numC]='pagada';
+          if(cuota.fecha_pago&&cuota.fecha_pago!=='')fechasPago[numC]=String(cuota.fecha_pago).slice(0,10);
+          if(parseFloat(cuota.monto_pagado)>0)montosPago[numC]=parseFloat(cuota.monto_pagado);
+        } else {
+          estadoCuotas[numC]='futura';
+        }
+        continue;
+      }
       if(!cuota){estadoCuotas[numC]='pendiente';continue;}
       estadoCuotas[numC]=cuota.estado==='pagada'?(cuota.compensada?'compensada':'pagada'):'pendiente';
       if(cuota.fecha_pago&&cuota.fecha_pago!=='')fechasPago[numC]=String(cuota.fecha_pago).slice(0,10);
