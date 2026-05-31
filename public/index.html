@@ -2556,13 +2556,14 @@ async function abrirDetalleAlumno(id){
       var e=est[_fk]||est[_fs]||'futura';
       var fecha=fechas.hasOwnProperty(_fk)?fechas[_fk]:(fechas.hasOwnProperty(_fs)?fechas[_fs]:'');
       var monto=montos.hasOwnProperty(_fk)?montos[_fk]:(montos.hasOwnProperty(_fs)?montos[_fs]:0);
-      if(e==='pagada'||e==='compensada'){
+      if((e==='pagada'||e==='compensada'||(e==='pendiente'&&monto>0))){
         totalAplicado += parseFloat(monto)||0;
         var fechaCorta = fecha?String(fecha).slice(0,10):'—';
+        var esParcial = e==='pendiente' && monto>0;
         cuentaCorriente +=
           '<tr style="border-bottom:1px solid var(--b)">'+
-            '<td style="padding:5px 8px;font-weight:600">C'+c.num+' '+c.mes+'</td>'+
-            '<td style="padding:5px 8px;text-align:right;color:var(--s)">'+( monto?pesos(monto):'—')+'</td>'+
+            '<td style="padding:5px 8px;font-weight:600">C'+c.num+' '+c.mes+(esParcial?' <span style="font-size:9px;color:var(--w)">(parcial)</span>':'')+'</td>'+
+            '<td style="padding:5px 8px;text-align:right;color:'+(esParcial?'var(--w)':'var(--s)')+'">'+( monto?pesos(monto):'—')+'</td>'+
             '<td style="padding:5px 8px;font-size:10.5px;color:var(--m)">'+fechaCorta+'</td>'+
           '</tr>';
       }
