@@ -1820,6 +1820,10 @@ async function eliminarPago(pagoId, alumnoId, revertirCuotas) {
 }
 
 async function aplicarSaldosPendientes() {
+  var clave = prompt('Ingresá la clave de administración para aplicar saldos:');
+  if (!clave) return;
+  var rv = await api('POST', '/api/verificar-clave', {clave, tipo:'admin'});
+  if (!rv || !rv.ok) { toast('Clave incorrecta', 'e'); return; }
   if (!confirm('Esto aplica el saldo disponible de cada alumno a sus cuotas pendientes. ¿Continuar?')) return;
   showSpinner('Aplicando saldos...');
   var r = await api('GET', '/api/aplicar-saldos-pendientes');
