@@ -547,6 +547,16 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
           <button class="btn bpb" onclick="guardarVencimientos()" style="font-size:12px">💾 Guardar fechas</button>
         </div>
         <div style="padding:0 16px 24px">
+          <div style="font-weight:700;font-size:13px;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;padding-top:8px;border-top:1px solid var(--b)">Mora por cuotas vencidas</div>
+          <div class="alert ai" style="font-size:11px;margin-bottom:12px">Se aplica sobre el total de la deuda cuando hay cuotas impagas del mes anterior o antes. Se muestra por separado en el reporte.</div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <label style="font-size:12px;color:var(--m)">Porcentaje de mora:</label>
+            <input type="number" id="mora-pct" min="0" max="100" step="0.5" style="width:80px;padding:5px 8px;border:1px solid var(--b);border-radius:4px;font-size:13px">
+            <span style="font-size:13px;color:var(--m)">%</span>
+            <button class="btn bpb" onclick="guardarMora()" style="font-size:12px">💾 Guardar</button>
+          </div>
+        </div>
+        <div style="padding:0 16px 24px">
           <div style="font-weight:700;font-size:13px;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;padding-top:8px;border-top:1px solid var(--b)">Cambio de claves</div>
           <div style="display:flex;gap:12px;flex-wrap:wrap">
             <button class="btn bob" onclick="abrirCambiarClave('sistema')" style="font-size:12px">🔑 Cambiar clave del sistema</button>
@@ -1939,6 +1949,29 @@ async function verificarCodigo() {
   }
 }
 
+async function cargarMora(){
+  var r=await api('GET','/api/mora');
+  if(r&&r.ok) document.getElementById('mora-pct').value=r.porcentaje||0;
+}
+
+async function guardarMora(){
+  var pct=parseFloat(document.getElementById('mora-pct').value)||0;
+  var r=await api('POST','/api/mora',{porcentaje:pct});
+  if(r&&r.ok){toast('Mora guardada: '+pct+'%','s');}
+  else{toast('Error al guardar','e');}
+}
+
+async function bonificarMora(alumnoId, moraMonto) {
+  var clave=prompt('Ingresá la clave de administración para bonificar la mora:');
+  if(!clave)return;
+  var rv=await api('POST','/api/verificar-clave',{clave,tipo:'admin'});
+  if(!rv||!rv.ok){toast('Clave incorrecta','e');return;}
+  var motivo=prompt('Motivo de la bonificación de mora (opcional):');
+  var r=await api('POST','/api/bonificar-mora',{alumnoId,moraMonto,motivo:motivo||''});
+  if(r&&r.ok){toast('Mora bonificada correctamente','s');cerrarM('m-det-alumno');cargarReporte();}
+  else{toast('Error: '+(r?r.error:''),'e');}
+}
+
 async function cargarVencimientos(){
   var r = await api('GET','/api/vencimientos');
   if(!r||!r.ok) return;
@@ -2004,6 +2037,7 @@ async function cargarStatsAdmin() {
   document.getElementById('admin-stats').innerHTML = html;
 
   // Cargar vencimientos y aranceles en el panel admin
+  cargarMora();
   cargarVencimientos();
   // Cargar aranceles en el panel admin
   await cargarAranceles();
@@ -2184,8 +2218,12 @@ function exportarReporteMedios(){
 }
 
 // REPORTE
+var _moraPorcentaje = 0;
+
 async function cargarReporte(){
   _reporte=await api('GET','/api/reporte');
+  var mr=await api('GET','/api/mora');
+  _moraPorcentaje=mr&&mr.ok?mr.porcentaje:0;
   var cursos=[];_reporte.forEach(function(a){if(cursos.indexOf(a.curso)<0)cursos.push(a.curso);});cursos.sort();
   var sel=document.getElementById('rep-curso');var first=sel.options[0];sel.innerHTML='';sel.appendChild(first);
   cursos.forEach(function(c){var o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o);});
@@ -2215,7 +2253,7 @@ function filtrarReporte(){
     rsc('Con deuda',conDeuda+' alumnos','d')+rsc('Compensados',conComp+' alumnos','p')+rsc('Al dia',(lista.length-conDeuda-conComp)+' alumnos','s');
   var h='<table><thead><tr><th>Alumno</th><th>Curso</th>';
   CUOTAS.forEach(function(c){h+='<th style="font-size:10px;text-align:center;min-width:52px">C'+c.num+'<br><span style="font-weight:400">'+c.mes.slice(0,3)+'</span></th>';});
-  h+='<th>Deuda real</th><th style="width:80px">WA</th></tr></thead><tbody>';
+  h+='<th>Deuda real</th>'+(_moraPorcentaje>0?'<th style="color:var(--w)">Mora '+_moraPorcentaje+'%</th>':'')+'<th style="width:80px">WA</th></tr></thead><tbody>';
   lista.forEach(function(a){
     var est=a.estadoCuotas||{};
     var fechas=a.fechasPago||{};
@@ -2242,7 +2280,9 @@ function filtrarReporte(){
         }
       }
     });
+    var moraMonto=(_moraPorcentaje>0&&a.tienesMora&&a.deudaReal>0)?Math.round(a.deudaReal*_moraPorcentaje/100):0;
     h+='<td style="font-weight:700;color:'+(a.deudaReal>0?'var(--d)':'var(--s)')+'">'+( a.deudaReal>0?pesos(a.deudaReal):'Al dia')+'</td>';
+    if(_moraPorcentaje>0){h+='<td style="font-weight:700;color:var(--w);text-align:center">'+(moraMonto>0?pesos(moraMonto):'—')+'</td>';}
     // Botón WhatsApp
     if(a.deudaReal>0){
       var tel=(a.telefono||'').replace(/[^0-9]/g,'');
@@ -2457,6 +2497,15 @@ async function abrirDetalleAlumno(id){
         '<div><span style="font-size:10px;color:var(--m)">Sin descuento </span><strong style="color:var(--d);font-size:13px">'+pesos(a.precio_normal)+'</strong></div>'+
       '</div>'+
     '</div>'+
+    ((_moraPorcentaje>0&&a.tienesMora&&a.deudaReal>0)?
+      (function(){var moraDet=Math.round(a.deudaReal*_moraPorcentaje/100);return '<div style="background:#fff3e0;padding:10px;border-radius:var(--rs);margin-bottom:14px;display:flex;gap:12px;align-items:center;border:1px solid #FFB74D">'+
+        '<div style="flex:1">'+
+          '<div style="font-size:11px;color:#E65100;font-weight:700">⚠ Mora por cuotas vencidas ('+_moraPorcentaje+'%)</div>'+
+          '<div style="font-size:13px;font-weight:700;color:#E65100">'+pesos(moraDet)+'</div>'+
+        '</div>'+
+        '<button class="btn" style="font-size:10px;padding:3px 8px;background:#FF9800;color:#fff;border-color:#FF9800" onclick="event.stopPropagation();bonificarMora('+a.id+','+moraDet+')">Bonificar mora</button>'+
+      '</div>';})()
+    :'')+
     cuotasHtml +
     cuentaCorriente;
   abrirM('m-det-alumno');
