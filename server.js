@@ -331,7 +331,42 @@ app.post('/api/alumnos', async (req,res) => {
 });
 app.put('/api/alumnos/:id', async (req,res) => {
   const {nombre,curso,cuits,precio_normal,precio_bonificado,telefono}=req.body;
-  await q('UPDATE alumnos SET nombre=$1,curso=$2,cuits=$3,precio_normal=$4,precio_bonificado=$5,telefono=$6 WHERE id=$7',[nombre.trim().toUpperCase(),curso,cuits||'',precio_normal||0,precio_bonificado||0,telefono||'',req.params.id]);
+  const alumnoId=parseInt(req.params.id);
+  const pb=parseFloat(precio_bonificado)||0;
+  const pn=parseFloat(precio_normal)||0;
+  await q('UPDATE alumnos SET nombre=$1,curso=$2,cuits=$3,precio_normal=$4,precio_bonificado=$5,telefono=$6 WHERE id=$7',[nombre.trim().toUpperCase(),curso,cuits||'',pn,pb,telefono||'',alumnoId]);
+  
+  // Recalcular estado de cuotas según nuevo precio
+  // Si monto_pagado >= precio_bonificado → pagada
+  // Si 0 < monto_pagado < precio_bonificado → pendiente (parcial)
+  // Si monto_pagado = 0 → pendiente
+  const cuotas = await q('SELECT * FROM cuotas WHERE alumno_id=$1', [alumnoId]);
+  const vencimientos = await getVencimientos();
+  for (const c of cuotas) {
+    const mp = parseFloat(c.monto_pagado)||0;
+    if (mp <= 0) continue;
+    // Determinar precio correcto según fecha de pago
+    let precioRef = pn;
+    if (c.fecha_pago && vencimientos[c.numero_cuota-1]) {
+      const venc = vencimientos[c.numero_cuota-1];
+      const [dv,mv,yv] = venc.split('/');
+      const dVenc = new Date(parseInt(yv),parseInt(mv)-1,parseInt(dv),23,59,59);
+      let dp;
+      if (String(c.fecha_pago).includes('/')) {
+        const [d,m,y]=String(c.fecha_pago).split('/');
+        dp=new Date(parseInt(y),parseInt(m)-1,parseInt(d),12);
+      } else {
+        const pts=String(c.fecha_pago).split('-');
+        dp=new Date(parseInt(pts[0]),parseInt(pts[1])-1,parseInt(pts[2]),12);
+      }
+      precioRef = dp<=dVenc ? pb : pn;
+    }
+    const nuevoEstado = mp >= precioRef ? 'pagada' : 'pendiente';
+    if (nuevoEstado !== c.estado) {
+      await q('UPDATE cuotas SET estado=$1 WHERE id=$2', [nuevoEstado, c.id]);
+    }
+  }
+  
   res.json({ok:true});
 });
 app.patch('/api/alumnos/:id/baja', async (req,res) => { await q('UPDATE alumnos SET activo=FALSE WHERE id=$1',[req.params.id]); res.json({ok:true}); });
