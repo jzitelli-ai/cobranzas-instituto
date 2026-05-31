@@ -1237,6 +1237,14 @@ function programarBackup() {
 let systemRecoveryCode = null;
 let systemRecoveryExpiry = null;
 
+// Verificar clave para acciones sensibles (bonificar, etc.)
+app.post('/api/verificar-clave', (req, res) => {
+  const {clave, tipo} = req.body;
+  if (tipo === 'admin') return res.json({ok: clave === adminPassword});
+  if (tipo === 'sistema') return res.json({ok: clave === systemPassword});
+  res.json({ok: false, error: 'Tipo desconocido'});
+});
+
 app.post('/api/login', (req, res) => {
   const { password } = req.body;
   res.json({ ok: password === systemPassword });
