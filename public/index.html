@@ -1290,7 +1290,8 @@ async function confirmarCobro(){
   var r=await api('POST','/api/cobro',{alumnoId:alumnoActual.id,monto:total,medio,origen:'Manual · '+medio+(obs?' · '+obs:''),cuotasSeleccionadas:cuotasSel,fechaManual:fechaManual});
   if(!r.ok){toast('Error al registrar','e');return;}
   document.getElementById('r-num').textContent=r.pagoId;
-  document.getElementById('r-fecha').textContent=r.fecha;
+  var fechaMostrar=fechaManual?new Date(fechaManual+'T12:00:00').toLocaleDateString('es-AR'):r.fecha;
+  document.getElementById('r-fecha').textContent=fechaMostrar;
   document.getElementById('r-alumno').textContent=alumnoActual.nombre;
   document.getElementById('r-curso').textContent=alumnoActual.curso;
   document.getElementById('r-conc').textContent=r.conceptos.join(', ');
@@ -1302,7 +1303,9 @@ async function confirmarCobro(){
   cambiarAlumno();
   _pagos=await api('GET','/api/pagos');
   toast('Cobro '+pesos(total)+' registrado · Recibo #'+r.pagoId,'s');
-  setTimeout(function(){ imprimirReciboDuplicado(r.pagoId, r.fecha, alumnoActual.nombre, alumnoActual.curso, r.conceptos.join(', '), medio+(obs?' — '+obs:''), pesos(total)); }, 400);
+  // Usar fechaManual para el recibo (fecha de pago real, no de confección)
+  var fechaRecibo=fechaManual?new Date(fechaManual+'T12:00:00').toLocaleDateString('es-AR'):r.fecha;
+  setTimeout(function(){ imprimirReciboDuplicado(r.pagoId, fechaRecibo, alumnoActual.nombre, alumnoActual.curso, r.conceptos.join(', '), medio+(obs?' — '+obs:''), pesos(total)); }, 400);
 }
 
 function imprimirReciboDuplicado(num, fecha, alumno, curso, concepto, medio, total) {
@@ -2464,18 +2467,31 @@ var _bonifAlumnoId = null;
 var _bonifCuota = null;
 var _bonifPrecioNormal = 0;
 
+var _pendingBonifAlumnoId=null, _pendingBonifCuota=null, _pendingBonifPrecioNormal=null;
+
 function abrirBonificar(alumnoId, numCuota, precioNormal) {
-  _bonifAlumnoId = alumnoId;
-  _bonifCuota = numCuota;
-  _bonifPrecioNormal = precioNormal;
-  var a = _reporte.find(function(x){ return x.id === alumnoId; });
-  document.getElementById('bonif-info').textContent = (a ? a.nombre : '') + ' — Cuota ' + numCuota + ' (' + CUOTAS[numCuota-1].mes + ' 2026) — Precio normal: ' + pesos(precioNormal);
-  document.getElementById('bonif-tipo').value = 'gratis';
-  document.getElementById('bonif-monto').value = '';
-  document.getElementById('bonif-motivo').value = '';
-  document.getElementById('bonif-monto-div').style.display = 'none';
-  document.getElementById('bonif-aviso').textContent = 'La cuota quedará marcada como pagada en $0.';
-  abrirM('m-bonificar');
+  // Pedir clave admin antes de continuar
+  _pendingBonifAlumnoId=alumnoId;
+  _pendingBonifCuota=numCuota;
+  _pendingBonifPrecioNormal=precioNormal;
+  var clave=prompt('Ingresá la clave de administración para bonificar:');
+  if(!clave){return;}
+  // Verificar clave
+  api('POST','/api/verificar-clave',{clave,tipo:'admin'}).then(function(r){
+    if(!r||!r.ok){toast('Clave incorrecta','e');return;}
+    // Clave correcta — abrir modal
+    _bonifAlumnoId=_pendingBonifAlumnoId;
+    _bonifCuota=_pendingBonifCuota;
+    _bonifPrecioNormal=_pendingBonifPrecioNormal;
+    var a=_reporte.find(function(x){return x.id===_bonifAlumnoId;});
+    document.getElementById('bonif-info').textContent=(a?a.nombre:'')+' — Cuota '+_bonifCuota+' ('+CUOTAS[_bonifCuota-1].mes+' 2026) — Precio normal: '+pesos(_bonifPrecioNormal);
+    document.getElementById('bonif-tipo').value='gratis';
+    document.getElementById('bonif-monto').value='';
+    document.getElementById('bonif-motivo').value='';
+    document.getElementById('bonif-monto-div').style.display='none';
+    document.getElementById('bonif-aviso').textContent='La cuota quedará marcada como pagada en $0.';
+    abrirM('m-bonificar');
+  });
 }
 
 function bonifCambiarTipo() {
