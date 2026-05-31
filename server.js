@@ -517,7 +517,14 @@ async function aplicarPagoYCrearCuotas(alumnoId, alumno, monto, fechaPago, venci
     const label = `Cuota ${n} (${MESES_NOMBRE_ALL[n-1]} 2026)${esGratis?' (GRATIS)':''}`;
     
     if (estado[n].existe) {
-      await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', [nuevoEstado, fechaStr, nuevoMonto, estado[n].id]);
+      // Si ya tenía monto pagado de un pago anterior, conservar la fecha anterior para el monto previo
+      // Solo actualizar fecha si es el primer pago o si el nuevo monto es mayor
+      const fechaFinal = (estado[n].monto_pagado > 0 && nuevoMonto > estado[n].monto_pagado) 
+        ? fechaStr  // nuevo pago completa la cuota
+        : (estado[n].monto_pagado > 0 
+          ? cuotaMap[n].fecha_pago  // conservar fecha original del pago parcial previo
+          : fechaStr);
+      await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', [nuevoEstado, fechaFinal, nuevoMonto, estado[n].id]);
     } else {
       // Crear cuota anticipada
       const r = await q('INSERT INTO cuotas (alumno_id,numero_cuota,estado,fecha_pago,monto_pagado,compensada) VALUES ($1,$2,$3,$4,$5,false) RETURNING id', [alumnoId, n, nuevoEstado, fechaStr, nuevoMonto]);
