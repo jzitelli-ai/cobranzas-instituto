@@ -1193,7 +1193,29 @@ function getPrecio(alumno, numCuota, cuotasPagadas) {
     parseFloat(alumno.precio_normal) || 0;
 }
 
-function renderCuotas(a, cuotas){
+// Calcular precio usando fechas de vencimiento reales
+var _vencimientosFrontend = null;
+
+async function cargarVencimientosFrontend() {
+  if (_vencimientosFrontend) return _vencimientosFrontend;
+  var r = await api('GET', '/api/vencimientos');
+  _vencimientosFrontend = r && r.ok ? r.vencimientos : null;
+  return _vencimientosFrontend;
+}
+
+function getPrecioConVencFrontend(alumno, numCuota, vencimientos) {
+  // Cuota 10 gratuita — manejada aparte
+  if (!vencimientos) return parseFloat(alumno.precio_normal)||0;
+  var venc = vencimientos[numCuota-1];
+  if (!venc) return parseFloat(alumno.precio_normal)||0;
+  var partes = venc.split('/');
+  var dVenc = new Date(parseInt(partes[2]), parseInt(partes[1])-1, parseInt(partes[0]), 23, 59, 59);
+  var hoy = new Date();
+  return hoy <= dVenc ? parseFloat(alumno.precio_bonificado)||0 : parseFloat(alumno.precio_normal)||0;
+}
+
+async function renderCuotas(a, cuotas){
+  var vencimientos = await cargarVencimientosFrontend();
   var cont=document.getElementById('cob-cuotas');
   var sinD=document.getElementById('cob-sindeuda');
   var hoyMesIdx=new Date().getMonth();
@@ -1219,8 +1241,8 @@ function renderCuotas(a, cuotas){
   cont.innerHTML=todasLasCuotas.map(function(c){
     var numC=c.numero_cuota;
     var esFutura=c.esFutura;
-    // Precio: futuras siempre bonificado (pago anticipado)
-    var precio=esFutura ? parseFloat(a.precio_bonificado)||0 : getPrecio(a, numC, cuotas);
+    // Precio: futuras siempre bonificado (pago anticipado), pendientes según vencimiento real
+    var precio=esFutura ? parseFloat(a.precio_bonificado)||0 : getPrecioConVencFrontend(a, numC, vencimientos);
     var esGratis=precio===0;
     var esBon=!esGratis && precio===(parseFloat(a.precio_bonificado)||0);
     var todoElMes=MESES_TODO_EL_MES.indexOf(numC)>=0;
