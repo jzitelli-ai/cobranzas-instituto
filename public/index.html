@@ -1437,9 +1437,11 @@ function leerBanco(file){
         var cuitRegex=/(?:var|cuo)\s*\/\s*(\d{8,11})/i;
         for(var i=headerRow+1;i<rawRows.length;i++){
           var row=rawRows[i];
-          var fecha=row[colFecha], desc=String(row[colDesc]||''), monto=row[colMonto];
-          if(!fecha||!desc||!monto) continue;
-          if(typeof monto!=='number'||monto<=0) continue;
+          var fecha=row[colFecha], desc=String(row[colDesc]||''), montoRaw=row[colMonto];
+          if(!fecha||!desc||!montoRaw) continue;
+          // Convertir monto a número (puede venir como string '82500.00' o número)
+          var monto=typeof montoRaw==='number'?montoRaw:parseFloat(String(montoRaw).replace(/[^0-9.-]/g,''));
+          if(isNaN(monto)||monto<=0) continue;
           if(desc.toLowerCase().indexOf('recibida')<0) continue;
           var cuitMatch=cuitRegex.exec(desc);
           var cuit=cuitMatch?cuitMatch[1]:'';
