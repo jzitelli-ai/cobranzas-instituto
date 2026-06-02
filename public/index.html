@@ -1577,7 +1577,24 @@ async function procesarBanco(){
 
   var det='';
   if(prev.nuevos>0){
-    det+='<div style="font-weight:700;color:var(--s);margin-bottom:4px">✓ '+prev.nuevos+' pagos nuevos a importar — Total: $'+prev.totalNuevo.toLocaleString('es-AR')+'</div>';
+    det+='<div style="font-weight:700;color:var(--s);margin-bottom:6px">✓ '+prev.nuevos+' pagos a importar — Total: $'+prev.totalNuevo.toLocaleString('es-AR')+'</div>';
+    if(prev.nuevosDetalle&&prev.nuevosDetalle.length>0){
+      det+='<table style="width:100%;font-size:11px;margin-bottom:8px"><thead><tr>'+
+        '<th style="text-align:left;padding:3px 6px;background:var(--sl);color:var(--s)">Alumno</th>'+
+        '<th style="text-align:left;padding:3px 6px;background:var(--sl);color:var(--s)">Curso</th>'+
+        '<th style="text-align:right;padding:3px 6px;background:var(--sl);color:var(--s)">Monto</th>'+
+        '<th style="text-align:left;padding:3px 6px;background:var(--sl);color:var(--s)">Fecha</th>'+
+      '</tr></thead><tbody>';
+      prev.nuevosDetalle.forEach(function(x){
+        det+='<tr style="border-bottom:1px solid var(--b)">'+
+          '<td style="padding:3px 6px;font-weight:600">'+x.alumno+'</td>'+
+          '<td style="padding:3px 6px;color:var(--m);font-size:10px">'+( x.curso||'—')+'</td>'+
+          '<td style="padding:3px 6px;text-align:right;color:var(--s)">$'+x.monto.toLocaleString('es-AR')+'</td>'+
+          '<td style="padding:3px 6px;color:var(--m)">'+x.fecha+'</td>'+
+        '</tr>';
+      });
+      det+='</tbody></table>';
+    }
   }
   if(prev.duplicados.length>0){
     det+='<div style="font-weight:700;color:var(--m);margin:8px 0 4px">Ya registrados (se omitirán):</div>';
