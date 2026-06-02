@@ -707,7 +707,7 @@ app.post('/api/banco/preview', async (req,res) => {
     });
   });
   let nuevos=0, totalNuevo=0; 
-  const duplicados=[],noEncontrados=[],sinCuit=[];
+  const duplicados=[],noEncontrados=[],sinCuit=[],nuevosDetalle=[];
 
   for(const fila of filas){
     const cuit=normalizarCuit(fila[colCuit]); 
@@ -750,9 +750,10 @@ app.post('/api/banco/preview', async (req,res) => {
     } else {
       nuevos++;
       totalNuevo+=monto;
+      nuevosDetalle.push({alumno:alumno.nombre,curso:alumno.curso,cuit,monto,fecha:fechaStr,descrip:String(descrip).trim().slice(0,40)});
     }
   }
-  res.json({ok:true,nuevos,totalNuevo,duplicados,noEncontrados,sinCuit,totalFilas:filas.length});
+  res.json({ok:true,nuevos,totalNuevo,nuevosDetalle,duplicados,noEncontrados,sinCuit,totalFilas:filas.length});
 });
 
 app.post('/api/banco', async (req,res) => {
