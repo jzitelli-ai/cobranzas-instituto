@@ -911,6 +911,16 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
 <script>
 var CUOTAS=[{num:1,mes:'Marzo'},{num:2,mes:'Abril'},{num:3,mes:'Mayo'},{num:4,mes:'Junio'},{num:5,mes:'Julio'},{num:6,mes:'Agosto'},{num:7,mes:'Septiembre'},{num:8,mes:'Octubre'},{num:9,mes:'Noviembre'},{num:10,mes:'Diciembre'}];
 var MESES_TODO_EL_MES=[1,5];
+
+function fechaLocalAR() {
+  // Devuelve fecha local Argentina en formato yyyy-mm-dd (para input type=date)
+  var now = new Date();
+  var ar = new Date(now.toLocaleString('en-US', {timeZone: 'America/Argentina/Buenos_Aires'}));
+  var y = ar.getFullYear();
+  var m = String(ar.getMonth()+1).padStart(2,'0');
+  var d = String(ar.getDate()).padStart(2,'0');
+  return y+'-'+m+'-'+d;
+}
 var MESES_NOMBRE_ALL=['Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var _alumnos=[],_cursos=[],_pagos=[],_reporte=[];
 var alumnoActual=null,bancoData=null;
@@ -1023,7 +1033,7 @@ async function cargarPreciosCursosVigente(){
   try {
     var aranceles=await api('GET','/api/aranceles');
     if(!aranceles||!aranceles.length) return;
-    var hoy=new Date().toISOString().slice(0,10);
+    var hoy=fechaLocalAR();
     var vigente=aranceles.find(function(a){return a.desde<=hoy;});
     if(!vigente) return;
     var cursos=await api('GET','/api/aranceles/'+vigente.id+'/cursos');
@@ -1174,7 +1184,7 @@ async function selAlumno(id){
   renderCuotas(a,cuotas||[]);
   actualizarTotal();
   document.getElementById('paso3').style.display='block';
-  var hoyStr=new Date().toISOString().slice(0,10);
+  var hoyStr=fechaLocalAR();
   document.getElementById('cob-fecha').value=hoyStr;
 }
 
@@ -1324,7 +1334,7 @@ async function confirmarCobro(){
   if(total===0){toast('Selecciona al menos una cuota','e');return;}
   var medio=document.getElementById('cob-medio').value;
   var obs=document.getElementById('cob-obs').value;
-  var fechaManual=document.getElementById('cob-fecha').value||new Date().toISOString().slice(0,10);
+  var fechaManual=document.getElementById('cob-fecha').value||fechaLocalAR();
 
   // Verificar duplicado — mismo alumno, mismo monto, mismas cuotas en los últimos pagos
   if(_pagos){
@@ -1689,7 +1699,7 @@ function exportarDuplicados() {
   var ws = XLSX.utils.json_to_sheet(rows);
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Ya importados');
-  XLSX.writeFile(wb, 'duplicados_banco_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  XLSX.writeFile(wb, 'duplicados_banco_'+fechaLocalAR()+'.xlsx');
   toast('Exportado correctamente','s');
 }
 
@@ -1699,7 +1709,7 @@ function exportarNoEncontrados() {
   var ws = XLSX.utils.json_to_sheet(rows);
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'No encontrados');
-  XLSX.writeFile(wb, 'cuits_no_encontrados_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  XLSX.writeFile(wb, 'cuits_no_encontrados_'+fechaLocalAR()+'.xlsx');
   toast('Exportado correctamente','s');
 }
 
@@ -2084,7 +2094,7 @@ function exportarDetalleCurso() {
   var ws=XLSX.utils.json_to_sheet(rows);
   var wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Detalle');
-  XLSX.writeFile(wb,'detalle_curso_'+(_detalleCursoData[0]&&_detalleCursoData[0].curso||'curso')+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  XLSX.writeFile(wb,'detalle_curso_'+(_detalleCursoData[0]&&_detalleCursoData[0].curso||'curso')+'_'+fechaLocalAR()+'.xlsx');
   toast('Exportado','s');
 }
 
@@ -2254,7 +2264,7 @@ function exportarSaldosPendientes() {
   var ws = XLSX.utils.json_to_sheet(rows);
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Saldos sin imputar');
-  XLSX.writeFile(wb, 'saldos_sin_imputar_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  XLSX.writeFile(wb, 'saldos_sin_imputar_'+fechaLocalAR()+'.xlsx');
   toast('Exportado correctamente', 's');
 }
 
@@ -2352,7 +2362,7 @@ function exportarReporteMedios(){
   crearHoja(_reporteMediosData.transferencias,'Transferencias');
   crearHoja(_reporteMediosData.efectivo,'Efectivo');
   if(_reporteMediosData.otros.length)crearHoja(_reporteMediosData.otros,'Otros');
-  XLSX.writeFile(wb,'reporte_medios_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  XLSX.writeFile(wb,'reporte_medios_'+fechaLocalAR()+'.xlsx');
   toast('Exportado correctamente','s');
 }
 
@@ -2805,7 +2815,7 @@ async function exportarPagos(){
     if(!pagos||!pagos.length){toast('Sin pagos para exportar','e');return;}
     var datos=pagos.map(function(p){return{'N Recibo':p.id,'Fecha':p.fecha,'Alumno':p.alumno_nombre,'Curso':p.curso,'Monto':p.monto,'Concepto':p.concepto,'Medio':p.medio,'Origen':p.origen};});
     var ws=XLSX.utils.json_to_sheet(datos);var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Pagos');
-    XLSX.writeFile(wb,'pagos_'+new Date().toISOString().slice(0,10)+'.xlsx');
+    XLSX.writeFile(wb,'pagos_'+fechaLocalAR()+'.xlsx');
     toast('Exportado correctamente','s');
   } catch(e){ toast('Error al exportar','e'); }
 }
@@ -2819,7 +2829,7 @@ async function cargarAranceles(){
 }
 
 function renderVigencias(){
-  var hoy=new Date().toISOString().slice(0,10);
+  var hoy=fechaLocalAR();
   var h='<table><thead><tr><th>Desde</th><th>Descripcion</th><th>Estado</th><th></th></tr></thead><tbody>';
   if(!_aranceles.length){ h+='<tr><td colspan="4" style="text-align:center;color:var(--m);padding:20px">Sin vigencias. Crea la primera.</td></tr>'; }
   _aranceles.forEach(function(v){
@@ -2841,7 +2851,7 @@ function renderVigencias(){
 
 function nuevaVigencia(){
   // Precargar la fecha de hoy y la descripción de la vigencia activa
-  var hoy=new Date().toISOString().slice(0,10);
+  var hoy=fechaLocalAR();
   document.getElementById('vig-desde').value=hoy;
   // Mostrar vigencia actual en el modal
   var vigActual=_aranceles.find(function(v){return v.desde<=hoy;});
@@ -3049,7 +3059,7 @@ function exportarReporte(){
     fila['Deuda Real']=a.deudaReal||0;return fila;
   });
   var ws=XLSX.utils.json_to_sheet(datos);var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Reporte');
-  XLSX.writeFile(wb,'reporte_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  XLSX.writeFile(wb,'reporte_'+fechaLocalAR()+'.xlsx');
 }
 
 function abrirM(id){document.getElementById(id).classList.add('open');}
