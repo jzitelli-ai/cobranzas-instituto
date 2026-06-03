@@ -1845,7 +1845,11 @@ function reimprimirRecibo(p) {
   var alumno = (_alumnos||[]).find(function(a){ return a.id == p.alumno_id; });
   var curso = alumno ? alumno.curso : (p.curso||'');
   var medio = (p.medio||'') + (p.origen && p.origen.indexOf('·')>=0 ? ' — ' + p.origen.split('·').slice(1).join('·').trim() : '');
-  imprimirReciboDuplicado(p.id, p.fecha, p.alumno_nombre, curso, p.concepto, medio, pesos(p.monto));
+  // Limpiar concepto para el recibo — solo mostrar período
+  var conceptoLimpio = (p.concepto||'').split(',').map(function(c){
+    return c.trim().replace(/ — pago parcial.*$/,'').replace(/ \[cuota anterior\]/,'').replace(/ \[credito\]/,'');
+  }).join(', ');
+  imprimirReciboDuplicado(p.id, p.fecha, p.alumno_nombre, curso, conceptoLimpio, medio, pesos(p.monto));
 }
 
 function abrirEliminarPago(pagoId, alumnoId) {
