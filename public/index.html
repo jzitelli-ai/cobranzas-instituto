@@ -191,7 +191,7 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
     <button class="ni" onclick="nav('historial')">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Historial
     </button>
-    <button class="ni ni-admin-only" onclick="nav('reporte')">
+    <button class="ni" onclick="nav('reporte')">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Reporte de deuda
     </button>
     <button class="ni ni-admin-only" onclick="nav('reporte-medios')">
@@ -987,7 +987,7 @@ function nav(id){
   if(id==='dashboard')actualizarDashboard();
   if(id==='alumnos')cargarAlumnos();
   if(id==='historial')cargarHistorial();
-  if(id==='reporte'){if(!_adminAutenticado){toast('Acceso restringido al panel de administración','e');nav('dashboard');return;}cargarReporte();}
+  if(id==='reporte')cargarReporte();
   if(id==='reporte-medios'){if(!_adminAutenticado){toast('Acceso restringido al panel de administración','e');nav('dashboard');return;}if(!_pagos)api('GET','/api/pagos').then(function(r){_pagos=r;cargarCursosReporteMedios();});else cargarCursosReporteMedios();}
   if(id==='saldos-pendientes')cargarSaldosPendientes();
   if(id==='aranceles')cargarAranceles();
