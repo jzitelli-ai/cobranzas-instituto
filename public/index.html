@@ -1466,7 +1466,7 @@ function leerBanco(file){
       if(headerRow>=0){
         // Formato bancario detectado — extraer CUIT desde descripción
         var procesadas=[];
-        var cuitRegex=/(?:(?:var|cuo)\s*\/\s*|\/)(\d{8,11})(?!\d)/i;
+        var cuitRegex=/(?:(?:var|cuo)\s*\/\s*|\/|\bcuit\s+)(\d{8,11})(?!\d)/i;
         for(var i=headerRow+1;i<rawRows.length;i++){
           var row=rawRows[i];
           var fecha=row[colFecha], desc=String(row[colDesc]||''), montoRaw=row[colMonto];
