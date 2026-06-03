@@ -119,6 +119,8 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
 .comp-cell{text-align:center;background:#FFF3E0;border:1px solid #FFB74D}
 .comp-tag{font-size:9px;color:#E65100;font-weight:700;line-height:1.2}
 .tag-inactivo{background:#eee;color:#999;font-size:10px;padding:1px 5px;border-radius:8px;margin-left:4px}
+.ni-admin-only { display: none !important; }
+.admin-activo .ni-admin-only { display: flex !important; }
 @media print{
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
   body > *{display:none!important}
@@ -189,10 +191,10 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
     <button class="ni" onclick="nav('historial')">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Historial
     </button>
-    <button class="ni" onclick="nav('reporte')">
+    <button class="ni ni-admin-only" onclick="nav('reporte')">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Reporte de deuda
     </button>
-    <button class="ni" onclick="nav('reporte-medios')">
+    <button class="ni ni-admin-only" onclick="nav('reporte-medios')">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Reporte por medio
     </button>
     <button class="ni" onclick="nav('saldos-pendientes')">
@@ -985,8 +987,8 @@ function nav(id){
   if(id==='dashboard')actualizarDashboard();
   if(id==='alumnos')cargarAlumnos();
   if(id==='historial')cargarHistorial();
-  if(id==='reporte')cargarReporte();
-  if(id==='reporte-medios'){if(!_pagos)api('GET','/api/pagos').then(function(r){_pagos=r;cargarCursosReporteMedios();});else cargarCursosReporteMedios();}
+  if(id==='reporte'){if(!_adminAutenticado){toast('Acceso restringido al panel de administración','e');nav('dashboard');return;}cargarReporte();}
+  if(id==='reporte-medios'){if(!_adminAutenticado){toast('Acceso restringido al panel de administración','e');nav('dashboard');return;}if(!_pagos)api('GET','/api/pagos').then(function(r){_pagos=r;cargarCursosReporteMedios();});else cargarCursosReporteMedios();}
   if(id==='saldos-pendientes')cargarSaldosPendientes();
   if(id==='aranceles')cargarAranceles();
   if(id==='cursos')renderCursos();
@@ -1965,6 +1967,7 @@ function _resetAdminTimeout() {
   _adminTimeoutTimer = setTimeout(function(){
     if (_adminAutenticado) {
       _adminAutenticado = false;
+  document.body.classList.remove('admin-activo');
       _adminLoginTime = 0;
       // Si el usuario está en el panel admin, volver a pedir clave
       if (document.getElementById('s-admin') && document.getElementById('s-admin').classList.contains('active')) {
@@ -1992,6 +1995,7 @@ async function loginAdmin() {
   var r = await api('POST', '/api/admin/login', { password: pwd });
   if (r && r.ok) {
     _adminAutenticado = true;
+  document.body.classList.add('admin-activo');
     _adminLoginTime = Date.now();
     _resetAdminTimeout();
     cerrarM('m-admin-login');
