@@ -1494,20 +1494,12 @@ function leerBanco(file){
           bancoData=procesadas;
           document.getElementById('banco-msg').innerHTML=
             'Archivo: <strong>'+file.name+'</strong> — <span style="color:var(--s);font-weight:600">✓ Formato bancario detectado automáticamente</span> — '+procesadas.length+' transferencias recibidas extraídas';
-          // Preview con checkboxes para seleccionar cuáles importar
-          var h='<div style="margin-bottom:6px;font-size:11px;color:var(--m)">'+
-            '<label style="cursor:pointer"><input type="checkbox" id="banco-sel-all" checked onchange="toggleAllBanco(this)"> Seleccionar todos</label>'+
-          '</div>';
-          h+='<table style="font-size:11px;width:100%"><thead><tr><th style="width:30px"></th><th>CUIT</th><th>FECHA</th><th>IMPORTE</th><th>DESCRIPCION</th></tr></thead><tbody>';
-          procesadas.forEach(function(row,i){
-            h+='<tr>'+
-              '<td><input type="checkbox" class="banco-row-check" data-idx="'+i+'" checked></td>'+
-              '<td>'+row.CUIT+'</td>'+
-              '<td>'+row.FECHA+'</td>'+
-              '<td>$'+row.IMPORTE.toLocaleString('es-AR')+'</td>'+
-              '<td>'+row.DESCRIPCION+'</td>'+
-            '</tr>';
+          // Preview simple en paso 2
+          var h='<table style="font-size:11px;width:100%"><thead><tr><th>CUIT</th><th>FECHA</th><th>IMPORTE</th><th>DESCRIPCION</th></tr></thead><tbody>';
+          procesadas.slice(0,5).forEach(function(row){
+            h+='<tr><td>'+row.CUIT+'</td><td>'+row.FECHA+'</td><td>$'+row.IMPORTE.toLocaleString('es-AR')+'</td><td>'+row.DESCRIPCION+'</td></tr>';
           });
+          if(procesadas.length>5) h+='<tr><td colspan="4" style="color:var(--m);font-size:10px;text-align:center">... y '+(procesadas.length-5)+' más</td></tr>';
           h+='</tbody></table>';
           document.getElementById('banco-prev').innerHTML=h;
           // Pre-setear columnas
@@ -1567,7 +1559,7 @@ function leerBanco(file){
 
 var _noEncontradosData = [];
 
-var _bancoColC='', _bancoColM='', _bancoDataFiltrado=null;
+var _bancoColC='', _bancoColM='', _bancoDataFiltrado=null, _bancoPrevData=null;
 
 function toggleAllBanco(cb) {
   document.querySelectorAll('.banco-row-check').forEach(function(c){ c.checked=cb.checked; });
@@ -1578,20 +1570,13 @@ async function procesarBanco(){
   _bancoColC=document.getElementById('bc-cuit').value;
   _bancoColM=document.getElementById('bc-monto').value;
 
-  // Filtrar solo las filas seleccionadas con checkbox
-  var checks=document.querySelectorAll('.banco-row-check');
   _bancoDataFiltrado=bancoData;
-  if(checks.length>0){
-    var seleccionados=[];
-    checks.forEach(function(c){ if(c.checked) seleccionados.push(parseInt(c.getAttribute('data-idx'))); });
-    _bancoDataFiltrado=bancoData.filter(function(_,i){ return seleccionados.indexOf(i)>=0; });
-    if(_bancoDataFiltrado.length===0){toast('No hay transferencias seleccionadas','e');return;}
-  }
 
   // Mostrar preview primero
   toast('Analizando archivo...','i');
   var prev=await api('POST','/api/banco/preview',{filas:_bancoDataFiltrado,colCuit:_bancoColC,colMonto:_bancoColM});
   if(!prev||!prev.ok){toast('Error al analizar','e');return;}
+  _bancoPrevData=prev;
 
   // Armar modal de preview
   document.getElementById('banco-prev-stats').innerHTML=
@@ -1604,14 +1589,19 @@ async function procesarBanco(){
   if(prev.nuevos>0){
     det+='<div style="font-weight:700;color:var(--s);margin-bottom:6px">✓ '+prev.nuevos+' pagos a importar — Total: $'+prev.totalNuevo.toLocaleString('es-AR')+'</div>';
     if(prev.nuevosDetalle&&prev.nuevosDetalle.length>0){
+      det+='<div style="margin-bottom:4px;font-size:11px">'+
+        '<label style="cursor:pointer"><input type="checkbox" id="banco-sel-all" checked onchange="toggleAllBanco(this)"> Seleccionar todos</label>'+
+      '</div>';
       det+='<table style="width:100%;font-size:11px;margin-bottom:8px"><thead><tr>'+
+        '<th style="width:28px;background:var(--sl)"></th>'+
         '<th style="text-align:left;padding:3px 6px;background:var(--sl);color:var(--s)">Alumno</th>'+
         '<th style="text-align:left;padding:3px 6px;background:var(--sl);color:var(--s)">Curso</th>'+
         '<th style="text-align:right;padding:3px 6px;background:var(--sl);color:var(--s)">Monto</th>'+
         '<th style="text-align:left;padding:3px 6px;background:var(--sl);color:var(--s)">Fecha</th>'+
       '</tr></thead><tbody>';
-      prev.nuevosDetalle.forEach(function(x){
+      prev.nuevosDetalle.forEach(function(x,i){
         det+='<tr style="border-bottom:1px solid var(--b)">'+
+          '<td style="padding:3px 6px;text-align:center"><input type="checkbox" class="banco-row-check" data-idx="'+i+'" checked></td>'+
           '<td style="padding:3px 6px;font-weight:600">'+x.alumno+'</td>'+
           '<td style="padding:3px 6px;color:var(--m);font-size:10px">'+( x.curso||'—')+'</td>'+
           '<td style="padding:3px 6px;text-align:right;color:var(--s)">$'+x.monto.toLocaleString('es-AR')+'</td>'+
@@ -1642,9 +1632,37 @@ async function procesarBanco(){
 }
 
 async function confirmarImportarBanco(){
+  // Filtrar según checkboxes del modal
+  var checks=document.querySelectorAll('.banco-row-check');
+  var dataAImportar=_bancoDataFiltrado||bancoData;
+  var prev=_bancoPrevData;
+  if(checks.length>0 && prev && prev.nuevosDetalle){
+    var seleccionados=[];
+    checks.forEach(function(c){ if(c.checked) seleccionados.push(parseInt(c.getAttribute('data-idx'))); });
+    // Mapear índices de nuevosDetalle a índices en _bancoDataFiltrado
+    var nuevosIdx=[];
+    var idxEnData=0;
+    (_bancoDataFiltrado||bancoData).forEach(function(fila,i){
+      // Si este fila es uno de los nuevos, verificar si está seleccionado
+      nuevosIdx.push(i);
+    });
+    // Simplificación: reconstruir la lista con todos excepto los desmarcados
+    if(seleccionados.length < checks.length){
+      // Hay desmarcados — excluir esos índices de nuevosDetalle del data
+      var desmarcados = [];
+      checks.forEach(function(c){ if(!c.checked) desmarcados.push(parseInt(c.getAttribute('data-idx'))); });
+      // Los índices en nuevosDetalle corresponden a posiciones en prev.nuevosDetalle
+      // Necesitamos identificar qué filas del bancoData son las desmarcadas
+      var alumnosDesmarcados = desmarcados.map(function(i){ return prev.nuevosDetalle[i] ? prev.nuevosDetalle[i].cuit : null; }).filter(Boolean);
+      dataAImportar = (_bancoDataFiltrado||bancoData).filter(function(f){
+        var cuit = String(f['CUIT']||f[_bancoColC]||'').replace(/[^0-9]/g,'');
+        return alumnosDesmarcados.indexOf(cuit) < 0;
+      });
+    }
+  }
   cerrarM('m-banco-preview');
   var colC=_bancoColC, colM=_bancoColM;
-  var r=await api('POST','/api/banco',{filas:_bancoDataFiltrado||bancoData,colCuit:colC,colMonto:colM});
+  var r=await api('POST','/api/banco',{filas:dataAImportar,colCuit:colC,colMonto:colM});
   if(!r||!r.ok){toast('Error al procesar','e');return;}
 
   document.getElementById('imp-stats').innerHTML=
