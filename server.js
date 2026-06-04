@@ -742,7 +742,9 @@ app.post('/api/banco/preview', async (req,res) => {
 
     // Verificar si ya existe
     const yaExiste=mesFechaDup
-      ?await q1("SELECT id,fecha,origen FROM pagos WHERE alumno_id=$1 AND monto=$2 AND SUBSTRING(fecha,4,2)=$3",[alumno.id,monto,String(mesFechaDup).padStart(2,'0')])
+      ?await q1(`SELECT id,fecha,origen FROM pagos WHERE alumno_id=$1 AND monto=$2 AND (
+        LPAD(SPLIT_PART(REPLACE(fecha,'-','/'),  '/', 2), 2, '0') = $3
+      )`,[alumno.id,monto,String(mesFechaDup).padStart(2,'0')])
       :await q1("SELECT id,fecha,origen FROM pagos WHERE alumno_id=$1 AND monto=$2",[alumno.id,monto]);
 
     if(yaExiste){
@@ -799,7 +801,9 @@ app.post('/api/banco', async (req,res) => {
     }
     // Anti-duplicado: mismo alumno, mismo monto Y mismo mes — evita confundir cuotas de distintos meses
     const yaExiste = mesFechaDup
-      ? await q1("SELECT id, fecha, origen FROM pagos WHERE alumno_id=$1 AND monto=$2 AND SUBSTRING(fecha,4,2)=$3", [alumno.id, monto, String(mesFechaDup).padStart(2,'0')])
+      ? await q1(`SELECT id, fecha, origen FROM pagos WHERE alumno_id=$1 AND monto=$2 AND (
+        LPAD(SPLIT_PART(REPLACE(fecha,'-','/'), '/', 2), 2, '0') = $3
+      )`, [alumno.id, monto, String(mesFechaDup).padStart(2,'0')])
       : await q1("SELECT id, fecha, origen FROM pagos WHERE alumno_id=$1 AND monto=$2", [alumno.id, monto]);
     if (yaExiste) {
       let fr=fila['FECHA']||fila['fecha']||fila['Fecha']||'',fs='';
