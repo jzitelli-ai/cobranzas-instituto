@@ -706,6 +706,7 @@ app.post('/api/banco/preview', async (req,res) => {
       if(clean.length>=7) cuitMap[clean]=a;
     });
   });
+  if(!filas||!Array.isArray(filas)||filas.length===0) return res.json({ok:false,error:'No hay filas para procesar'});
   let nuevos=0, totalNuevo=0; 
   const duplicados=[],noEncontrados=[],sinCuit=[],nuevosDetalle=[];
 
@@ -760,6 +761,7 @@ app.post('/api/banco/preview', async (req,res) => {
 
 app.post('/api/banco', async (req,res) => {
   const {filas,colCuit,colMonto}=req.body;
+  if(!filas||!Array.isArray(filas)||filas.length===0) return res.json({ok:false,error:'No hay filas para procesar'});
   const alumnos=await q('SELECT * FROM alumnos WHERE activo=TRUE');
   const cuitMap={};
   alumnos.forEach(a=>{
