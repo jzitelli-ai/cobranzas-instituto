@@ -1580,12 +1580,12 @@ async function procesarBanco(){
 
   // Filtrar solo las filas seleccionadas con checkbox
   var checks=document.querySelectorAll('.banco-row-check');
-  var bancoDataFiltrado=bancoData;
+  _bancoDataFiltrado=bancoData;
   if(checks.length>0){
     var seleccionados=[];
     checks.forEach(function(c){ if(c.checked) seleccionados.push(parseInt(c.getAttribute('data-idx'))); });
-    bancoDataFiltrado=bancoData.filter(function(_,i){ return seleccionados.indexOf(i)>=0; });
-    if(bancoDataFiltrado.length===0){toast('No hay transferencias seleccionadas','e');return;}
+    _bancoDataFiltrado=bancoData.filter(function(_,i){ return seleccionados.indexOf(i)>=0; });
+    if(_bancoDataFiltrado.length===0){toast('No hay transferencias seleccionadas','e');return;}
   }
 
   // Mostrar preview primero
