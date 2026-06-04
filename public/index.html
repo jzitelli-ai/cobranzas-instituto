@@ -1494,10 +1494,19 @@ function leerBanco(file){
           bancoData=procesadas;
           document.getElementById('banco-msg').innerHTML=
             'Archivo: <strong>'+file.name+'</strong> — <span style="color:var(--s);font-weight:600">✓ Formato bancario detectado automáticamente</span> — '+procesadas.length+' transferencias recibidas extraídas';
-          // Preview
-          var h='<table style="font-size:11px"><thead><tr><th>CUIT</th><th>FECHA</th><th>IMPORTE</th><th>DESCRIPCION</th></tr></thead><tbody>';
-          procesadas.slice(0,5).forEach(function(row){
-            h+='<tr><td>'+row.CUIT+'</td><td>'+row.FECHA+'</td><td>$'+row.IMPORTE.toLocaleString('es-AR')+'</td><td>'+row.DESCRIPCION+'</td></tr>';
+          // Preview con checkboxes para seleccionar cuáles importar
+          var h='<div style="margin-bottom:6px;font-size:11px;color:var(--m)">'+
+            '<label style="cursor:pointer"><input type="checkbox" id="banco-sel-all" checked onchange="toggleAllBanco(this)"> Seleccionar todos</label>'+
+          '</div>';
+          h+='<table style="font-size:11px;width:100%"><thead><tr><th style="width:30px"></th><th>CUIT</th><th>FECHA</th><th>IMPORTE</th><th>DESCRIPCION</th></tr></thead><tbody>';
+          procesadas.forEach(function(row,i){
+            h+='<tr>'+
+              '<td><input type="checkbox" class="banco-row-check" data-idx="'+i+'" checked></td>'+
+              '<td>'+row.CUIT+'</td>'+
+              '<td>'+row.FECHA+'</td>'+
+              '<td>$'+row.IMPORTE.toLocaleString('es-AR')+'</td>'+
+              '<td>'+row.DESCRIPCION+'</td>'+
+            '</tr>';
           });
           h+='</tbody></table>';
           document.getElementById('banco-prev').innerHTML=h;
@@ -1558,16 +1567,30 @@ function leerBanco(file){
 
 var _noEncontradosData = [];
 
-var _bancoColC='', _bancoColM='';
+var _bancoColC='', _bancoColM='', _bancoDataFiltrado=null;
+
+function toggleAllBanco(cb) {
+  document.querySelectorAll('.banco-row-check').forEach(function(c){ c.checked=cb.checked; });
+}
 
 async function procesarBanco(){
   if(!bancoData)return;
   _bancoColC=document.getElementById('bc-cuit').value;
   _bancoColM=document.getElementById('bc-monto').value;
 
+  // Filtrar solo las filas seleccionadas con checkbox
+  var checks=document.querySelectorAll('.banco-row-check');
+  var bancoDataFiltrado=bancoData;
+  if(checks.length>0){
+    var seleccionados=[];
+    checks.forEach(function(c){ if(c.checked) seleccionados.push(parseInt(c.getAttribute('data-idx'))); });
+    bancoDataFiltrado=bancoData.filter(function(_,i){ return seleccionados.indexOf(i)>=0; });
+    if(bancoDataFiltrado.length===0){toast('No hay transferencias seleccionadas','e');return;}
+  }
+
   // Mostrar preview primero
   toast('Analizando archivo...','i');
-  var prev=await api('POST','/api/banco/preview',{filas:bancoData,colCuit:_bancoColC,colMonto:_bancoColM});
+  var prev=await api('POST','/api/banco/preview',{filas:_bancoDataFiltrado,colCuit:_bancoColC,colMonto:_bancoColM});
   if(!prev||!prev.ok){toast('Error al analizar','e');return;}
 
   // Armar modal de preview
@@ -1621,7 +1644,7 @@ async function procesarBanco(){
 async function confirmarImportarBanco(){
   cerrarM('m-banco-preview');
   var colC=_bancoColC, colM=_bancoColM;
-  var r=await api('POST','/api/banco',{filas:bancoData,colCuit:colC,colMonto:colM});
+  var r=await api('POST','/api/banco',{filas:_bancoDataFiltrado||bancoData,colCuit:colC,colMonto:colM});
   if(!r||!r.ok){toast('Error al procesar','e');return;}
 
   document.getElementById('imp-stats').innerHTML=
