@@ -2436,6 +2436,7 @@ function exportarReporteMedios(){
 var _moraPorcentaje = 0;
 
 async function cargarReporte(){
+  await cargarVencimientosFrontend();
   _reporte=await api('GET','/api/reporte');
   var mr=await api('GET','/api/mora');
   _moraPorcentaje=mr&&mr.ok?mr.porcentaje:0;
