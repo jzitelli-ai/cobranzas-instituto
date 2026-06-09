@@ -78,8 +78,18 @@ async function getPrecioConVenc(alumno, numCuota, fechaPago, vencimientos) {
   return esBonif ? parseFloat(alumno.precio_bonificado) : parseFloat(alumno.precio_normal);
 }
 
-function getPrecio(alumno, numCuota, dia) {
-  const esBonif = MESES_TODO_EL_MES.includes(numCuota) || dia <= 10;
+function getPrecio(alumno, numCuota, dia, vencimientos) {
+  if (MESES_TODO_EL_MES.includes(numCuota)) return parseFloat(alumno.precio_bonificado);
+  // Si tenemos vencimientos, comparar la fecha de vencimiento de la cuota con hoy
+  if (vencimientos && vencimientos[numCuota - 1]) {
+    const venc = vencimientos[numCuota - 1];
+    const [dv, mv, yv] = venc.split('/');
+    const dVenc = new Date(parseInt(yv), parseInt(mv) - 1, parseInt(dv), 23, 59, 59);
+    const hoy = new Date();
+    return hoy <= dVenc ? parseFloat(alumno.precio_bonificado) : parseFloat(alumno.precio_normal);
+  }
+  // Fallback: usar día del mes
+  const esBonif = dia <= 10;
   return esBonif ? parseFloat(alumno.precio_bonificado) : parseFloat(alumno.precio_normal);
 }
 
@@ -888,9 +898,9 @@ app.get('/api/reporte', async (req,res) => {
     const c10g=await cuota10Gratis(a.id,a,cuotas);
     if(c10g&&estadoCuotas[10]==='pendiente')estadoCuotas[10]='gratis';
     const cuotasGen=Object.entries(estadoCuotas).filter(([,v])=>v!=='futura');
-    const totalDebido=cuotasGen.reduce((s,[k])=>{const n=parseInt(k);return s+(n===10&&c10g?0:getPrecio(a,n,dia));},0);
+    const totalDebido=cuotasGen.reduce((s,[k])=>{const n=parseInt(k);return s+(n===10&&c10g?0:getPrecio(a,n,dia,vencimientosReporte));},0);
     let saldo=totalPagado-totalDebido;
-    if(saldo>0){let d=saldo;for(let i=0;i<10;i++){const n=i+1;if(estadoCuotas[n]==='pendiente'&&d>0){const p=n===10&&c10g?0:getPrecio(a,n,dia);if(p>0&&d>=p){estadoCuotas[n]='compensada';d-=p;}}}}
+    if(saldo>0){let d=saldo;for(let i=0;i<10;i++){const n=i+1;if(estadoCuotas[n]==='pendiente'&&d>0){const p=n===10&&c10g?0:getPrecio(a,n,dia,vencimientosReporte);if(p>0&&d>=p){estadoCuotas[n]='compensada';d-=p;}}}}
     // deudaReal: usar fecha de pago de la cuota para determinar precio bonif/normal
     const deudaReal=Object.entries(estadoCuotas).reduce((s,[k,v])=>{
       if(v!=='pendiente')return s;
@@ -912,10 +922,10 @@ app.get('/api/reporte', async (req,res) => {
             else{const pts=String(fpCuota).split('-');dp=new Date(parseInt(pts[0]),parseInt(pts[1])-1,parseInt(pts[2]),12);}
             precio=dp<=dVenc?parseFloat(a.precio_bonificado):parseFloat(a.precio_normal);
           } else {
-            precio=getPrecio(a,n,dia);
+            precio=getPrecio(a,n,dia,vencimientosReporte);
           }
         } else {
-          precio=getPrecio(a,n,dia);
+          precio=getPrecio(a,n,dia,vencimientosReporte);
         }
       }
       return s+(precio-mp>0?precio-mp:0);
@@ -1591,6 +1601,7 @@ app.get('/api/admin/stats', async (req, res) => {
   const todosPagos = await q('SELECT alumno_id, COALESCE(SUM(monto),0) as total FROM pagos WHERE alumno_id=ANY($1) GROUP BY alumno_id', [alumnos.map(a=>a.id)]);
   const mapPagos = {};
   todosPagos.forEach(p => { mapPagos[p.alumno_id] = parseFloat(p.total||0); });
+  const vencimientosStats = await getVencimientos();
   const hoy = new Date();
   const mesActual = hoy.getMonth();
   const dia = hoy.getDate();
@@ -1601,7 +1612,7 @@ app.get('/api/admin/stats', async (req, res) => {
     let totalDebido = 0;
     for (let i = 0; i < 10; i++) {
       if (MESES_IDX[i] > mesActual) continue;
-      totalDebido += getPrecio(a, i+1, dia);
+      totalDebido += getPrecio(a, i+1, dia, vencimientosStats);
     }
     const saldo = totalPagadoA - totalDebido;
     if (saldo < 0) totalDeuda += Math.abs(saldo);
