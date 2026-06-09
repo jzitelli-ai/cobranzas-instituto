@@ -2486,7 +2486,7 @@ function filtrarReporte(){
       else if(e==='gratis'){h+='<td style="text-align:center;background:#c8f7c5;border:1px solid #5cb85c"><div style="font-size:9px;color:#1a7a1a;font-weight:700">★<br>GRATIS</div></td>';}
       else{
         var numCuota=c.num;var dia=new Date().getDate();
-        var precioCuota=(MESES_TODO_EL_MES.indexOf(numCuota)>=0||dia<=10)?parseFloat(a.precio_bonificado)||0:parseFloat(a.precio_normal)||0;
+        var precioCuota=getPrecioConVencFrontend(a, numCuota, _vencimientosFrontend);
         var montoParcial=a.montosPago&&(a.montosPago[numCuota]||a.montosPago[String(numCuota)])||0;
         if(montoParcial>0&&montoParcial<precioCuota){
           h+='<td style="text-align:center;background:var(--wl);border:1px solid var(--w)" title="Pago parcial: '+pesos(montoParcial)+' de '+pesos(precioCuota)+'"><div style="font-size:9px;color:var(--w);font-weight:700">⚠ PARCIAL</div><div style="font-size:8px;color:var(--w)">'+pesos(montoParcial)+'</div></td>';
@@ -2513,7 +2513,7 @@ function filtrarReporte(){
       MESES_NOMBRE_ALL.forEach(function(mes,i){
         var n=i+1;
         if(a.estadoCuotas&&a.estadoCuotas[n]==='pendiente'){
-          var precio=(MESES_TODO_EL_MES.indexOf(n)>=0||dia<=10)?parseFloat(a.precio_bonificado):parseFloat(a.precio_normal);
+          var precio=getPrecioConVencFrontend(a, n, _vencimientosFrontend);
           lineasPend.push(mes+': '+pesos(precio));
         }
       });
@@ -2543,7 +2543,7 @@ async function abrirDetalleAlumno(id){
   MESES_NOMBRE_ALL.forEach(function(mes,i){
     var n=i+1;
     if(est[n]==='pendiente'){
-      var precio=(MESES_TODO_EL_MES.indexOf(n)>=0||dia2<=10)?parseFloat(a.precio_bonificado):parseFloat(a.precio_normal);
+      var precio=getPrecioConVencFrontend(a, n, _vencimientosFrontend);
       lineasPend2.push(mes+': '+pesos(precio));
     }
   });
@@ -2577,7 +2577,7 @@ async function abrirDetalleAlumno(id){
     else if(e==='gratis'){bg='#c8f7c5';estadoHtml='<span style="color:#1a7a1a;font-weight:600">★ Gratis</span>';montoTxt='$0';}
     else{
       bg='var(--dl)';
-      var precioCuota=(MESES_TODO_EL_MES.indexOf(c.num)>=0||dia<=10)?parseFloat(a.precio_bonificado)||0:parseFloat(a.precio_normal)||0;
+      var precioCuota=getPrecioConVencFrontend(a, c.num, _vencimientosFrontend);
       // Verificar si hay pago parcial (monto_pagado > 0 pero cuota pendiente)
       if(monto && monto > 0 && monto < precioCuota){
         var saldoRest=precioCuota-monto;
