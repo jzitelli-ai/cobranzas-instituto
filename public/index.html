@@ -2531,6 +2531,7 @@ function filtrarReporte(){
 function rsc(l,v,c){return '<div class="sc" style="padding:8px 12px"><div class="sc-l">'+l+'</div><div class="sc-v '+c+'" style="font-size:15px">'+v+'</div></div>';}
 
 async function abrirDetalleAlumno(id){
+  await cargarVencimientosFrontend();
   var a=_reporte.find(function(x){return x.id===id;});
   if(!a)return;
   var est=a.estadoCuotas||{};
