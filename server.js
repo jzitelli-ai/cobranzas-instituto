@@ -862,6 +862,42 @@ app.post('/api/backfill-pagos', async (req,res) => {
   res.json({ok:true,insertados});
 });
 
+// Deuda impaga de un período: recibe mes (1-12) y anio, devuelve suma de cuotas pendientes de ese período
+app.get('/api/deuda-periodo', async (req, res) => {
+  try {
+    const mes = parseInt(req.query.mes);
+    const anio = parseInt(req.query.anio);
+    if (!mes || !anio) return res.json({ ok: false, error: 'Faltan parámetros' });
+    // MESES_IDX: [2,3,4,5,6,7,8,9,10,11] → C1=Marzo(2), C2=Abril(3), ..., C10=Dic(11)
+    const MESES_IDX_SRV = [2,3,4,5,6,7,8,9,10,11];
+    const numeroCuota = MESES_IDX_SRV.indexOf(mes - 1) + 1; // mes es 1-based, indexOf usa 0-based JS month
+    if (numeroCuota < 1) return res.json({ ok: true, deuda: 0, alumnos_deudores: 0, descripcion: 'Mes fuera del período lectivo' });
+    const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE');
+    const venc = await getVencimientos();
+    const hoy = new Date();
+    const dia = hoy.getDate();
+    // Cuotas generadas para ese número de cuota
+    const cuotas = await q('SELECT * FROM cuotas WHERE numero_cuota=$1 AND alumno_id=ANY($2)', [numeroCuota, alumnos.map(a=>a.id)]);
+    const cuotaMap = {};
+    cuotas.forEach(c => { cuotaMap[c.alumno_id] = c; });
+    let deudaTotal = 0, deudores = 0;
+    for (const a of alumnos) {
+      const c = cuotaMap[a.id];
+      // Si no tiene cuota generada, está pendiente (no pagó nada)
+      if (!c || c.estado === 'pendiente') {
+        const precio = getPrecio(a, numeroCuota, dia, venc);
+        // Descontar pago parcial si existe
+        const parcial = c ? parseFloat(c.monto_pagado || 0) : 0;
+        const debe = precio - parcial;
+        if (debe > 0) { deudaTotal += debe; deudores++; }
+      }
+    }
+    res.json({ ok: true, deuda: deudaTotal, alumnos_deudores: deudores, numero_cuota: numeroCuota });
+  } catch(e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 app.get('/api/reporte', async (req,res) => {
   const alumnos=await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
   const mesActual=new Date().getMonth(), dia=new Date().getDate();
