@@ -1416,6 +1416,11 @@ app.get('/api/diagnostico/saldos-sin-aplicar', async (req,res) => {
   res.json({ total: resultado.length, alumnos: resultado });
 });
 
+// Endpoint para despertar el servicio (usado por cronjobs externos)
+app.get('/api/wake-up', (req, res) => {
+  res.json({ ok: true, status: 'awake', time: new Date().toISOString() });
+});
+
 // Ruta manual para ejecutar backup
 app.get('/api/backup', (req,res) => {
   res.set('Content-Type','application/json');
@@ -1681,10 +1686,23 @@ function keepAliveDB() {
   }, 4 * 60 * 1000); // cada 4 minutos
 }
 
+function keepAliveHTTP() {
+  const url = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+  setInterval(async () => {
+    try {
+      const res = await fetch(`${url}/api/wake-up`);
+      console.log(`[keep-alive] ping OK: ${res.status}`);
+    } catch(e) {
+      console.log(`[keep-alive] ping error: ${e.message}`);
+    }
+  }, 4 * 60 * 1000); // cada 4 minutos
+}
+
 inicializarConRetry().then(() => {
   app.listen(PORT, () => {
     console.log(`Servidor en puerto ${PORT}`);
     programarBackup();
     keepAliveDB();
+    keepAliveHTTP();
   });
 });
