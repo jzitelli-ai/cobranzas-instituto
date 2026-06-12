@@ -585,7 +585,15 @@ async function aplicarPagoYCrearCuotas(alumnoId, alumno, monto, fechaPago, venci
     const precio = esGratis ? 0 : getPrecioConVencLocal(n);
     const yaAbonado = estado[n].monto_pagado;
     const falta = precio - yaAbonado;
-    if (falta <= 0) continue;
+
+    if (falta <= 0) {
+      // Si ya abonó igual o más que el precio actual, marcar como pagada si no lo estaba
+      if (yaAbonado >= precio && estado[n].estado !== 'pagada' && estado[n].existe) {
+        await q('UPDATE cuotas SET estado=$1 WHERE id=$2', ['pagada', estado[n].id]);
+        estado[n].estado = 'pagada';
+      }
+      continue;
+    }
     
     let nuevoMonto, nuevoEstado;
     if (restante >= falta) {
@@ -686,7 +694,15 @@ async function aplicarPagoConSaldo(alumnoId, alumno, monto, fecha, origen, venci
     const precio = esGratis ? 0 : await getPrecioConVenc(alumno, c.numero_cuota, fecha, vencimientos);
     const yaAbonado = parseFloat(c.monto_pagado) || 0;
     const saldoCuota = precio - yaAbonado; // lo que falta para completar esta cuota
-    if (saldoCuota <= 0) continue; // ya estaba pagada parcialmente con saldo completo
+
+    if (saldoCuota <= 0) {
+      // Si el monto pagado cubre o supera el precio actual, marcar como pagada y seguir
+      // (cubre el caso donde se pagó precio bonificado pero la cuota ya venció y subió a normal)
+      if (yaAbonado >= precio && c.estado !== 'pagada') {
+        await q('UPDATE cuotas SET estado=$1 WHERE id=$2', ['pagada', c.id]);
+      }
+      continue;
+    }
     if (precio === 0 || restante >= saldoCuota) {
       // Pago completo de la cuota
       await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', ['pagada', fecha, precio, c.id]);
