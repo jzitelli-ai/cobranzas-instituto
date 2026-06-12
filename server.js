@@ -1365,6 +1365,53 @@ app.get('/api/reaplicar-pagos-banco', async (req,res) => {
   res.json({ ok: true, pagosReaplicados: aplicados, mensaje: `${aplicados} pagos bancarios re-aplicados a cuotas` });
 });
 
+// Aplicar saldo a favor de un alumno específico a sus cuotas pendientes
+app.post('/api/alumno/:id/aplicar-saldo', async (req, res) => {
+  try {
+    const alumnoId = parseInt(req.params.id);
+    const alumno = await q1('SELECT * FROM alumnos WHERE id=$1', [alumnoId]);
+    if (!alumno) return res.json({ ok: false, error: 'Alumno no encontrado' });
+
+    const totalPagado = parseFloat((await q1('SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE alumno_id=$1', [alumnoId]))?.t || 0);
+    const cuotas = await q('SELECT * FROM cuotas WHERE alumno_id=$1 ORDER BY numero_cuota', [alumnoId]);
+    const totalAplicado = cuotas.filter(c => c.estado === 'pagada').reduce((s, c) => s + parseFloat(c.monto_pagado || 0), 0)
+                        + cuotas.filter(c => c.estado === 'pendiente').reduce((s, c) => s + parseFloat(c.monto_pagado || 0), 0);
+    let saldo = totalPagado - totalAplicado;
+
+    if (saldo < 100) return res.json({ ok: false, error: 'No hay saldo suficiente para aplicar' });
+
+    const vencimientos = await getVencimientos();
+    const hoy = normalizarFechaAR(new Date().toLocaleDateString('es-AR'));
+    const pendientes = cuotas.filter(c => c.estado === 'pendiente').sort((a, b) => a.numero_cuota - b.numero_cuota);
+    if (!pendientes.length) return res.json({ ok: false, error: 'No hay cuotas pendientes' });
+
+    const conceptos = [];
+    for (const c of pendientes) {
+      if (saldo <= 0) break;
+      const precio = await getPrecioConVenc(alumno, c.numero_cuota, hoy, vencimientos);
+      const yaAbonado = parseFloat(c.monto_pagado) || 0;
+      const falta = precio - yaAbonado;
+      if (falta <= 0) continue;
+      if (saldo >= falta) {
+        await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', ['pagada', hoy, precio, c.id]);
+        conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota - 1]} 2026)`);
+        saldo -= falta;
+      } else {
+        const nuevoMonto = yaAbonado + saldo;
+        await q('UPDATE cuotas SET monto_pagado=$1,fecha_pago=$2 WHERE id=$3', [nuevoMonto, hoy, c.id]);
+        conceptos.push(`Cuota ${c.numero_cuota} (${MESES_NOMBRE_ALL[c.numero_cuota - 1]} 2026) — pago parcial $${nuevoMonto.toLocaleString('es-AR')}`);
+        saldo = 0;
+      }
+    }
+    // Actualizar saldo_favor en alumnos
+    await q('UPDATE alumnos SET saldo_favor=$1 WHERE id=$2', [saldo > 0 ? saldo : 0, alumnoId]);
+
+    res.json({ ok: true, conceptos, saldoRestante: saldo });
+  } catch(e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 // Aplicar saldo disponible a cuotas pendientes para todos los alumnos con saldo sin aplicar
 app.get('/api/aplicar-saldos-pendientes', async (req,res) => {
   const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
