@@ -2546,6 +2546,23 @@ function filtrarReporte(){
 }
 function rsc(l,v,c){return '<div class="sc" style="padding:8px 12px"><div class="sc-l">'+l+'</div><div class="sc-v '+c+'" style="font-size:15px">'+v+'</div></div>';}
 
+async function aplicarSaldoAlumno(id, saldo) {
+  var a = _reporte.find(function(x){ return x.id === id; });
+  var nombre = a ? a.nombre : 'este alumno';
+  if (!confirm('¿Aplicar ' + pesos(saldo) + ' de saldo a favor a las cuotas pendientes de ' + nombre + '?')) return;
+  var r = await api('POST', '/api/alumno/' + id + '/aplicar-saldo');
+  if (!r || !r.ok) {
+    toast(r && r.error ? r.error : 'Error al aplicar saldo', 'e');
+    return;
+  }
+  var msg = 'Saldo aplicado: ' + (r.conceptos && r.conceptos.length ? r.conceptos.join(', ') : 'sin cambios');
+  if (r.saldoRestante > 0) msg += '. Saldo restante: ' + pesos(r.saldoRestante);
+  toast(msg, 's');
+  // Recargar reporte y reabrir ficha
+  _reporte = await api('GET', '/api/reporte');
+  abrirDetalleAlumno(id);
+}
+
 async function abrirDetalleAlumno(id){
   await cargarVencimientosFrontend();
   var a=_reporte.find(function(x){return x.id===id;});
@@ -2707,7 +2724,7 @@ async function abrirDetalleAlumno(id){
             '<tr style="background:var(--wl)">'+
               '<td style="padding:6px 8px;font-weight:700;color:var(--w)">Saldo sin aplicar</td>'+
               '<td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--w)">'+pesos(saldoPendiente)+'</td>'+
-              '<td></td>'+
+              '<td style="padding:4px 8px;text-align:right"><button onclick="aplicarSaldoAlumno('+a.id+','+saldoPendiente+')" style="background:var(--w);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">Aplicar</button></td>'+
             '</tr>' : '')+
         '</tfoot>'+
         '</table>'+
