@@ -2589,6 +2589,7 @@ async function abrirDetalleAlumno(id){
     '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Mes</th>'+
     '<th style="text-align:center;padding:6px 10px;background:var(--gl);color:var(--m)">Estado</th>'+
     '<th style="text-align:right;padding:6px 10px;background:var(--gl);color:var(--m)">Monto</th>'+
+    '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Vence</th>'+
     '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Fecha de pago</th>'+
     '<th style="padding:6px 10px;background:var(--gl)"></th>'+
     '</tr></thead><tbody>';
@@ -2624,11 +2625,23 @@ async function abrirDetalleAlumno(id){
       }
       accion='<button class="btn bob" style="padding:2px 7px;font-size:10px;background:#FF9800;color:#fff;border-color:#FF9800" onclick="event.stopPropagation();abrirBonificar('+a.id+','+c.num+','+precioCuota+')">Bonificar</button>';
     }
+    var vencTxt = '—';
+    if (_vencimientosFrontend && _vencimientosFrontend[c.num-1]) {
+      var vencFull = _vencimientosFrontend[c.num-1]; // dd/mm/yyyy
+      vencTxt = vencFull.slice(0,5); // solo dd/mm
+      // Si ya venció → mostrar en rojo
+      var partsV = vencFull.split('/');
+      var dVenc = new Date(parseInt(partsV[2]), parseInt(partsV[1])-1, parseInt(partsV[0]), 23,59,59);
+      if (e !== 'futura' && e !== 'pagada' && e !== 'gratis' && new Date() > dVenc) {
+        vencTxt = '<span style="color:var(--d);font-weight:600">'+vencTxt+'</span>';
+      }
+    }
     cuotasHtml+='<tr style="background:'+bg+'">'+
       '<td style="padding:6px 10px;font-weight:600">'+c.num+'</td>'+
       '<td style="padding:6px 10px">'+c.mes+' 2026</td>'+
       '<td style="padding:6px 10px;text-align:center">'+estadoHtml+'</td>'+
       '<td style="padding:6px 10px;text-align:right;font-weight:600">'+montoTxt+'</td>'+
+      '<td style="padding:6px 10px;color:var(--m);font-size:11px">'+vencTxt+'</td>'+
       '<td style="padding:6px 10px;color:var(--m)">'+fechaCorta+'</td>'+
       '<td style="padding:6px 10px">'+accion+'</td>'+
     '</tr>';
