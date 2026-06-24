@@ -1743,22 +1743,31 @@ async function inicializarConRetry(intentos=5, delay=5000) {
   }
 }
 
+function enVentanaActiva() {
+  // Ventana activa: 4:00 AM a 8:00 AM hora Argentina (UTC-3)
+  const ahoraAR = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' }));
+  const hora = ahoraAR.getHours();
+  return hora >= 4 && hora < 8;
+}
+
 function keepAliveDB() {
   setInterval(async () => {
+    if (!enVentanaActiva()) return;
     try { await q('SELECT 1'); } catch(e) {}
-  }, 4 * 60 * 1000); // cada 4 minutos
+  }, 9 * 60 * 1000); // cada 9 minutos, solo entre 4-8 AM Argentina
 }
 
 function keepAliveHTTP() {
   const url = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
   setInterval(async () => {
+    if (!enVentanaActiva()) return;
     try {
       const res = await fetch(`${url}/api/wake-up`);
       console.log(`[keep-alive] ping OK: ${res.status}`);
     } catch(e) {
       console.log(`[keep-alive] ping error: ${e.message}`);
     }
-  }, 4 * 60 * 1000); // cada 4 minutos
+  }, 9 * 60 * 1000); // cada 9 minutos, solo entre 4-8 AM Argentina
 }
 
 inicializarConRetry().then(() => {
