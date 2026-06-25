@@ -402,7 +402,7 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
           </div>
         </div>
         <div style="padding:8px 16px;border-bottom:1px solid var(--b);background:var(--gl);display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn bob" onclick="backfillPagos()" style="font-size:11px;padding:4px 10px">
+          <button id="btn-sincronizar" class="btn bob" onclick="backfillPagos()" style="font-size:11px;padding:4px 10px;display:none">
             Sincronizar importados
           </button>
           <button id="btn-reprocesar-excel" class="btn bpb" onclick="reprocesarHistoricos()" style="font-size:11px;padding:4px 10px;display:none" title="Re-aplica logica de saldo a pagos importados del Excel">
@@ -2002,8 +2002,10 @@ var _adminAutenticado = false;
 
 function actualizarBotonesAdmin() {
   var display = _adminAutenticado ? '' : 'none';
+  var btnS = document.getElementById('btn-sincronizar');
   var btnR = document.getElementById('btn-reprocesar-excel');
   var btnA = document.getElementById('btn-aplicar-saldos');
+  if (btnS) btnS.style.display = display;
   if (btnR) btnR.style.display = display;
   if (btnA) btnA.style.display = display;
 }
