@@ -405,10 +405,10 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
           <button class="btn bob" onclick="backfillPagos()" style="font-size:11px;padding:4px 10px">
             Sincronizar importados
           </button>
-          <button class="btn bpb" onclick="reprocesarHistoricos()" style="font-size:11px;padding:4px 10px" title="Re-aplica logica de saldo a pagos importados del Excel">
+          <button id="btn-reprocesar-excel" class="btn bpb" onclick="reprocesarHistoricos()" style="font-size:11px;padding:4px 10px;display:none" title="Re-aplica logica de saldo a pagos importados del Excel">
             ↺ Reprocesar saldos Excel
           </button>
-          <button class="btn bob" onclick="aplicarSaldosPendientes()" style="font-size:11px;padding:4px 10px" title="Aplica saldo disponible a cuotas pendientes">
+          <button id="btn-aplicar-saldos" class="btn bob" onclick="aplicarSaldosPendientes()" style="font-size:11px;padding:4px 10px;display:none" title="Aplica saldo disponible a cuotas pendientes">
             ⚡ Aplicar saldos pendientes
           </button>
           <button class="btn bob" onclick="ejecutarBackup()" style="font-size:11px;padding:4px 10px;background:#25D366;color:#fff;border-color:#25D366" title="Ejecuta backup manual a Google Sheets">
@@ -1999,6 +1999,14 @@ async function cambiarClave(){
 
 // ADMINISTRACIÓN
 var _adminAutenticado = false;
+
+function actualizarBotonesAdmin() {
+  var display = _adminAutenticado ? '' : 'none';
+  var btnR = document.getElementById('btn-reprocesar-excel');
+  var btnA = document.getElementById('btn-aplicar-saldos');
+  if (btnR) btnR.style.display = display;
+  if (btnA) btnA.style.display = display;
+}
 var _adminLoginTime = 0;
 var _ADMIN_TIMEOUT = 5 * 60 * 1000; // 5 minutos en ms
 var _adminTimeoutTimer = null;
@@ -2010,6 +2018,7 @@ function _resetAdminTimeout() {
       _adminAutenticado = false;
   document.body.classList.remove('admin-activo');
       _adminLoginTime = 0;
+      actualizarBotonesAdmin();
       // Si el usuario está en el panel admin, volver a pedir clave
       if (document.getElementById('s-admin') && document.getElementById('s-admin').classList.contains('active')) {
         toast('Sesión de administración expirada. Ingresá la clave nuevamente.', 'w');
@@ -2039,6 +2048,7 @@ async function loginAdmin() {
   document.body.classList.add('admin-activo');
     _adminLoginTime = Date.now();
     _resetAdminTimeout();
+    actualizarBotonesAdmin();
     cerrarM('m-admin-login');
     nav('admin');
     cargarStatsAdmin();
