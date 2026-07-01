@@ -1482,6 +1482,8 @@ app.get('/api/diagnostico/saldos-sin-aplicar', async (req,res) => {
 // Endpoint para despertar el servicio (usado por cronjobs externos)
 app.get('/api/wake-up', (req, res) => {
   res.json({ ok: true, status: 'awake', time: new Date().toISOString() });
+  // Aprovechar el wake-up para ejecutar backup si corresponde
+  ejecutarBackupSiNecesario().catch(e => console.error('Error backup en wake-up:', e));
 });
 
 // Ruta manual para ejecutar backup
@@ -1585,18 +1587,28 @@ async function ejecutarBackup() {
 }
 
 // Ejecutar backup cada 24 horas
+let _ultimoBackupFecha = null; // fecha 'dd/mm/yyyy' del último backup ejecutado
+
+async function ejecutarBackupSiNecesario() {
+  // Obtener fecha actual en Argentina
+  const hoyAR = new Date().toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
+  if (_ultimoBackupFecha === hoyAR) return; // ya se hizo hoy
+  // Solo ejecutar entre 2 AM y 10 AM Argentina para no hacer backup en horario de uso
+  const ahoraAR = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' }));
+  const hora = ahoraAR.getHours();
+  if (hora < 2 || hora >= 10) return;
+  console.log(`[backup] Ejecutando backup pendiente del día ${hoyAR}`);
+  _ultimoBackupFecha = hoyAR;
+  await ejecutarBackup().catch(e => console.error('Error backup:', e));
+}
+
 function programarBackup() {
-  // Primer backup a las 3 AM hora Argentina (UTC-3 = 6 AM UTC)
-  const ahora = new Date();
-  const proximoBackup = new Date();
-  proximoBackup.setUTCHours(6, 0, 0, 0);
-  if (proximoBackup <= ahora) proximoBackup.setUTCDate(proximoBackup.getUTCDate() + 1);
-  const msHasta = proximoBackup - ahora;
-  console.log(`Próximo backup automático en ${Math.round(msHasta/1000/60)} minutos`);
-  setTimeout(() => {
-    ejecutarBackup().catch(e => console.error('Error backup:', e));
-    setInterval(() => ejecutarBackup().catch(e => console.error('Error backup:', e)), 24*60*60*1000);
-  }, msHasta);
+  // Intentar backup cada 15 minutos — solo corre si no se hizo hoy y está en ventana 2-10 AM Argentina
+  setInterval(() => {
+    ejecutarBackupSiNecesario().catch(e => console.error('Error backup scheduler:', e));
+  }, 15 * 60 * 1000);
+  // También intentar al arrancar el servidor (por si reinició dentro de la ventana)
+  ejecutarBackupSiNecesario().catch(e => console.error('Error backup inicial:', e));
 }
 
 // ================================================================
