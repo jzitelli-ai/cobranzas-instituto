@@ -2823,11 +2823,11 @@ function abrirBonificar(alumnoId, numCuota, precioNormal) {
     _bonifPrecioNormal=_pendingBonifPrecioNormal;
     var a=_reporte.find(function(x){return x.id===_bonifAlumnoId;});
     document.getElementById('bonif-info').textContent=(a?a.nombre:'')+' — Cuota '+_bonifCuota+' ('+CUOTAS[_bonifCuota-1].mes+' 2026) — Precio normal: '+pesos(_bonifPrecioNormal);
-    document.getElementById('bonif-tipo').value='gratis';
-    document.getElementById('bonif-monto').value='';
+    document.getElementById('bonif-tipo').value='personalizado';
+    document.getElementById('bonif-monto').value=_bonifPrecioNormal;
     document.getElementById('bonif-motivo').value='';
-    document.getElementById('bonif-monto-div').style.display='none';
-    document.getElementById('bonif-aviso').textContent='La cuota quedará marcada como pagada en $0.';
+    document.getElementById('bonif-monto-div').style.display='block';
+    document.getElementById('bonif-aviso').textContent='La cuota quedará marcada como pagada con el monto ingresado.';
     abrirM('m-bonificar');
   });
 }
