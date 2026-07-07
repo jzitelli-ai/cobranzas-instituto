@@ -755,6 +755,7 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
     <div id="det-body"></div>
     <div class="modal-btns">
       <button class="btn bob" onclick="cerrarM('m-det-alumno')">Cerrar</button>
+      <button id="btn-reordenar" class="btn bob" style="display:none;font-size:11px;color:var(--m)" onclick="reordenarImputaciones()">↺ Reordenar imputaciones</button>
       <button class="btn bpb" onclick="cerrarM('m-det-alumno');nav('cobro')">Registrar pago</button>
     </div>
   </div>
@@ -1999,6 +2000,7 @@ async function cambiarClave(){
 
 // ADMINISTRACIÓN
 var _adminAutenticado = false;
+var _detAlumnoId = null;
 
 function actualizarBotonesAdmin() {
   var display = _adminAutenticado ? '' : 'none';
@@ -2558,6 +2560,17 @@ function filtrarReporte(){
 }
 function rsc(l,v,c){return '<div class="sc" style="padding:8px 12px"><div class="sc-l">'+l+'</div><div class="sc-v '+c+'" style="font-size:15px">'+v+'</div></div>';}
 
+async function reordenarImputaciones() {
+  var a = _reporte.find(function(x){ return x.id === _detAlumnoId; });
+  var nombre = a ? a.nombre : 'este alumno';
+  if (!confirm('¿Reordenar imputaciones de ' + nombre + '?\n\nEsto va a resetear todas las cuotas y reaplicar los pagos desde el más antiguo al más nuevo.\n\nEsta acción no se puede deshacer.')) return;
+  var r = await api('POST', '/api/alumno/' + _detAlumnoId + '/reordenar-imputaciones');
+  if (!r || !r.ok) { toast(r && r.error ? r.error : 'Error al reordenar', 'e'); return; }
+  toast('Imputaciones reordenadas — ' + r.pagosReaplicados + ' pago' + (r.pagosReaplicados !== 1 ? 's' : '') + ' replicado' + (r.pagosReaplicados !== 1 ? 's' : ''), 's');
+  _reporte = await api('GET', '/api/reporte');
+  abrirDetalleAlumno(_detAlumnoId);
+}
+
 async function aplicarSaldoAlumno(id, saldo) {
   var a = _reporte.find(function(x){ return x.id === id; });
   var nombre = a ? a.nombre : 'este alumno';
@@ -2577,6 +2590,10 @@ async function aplicarSaldoAlumno(id, saldo) {
 
 async function abrirDetalleAlumno(id){
   await cargarVencimientosFrontend();
+  _detAlumnoId = id;
+  // Mostrar botón reordenar solo para admins
+  var btnR = document.getElementById('btn-reordenar');
+  if (btnR) btnR.style.display = _adminAutenticado ? '' : 'none';
   var a=_reporte.find(function(x){return x.id===id;});
   if(!a)return;
   var est=a.estadoCuotas||{};
