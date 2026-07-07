@@ -566,10 +566,14 @@ async function aplicarPagoYCrearCuotas(alumnoId, alumno, monto, fechaPago, venci
   }
   
   // Ordenar: primero pendientes anteriores a objetivo, luego desde objetivo
+  // Excluir cuotas cuyo mes aún no llegó (futuras)
+  const mesActualPago = new Date().getMonth(); // mes actual 0-based
   const pendientesAntes = [];
   const desdeObj = [];
   for (let n=1; n<=10; n++) {
     if (estado[n].estado !== 'pendiente') continue;
+    // Excluir si el mes de la cuota aún no llegó
+    if (MESES_IDX[n-1] > mesActualPago) continue;
     if (cuotaObj && n < cuotaObj) pendientesAntes.push(n);
     else desdeObj.push(n);
   }
@@ -673,7 +677,9 @@ async function aplicarPagoConSaldo(alumnoId, alumno, monto, fecha, origen, venci
     }
   }
 
-  const todasPendientes = await q('SELECT * FROM cuotas WHERE alumno_id=$1 AND estado=$2 ORDER BY numero_cuota', [alumnoId, 'pendiente']);
+  const mesActualPagoCS = new Date().getMonth(); // mes actual 0-based
+  const todasPendientes = (await q('SELECT * FROM cuotas WHERE alumno_id=$1 AND estado=$2 ORDER BY numero_cuota', [alumnoId, 'pendiente']))
+    .filter(c => MESES_IDX[c.numero_cuota - 1] <= mesActualPagoCS); // excluir cuotas futuras
   let restante = monto;
   const conceptos = [];
 
