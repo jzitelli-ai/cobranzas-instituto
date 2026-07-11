@@ -1371,9 +1371,11 @@ async function confirmarCobro(){
   // Usar fechaManual para el recibo (fecha de pago real, no de confección)
   var fechaRecibo=fechaManual?new Date(fechaManual+'T12:00:00').toLocaleDateString('es-AR'):r.fecha;
   // Limpiar conceptos para el recibo — solo mostrar período
-  var conceptosLimpios = r.conceptos.map(function(c){
-    return c.replace(/ — pago parcial.*$/,'').replace(/ \[cuota anterior\]/,'').replace(/ \[credito\]/,'').replace(/ \(GRATIS\)/,' (GRATIS)');
-  });
+  var conceptosLimpios = r.conceptos
+    .filter(function(c){ return !c.toLowerCase().includes('saldo a favor'); })
+    .map(function(c){
+      return c.replace(/ — pago parcial.*$/,'').replace(/ \[cuota anterior\]/,'').replace(/ \[credito\]/,'').replace(/ \(GRATIS\)/,' (GRATIS)');
+    });
   setTimeout(function(){ imprimirReciboDuplicado(r.pagoId, fechaRecibo, alumnoActual.nombre, alumnoActual.curso, conceptosLimpios.join(', '), medio+(obs?' — '+obs:''), pesos(total)); }, 400);
 }
 
@@ -1890,9 +1892,11 @@ function reimprimirRecibo(p) {
   var curso = alumno ? alumno.curso : (p.curso||'');
   var medio = (p.medio||'') + (p.origen && p.origen.indexOf('·')>=0 ? ' — ' + p.origen.split('·').slice(1).join('·').trim() : '');
   // Limpiar concepto para el recibo — solo mostrar período
-  var conceptoLimpio = (p.concepto||'').split(',').map(function(c){
-    return c.trim().replace(/ — pago parcial.*$/,'').replace(/ \[cuota anterior\]/,'').replace(/ \[credito\]/,'');
-  }).join(', ');
+  var conceptoLimpio = (p.concepto||'').split(',')
+    .filter(function(c){ return !c.toLowerCase().includes('saldo a favor'); })
+    .map(function(c){
+      return c.trim().replace(/ — pago parcial.*$/,'').replace(/ \[cuota anterior\]/,'').replace(/ \[credito\]/,'');
+    }).join(', ');
   imprimirReciboDuplicado(p.id, p.fecha, p.alumno_nombre, curso, conceptoLimpio, medio, pesos(p.monto));
 }
 
