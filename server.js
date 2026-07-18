@@ -1418,6 +1418,29 @@ app.post('/api/alumno/:id/aplicar-saldo', async (req, res) => {
   }
 });
 
+// Reordenar imputaciones de un alumno: resetea cuotas y reaplica pagos en orden cronológico
+app.post('/api/alumno/:id/reordenar-imputaciones', async (req, res) => {
+  try {
+    const alumnoId = parseInt(req.params.id);
+    const alumno = await q1('SELECT * FROM alumnos WHERE id=$1', [alumnoId]);
+    if (!alumno) return res.json({ ok: false, error: 'Alumno no encontrado' });
+    const vencimientos = await getVencimientos();
+    // 1. Traer todos los pagos ordenados cronológicamente
+    const pagos = await q('SELECT * FROM pagos WHERE alumno_id=$1 ORDER BY id ASC', [alumnoId]);
+    if (!pagos.length) return res.json({ ok: false, error: 'No hay pagos registrados' });
+    // 2. Resetear todas las cuotas del alumno
+    await q('UPDATE cuotas SET estado=$1, monto_pagado=0, fecha_pago=$2 WHERE alumno_id=$3', ['pendiente', '', alumnoId]);
+    // 3. Reaplicar cada pago en orden
+    for (const pago of pagos) {
+      const fecha = normalizarFechaAR(String(pago.fecha));
+      await aplicarPagoYCrearCuotas(alumnoId, alumno, parseFloat(pago.monto), fecha, vencimientos);
+    }
+    res.json({ ok: true, pagosReaplicados: pagos.length });
+  } catch(e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 // Aplicar saldo disponible a cuotas pendientes para todos los alumnos con saldo sin aplicar
 app.get('/api/aplicar-saldos-pendientes', async (req,res) => {
   const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
