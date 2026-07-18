@@ -1436,12 +1436,23 @@ app.post('/api/alumno/:id/reordenar-imputaciones', async (req, res) => {
     const alumno = await q1('SELECT * FROM alumnos WHERE id=$1', [alumnoId]);
     if (!alumno) return res.json({ ok: false, error: 'Alumno no encontrado' });
     const vencimientos = await getVencimientos();
-    // 1. Traer todos los pagos ordenados cronológicamente
-    const pagos = await q('SELECT * FROM pagos WHERE alumno_id=$1 ORDER BY id ASC', [alumnoId]);
+    // 1. Traer todos los pagos y ordenarlos por fecha real
+    const pagos = await q('SELECT * FROM pagos WHERE alumno_id=$1', [alumnoId]);
     if (!pagos.length) return res.json({ ok: false, error: 'No hay pagos registrados' });
+
+    // Convertir fecha a Date para ordenar correctamente independiente del formato
+    function parseFechaAR(f) {
+      const s = normalizarFechaAR(String(f || ''));
+      if (!s) return new Date(0);
+      const p = s.split('/');
+      if (p.length === 3) return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+      return new Date(0);
+    }
+    pagos.sort((a, b) => parseFechaAR(a.fecha) - parseFechaAR(b.fecha) || a.id - b.id);
+
     // 2. Resetear todas las cuotas del alumno
     await q('UPDATE cuotas SET estado=$1, monto_pagado=0, fecha_pago=$2 WHERE alumno_id=$3', ['pendiente', '', alumnoId]);
-    // 3. Reaplicar cada pago en orden
+    // 3. Reaplicar cada pago en orden cronológico
     for (const pago of pagos) {
       const fecha = normalizarFechaAR(String(pago.fecha));
       await aplicarPagoYCrearCuotas(alumnoId, alumno, parseFloat(pago.monto), fecha, vencimientos);
