@@ -2417,12 +2417,34 @@ async function generarReporteMedios(){
     var partesMes=mesSel.split('/');
     var mesNum=parseInt(partesMes[0]); var anioNum=parseInt(partesMes[1]);
     var dr=await api('GET','/api/deuda-periodo?mes='+mesNum+'&anio='+anioNum);
-    if(dr&&dr.ok&&dr.deuda>0){
-      deudaPeriodoHtml='<div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:var(--rs);padding:12px;text-align:center;margin-bottom:16px">'+
-        '<div style="font-size:11px;color:#e65100;font-weight:600;margin-bottom:4px">⚠ Deuda impaga del período</div>'+
-        '<div style="font-weight:700;font-size:22px;color:#e65100">'+pesos(dr.deuda)+'</div>'+
-        '<div style="font-size:10px;color:var(--m);margin-top:2px">'+dr.alumnos_deudores+' alumno'+(dr.alumnos_deudores!==1?'s':'')+' con cuota impaga</div>'+
+    if(dr&&dr.ok){
+      var totalAlumnos=(dr.alumnos_deudores||0)+(dr.alumnos_al_dia||0);
+      var statsHtml='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">';
+      if(dr.deuda>0){
+        statsHtml+='<div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:var(--rs);padding:12px;text-align:center">'+
+          '<div style="font-size:11px;color:#e65100;font-weight:600;margin-bottom:4px">⚠ Deuda impaga</div>'+
+          '<div style="font-weight:700;font-size:20px;color:#e65100">'+pesos(dr.deuda)+'</div>'+
+          '<div style="font-size:10px;color:var(--m);margin-top:2px">'+dr.alumnos_deudores+' alumno'+(dr.alumnos_deudores!==1?'s':'')+' con deuda</div>'+
+          '</div>';
+      } else {
+        statsHtml+='<div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:var(--rs);padding:12px;text-align:center">'+
+          '<div style="font-size:11px;color:#2e7d32;font-weight:600;margin-bottom:4px">✓ Sin deuda</div>'+
+          '<div style="font-weight:700;font-size:20px;color:#2e7d32">$0</div>'+
+          '<div style="font-size:10px;color:var(--m);margin-top:2px">todos al día</div>'+
+          '</div>';
+      }
+      statsHtml+='<div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:var(--rs);padding:12px;text-align:center">'+
+        '<div style="font-size:11px;color:#2e7d32;font-weight:600;margin-bottom:4px">✓ Al día</div>'+
+        '<div style="font-weight:700;font-size:20px;color:#2e7d32">'+(dr.alumnos_al_dia||0)+'</div>'+
+        '<div style="font-size:10px;color:var(--m);margin-top:2px">alumno'+(dr.alumnos_al_dia!==1?'s':'')+' al día</div>'+
         '</div>';
+      statsHtml+='<div style="background:var(--gl);border:1px solid var(--b);border-radius:var(--rs);padding:12px;text-align:center">'+
+        '<div style="font-size:11px;color:var(--m);font-weight:600;margin-bottom:4px">👥 Total activos</div>'+
+        '<div style="font-weight:700;font-size:20px">'+totalAlumnos+'</div>'+
+        '<div style="font-size:10px;color:var(--m);margin-top:2px">alumnos</div>'+
+        '</div>';
+      statsHtml+='</div>';
+      deudaPeriodoHtml=statsHtml;
     }
   }
   function tablaGrupo(lista,titulo,color){
