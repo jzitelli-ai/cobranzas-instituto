@@ -2685,7 +2685,17 @@ async function abrirDetalleAlumno(id){
   var pagosAlumno = await api('GET', '/api/pagos?alumnoId=' + id) || [];
   // Filtrar pagos de este alumno del historial
   pagosAlumno = (_pagos || []).filter(function(p){ return p.alumno_id === id || p.alumno_id === String(id); })
-    .sort(function(a,b){ return a.id - b.id; });
+    .sort(function(a,b){
+      function parseFecha(f) {
+        var s = String(f||'').trim().split(' ')[0];
+        var iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (iso) return new Date(parseInt(iso[1]), parseInt(iso[2])-1, parseInt(iso[3]));
+        var p = s.split('/');
+        if (p.length===3) return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+        return new Date(0);
+      }
+      return parseFecha(a.fecha) - parseFecha(b.fecha) || a.id - b.id;
+    });
 
   var cuentaCorriente = '';
   if (pagosAlumno.length > 0) {
