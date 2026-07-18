@@ -918,7 +918,7 @@ app.get('/api/deuda-periodo', async (req, res) => {
         if (debe > 0) { deudaTotal += debe; deudores++; }
       }
     }
-    res.json({ ok: true, deuda: deudaTotal, alumnos_deudores: deudores, numero_cuota: numeroCuota });
+    res.json({ ok: true, deuda: deudaTotal, alumnos_deudores: deudores, alumnos_al_dia: alumnos.length - deudores, numero_cuota: numeroCuota });
   } catch(e) {
     res.json({ ok: false, error: e.message });
   }
