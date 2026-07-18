@@ -1419,29 +1419,6 @@ app.post('/api/alumno/:id/aplicar-saldo', async (req, res) => {
 });
 
 // Aplicar saldo disponible a cuotas pendientes para todos los alumnos con saldo sin aplicar
-// Reordenar imputaciones de un alumno: resetea cuotas y reaplica pagos en orden cronológico
-app.post('/api/alumno/:id/reordenar-imputaciones', async (req, res) => {
-  try {
-    const alumnoId = parseInt(req.params.id);
-    const alumno = await q1('SELECT * FROM alumnos WHERE id=$1', [alumnoId]);
-    if (!alumno) return res.json({ ok: false, error: 'Alumno no encontrado' });
-    const vencimientos = await getVencimientos();
-    // 1. Traer todos los pagos ordenados cronológicamente
-    const pagos = await q('SELECT * FROM pagos WHERE alumno_id=$1 ORDER BY id ASC', [alumnoId]);
-    if (!pagos.length) return res.json({ ok: false, error: 'No hay pagos registrados' });
-    // 2. Resetear todas las cuotas del alumno
-    await q('UPDATE cuotas SET estado=$1, monto_pagado=0, fecha_pago=$2 WHERE alumno_id=$3', ['pendiente', '', alumnoId]);
-    // 3. Reaplicar cada pago en orden
-    for (const pago of pagos) {
-      const fecha = normalizarFechaAR(String(pago.fecha));
-      await aplicarPagoYCrearCuotas(alumnoId, alumno, parseFloat(pago.monto), fecha, vencimientos);
-    }
-    res.json({ ok: true, pagosReaplicados: pagos.length });
-  } catch(e) {
-    res.json({ ok: false, error: e.message });
-  }
-});
-
 app.get('/api/aplicar-saldos-pendientes', async (req,res) => {
   const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
   let corregidos = 0;
@@ -1616,27 +1593,39 @@ async function ejecutarBackup() {
 }
 
 // Ejecutar backup cada 24 horas
-let _ultimoBackupFecha = null; // fecha 'dd/mm/yyyy' del último backup ejecutado
+let _ultimoBackupFecha = null; // cache en memoria
+
+async function getUltimoBackupFecha() {
+  if (_ultimoBackupFecha) return _ultimoBackupFecha;
+  try {
+    const row = await q1("SELECT valor FROM config WHERE clave='ultimo_backup_fecha'");
+    _ultimoBackupFecha = row ? row.valor : null;
+  } catch(e) {}
+  return _ultimoBackupFecha;
+}
+
+async function setUltimoBackupFecha(fecha) {
+  _ultimoBackupFecha = fecha;
+  try {
+    await q("INSERT INTO config(clave,valor) VALUES('ultimo_backup_fecha',$1) ON CONFLICT(clave) DO UPDATE SET valor=$1", [fecha]);
+  } catch(e) {}
+}
 
 async function ejecutarBackupSiNecesario() {
-  // Obtener fecha actual en Argentina
   const hoyAR = new Date().toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
-  if (_ultimoBackupFecha === hoyAR) return; // ya se hizo hoy
-  // Solo ejecutar entre 2 AM y 10 AM Argentina para no hacer backup en horario de uso
-  const ahoraAR = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' }));
-  const hora = ahoraAR.getHours();
-  if (hora < 2 || hora >= 10) return;
+  const ultimoBackup = await getUltimoBackupFecha();
+  if (ultimoBackup === hoyAR) return; // ya se hizo hoy
   console.log(`[backup] Ejecutando backup pendiente del día ${hoyAR}`);
-  _ultimoBackupFecha = hoyAR;
+  await setUltimoBackupFecha(hoyAR);
   await ejecutarBackup().catch(e => console.error('Error backup:', e));
 }
 
 function programarBackup() {
-  // Intentar backup cada 15 minutos — solo corre si no se hizo hoy y está en ventana 2-10 AM Argentina
+  // Intentar backup cada 15 minutos — solo corre si no se hizo hoy y está en ventana
   setInterval(() => {
     ejecutarBackupSiNecesario().catch(e => console.error('Error backup scheduler:', e));
   }, 15 * 60 * 1000);
-  // También intentar al arrancar el servidor (por si reinició dentro de la ventana)
+  // También intentar al arrancar el servidor
   ejecutarBackupSiNecesario().catch(e => console.error('Error backup inicial:', e));
 }
 
