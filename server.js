@@ -103,7 +103,11 @@ async function cuota10Gratis(alumnoId, alumno, cuotasPrec) {
 
 function normalizarFechaAR(f) {
   if (!f) return '';
-  const s = String(f).trim();
+  const s = String(f).trim().split(' ')[0]; // quitar hora si viene con timestamp
+  // Formato yyyy-mm-dd → convertir a dd/mm/yyyy
+  const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) return isoMatch[3]+'/'+isoMatch[2]+'/'+isoMatch[1];
+  // Formato dd/mm/yyyy → normalizar padding
   const partes = s.split('/');
   if (partes.length === 3) {
     return partes[0].padStart(2,'0')+'/'+partes[1].padStart(2,'0')+'/'+partes[2];
