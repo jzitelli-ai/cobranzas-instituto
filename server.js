@@ -747,7 +747,13 @@ app.post('/api/banco/preview', async (req,res) => {
   const duplicados=[],noEncontrados=[],sinCuit=[],nuevosDetalle=[];
 
   for(const fila of filas){
-    const cuit=normalizarCuit(fila[colCuit]); 
+    let cuit=normalizarCuit(fila[colCuit]); 
+    // Si no hay CUIT en la columna, intentar extraerlo de la descripción
+    if(!cuit){
+      const descripStr = String(fila['DESCRIPCION']||fila['DESCRIP']||fila['descrip']||'');
+      const cuitMatch = descripStr.match(/\b(\d{11})\b/) || descripStr.match(/\b(\d{8})\b/) || descripStr.match(/\b(\d{7})\b/);
+      if(cuitMatch) cuit = normalizarCuit(cuitMatch[1]);
+    }
     const monto=parsearMonto(fila[colMonto]);
     const descrip=fila['DESCRIPCION']||fila['DESCRIP']||fila['descrip']||'';
     if(!cuit){sinCuit.push({detalle:String(fila[colCuit]||'').slice(0,80),monto});continue;}
@@ -810,8 +816,15 @@ app.post('/api/banco', async (req,res) => {
   const vencimientosBanco = await getVencimientos();
   let aplicados=0; const duplicados=[],noEncontrados=[],sinCuit=[];
   for(const fila of filas) {
-    const cuit=normalizarCuit(fila[colCuit]); const monto=parsearMonto(fila[colMonto]);
+    let cuit=normalizarCuit(fila[colCuit]);
     const descrip=fila['DESCRIP']||fila['descrip']||fila['DESCRIPCION']||fila['DETALLE']||'';
+    // Si no hay CUIT en la columna, intentar extraerlo de la descripción
+    if(!cuit){
+      const descripStr = String(descrip);
+      const cuitMatch = descripStr.match(/\b(\d{11})\b/) || descripStr.match(/\b(\d{8})\b/) || descripStr.match(/\b(\d{7})\b/);
+      if(cuitMatch) cuit = normalizarCuit(cuitMatch[1]);
+    }
+    const monto=parsearMonto(fila[colMonto]);
     if(!cuit){sinCuit.push({detalle:String(fila[colCuit]||'').slice(0,80),descrip:String(descrip).trim(),monto});continue;}
     if(monto<=0)continue;
     const alumno=cuitMap[cuit];
