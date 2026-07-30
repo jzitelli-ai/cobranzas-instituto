@@ -1359,7 +1359,7 @@ async function confirmarCobro(){
   document.getElementById('r-fecha').textContent=fechaMostrar;
   document.getElementById('r-alumno').textContent=alumnoActual.nombre;
   document.getElementById('r-curso').textContent=alumnoActual.curso;
-  document.getElementById('r-conc').textContent=r.conceptos.join(', ');
+  document.getElementById('r-conc').textContent=r.conceptos.filter(function(c){ return !c.toLowerCase().includes('saldo a favor'); }).map(function(c){ return c.replace(/ — pago parcial.*$/,'').replace(/ \[cuota anterior\]/,'').replace(/ \[credito\]/,''); }).join(', ');
   document.getElementById('r-medio').textContent=medio+(obs?' — '+obs:'');
   document.getElementById('r-total').textContent=pesos(total);
   document.getElementById('recibo').classList.add('visible');
