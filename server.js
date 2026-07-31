@@ -850,11 +850,25 @@ app.post('/api/banco', async (req,res) => {
         mesFechaDup = s.includes('/') ? parseInt(s.split('/')[1]) : parseInt(s.split('-')[1]);
       }
     }
-    // Anti-duplicado: mismo alumno, mismo monto Y mismo mes — evita confundir cuotas de distintos meses
-    const yaExiste = mesFechaDup
+    // Anti-duplicado: mismo alumno, mismo monto Y misma fecha exacta (día/mes/año)
+    let fechaDupStr = null;
+    if (fechaRawDup) {
+      if (typeof fechaRawDup === 'number') {
+        const d = new Date(Math.round((fechaRawDup-25569)*86400*1000));
+        fechaDupStr = normalizarFechaAR(d.toLocaleDateString('es-AR'));
+      } else if (fechaRawDup instanceof Date) {
+        fechaDupStr = normalizarFechaAR(fechaRawDup.toLocaleDateString('es-AR'));
+      } else {
+        fechaDupStr = normalizarFechaAR(String(fechaRawDup).slice(0,10));
+      }
+    }
+    const yaExiste = fechaDupStr
       ? await q1(`SELECT id, fecha, origen FROM pagos WHERE alumno_id=$1 AND monto=$2 AND (
-        LPAD(SPLIT_PART(REPLACE(fecha,'-','/'), '/', 2), 2, '0') = $3
-      )`, [alumno.id, monto, String(mesFechaDup).padStart(2,'0')])
+          LPAD(SPLIT_PART(REPLACE(fecha,'-','/'), '/', 1), 2, '0') = $3 AND
+          LPAD(SPLIT_PART(REPLACE(fecha,'-','/'), '/', 2), 2, '0') = $4
+        )`, [alumno.id, monto,
+          String(fechaDupStr.split('/')[0]).padStart(2,'0'),
+          String(fechaDupStr.split('/')[1]).padStart(2,'0')])
       : await q1("SELECT id, fecha, origen FROM pagos WHERE alumno_id=$1 AND monto=$2", [alumno.id, monto]);
     if (yaExiste) {
       let fr=fila['FECHA']||fila['fecha']||fila['Fecha']||'',fs='';
