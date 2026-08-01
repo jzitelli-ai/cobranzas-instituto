@@ -1216,15 +1216,25 @@ async function cargarVencimientosFrontend() {
   return _vencimientosFrontend;
 }
 
-function getPrecioConVencFrontend(alumno, numCuota, vencimientos) {
+function getPrecioConVencFrontend(alumno, numCuota, vencimientos, fechaRef) {
   // Cuota 10 gratuita — manejada aparte
   if (!vencimientos) return parseFloat(alumno.precio_normal)||0;
   var venc = vencimientos[numCuota-1];
   if (!venc) return parseFloat(alumno.precio_normal)||0;
   var partes = venc.split('/');
   var dVenc = new Date(parseInt(partes[2]), parseInt(partes[1])-1, parseInt(partes[0]), 23, 59, 59);
-  var hoy = new Date();
-  return hoy <= dVenc ? parseFloat(alumno.precio_bonificado)||0 : parseFloat(alumno.precio_normal)||0;
+  // Si se pasa fechaRef (fecha de pago de la cuota), usar esa para comparar; si no, usar hoy
+  var dRef = new Date();
+  if (fechaRef) {
+    var s = String(fechaRef).trim().split(' ')[0];
+    var iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso) dRef = new Date(parseInt(iso[1]), parseInt(iso[2])-1, parseInt(iso[3]), 23, 59, 59);
+    else {
+      var p = s.split('/');
+      if (p.length===3) dRef = new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]), 23, 59, 59);
+    }
+  }
+  return dRef <= dVenc ? parseFloat(alumno.precio_bonificado)||0 : parseFloat(alumno.precio_normal)||0;
 }
 
 async function renderCuotas(a, cuotas){
@@ -2703,6 +2713,7 @@ async function abrirDetalleAlumno(id){
     var MESES_IDX_CC = [2,3,4,5,6,7,8,9,10,11];
     var hoyMesCC = new Date().getMonth();
 
+    // Calcular saldo sin aplicar
     var totalIngresos2 = 0;
     pagosAlumno.forEach(function(p){ totalIngresos2 += parseFloat(p.monto)||0; });
     var totalAplicado2 = 0;
@@ -2730,10 +2741,13 @@ async function abrirDetalleAlumno(id){
       var n = c.num;
       var e = est[n] || est[String(n)] || 'futura';
       var montoC = parseFloat(montos[n] || montos[String(n)] || 0);
-      var fechaC = fechas[n] || fechas[String(n)] || '';
+      var fechaPago = fechas[n] || fechas[String(n)] || '';
       var mesIdx = MESES_IDX_CC[n-1];
-      if (mesIdx > hoyMesCC) return;
-      var precioCuota = getPrecioConVencFrontend(a, n, _vencimientosFrontend);
+      if (mesIdx > hoyMesCC) return; // no mostrar futuras
+
+      // Precio correcto: comparar fecha de pago (o hoy si no pagó) con vencimiento bonificado
+      var fechaRef = fechaPago || null;
+      var precioCuota = getPrecioConVencFrontend(a, n, _vencimientosFrontend, fechaRef);
       var vencTxt = _vencimientosFrontend && _vencimientosFrontend[n-1] ? _vencimientosFrontend[n-1].slice(0,5) : '';
       saldo += precioCuota;
 
@@ -2748,45 +2762,35 @@ async function abrirDetalleAlumno(id){
           '<td style="padding:5px 8px;text-align:right;font-weight:700;color:'+(saldo>0?'var(--d)':'var(--s)')+'">'+pesos(saldo)+'</td>'+
         '</tr>';
 
-      // Pagos de esta cuota
+      // Fila de pago si hay monto aplicado
       if (montoC > 0) {
-        var pagosEsta = pagosAlumno.filter(function(p){
+        var esParcial = e === 'pendiente';
+        var origenStr = '';
+        // Buscar el pago correspondiente para obtener el origen
+        var pagoCuota = pagosAlumno.find(function(p){
           var conc = (p.concepto||'').toLowerCase();
-          return new RegExp('cuota\\s*'+n+'[\\s,\\(]').test(conc) || conc.includes('cuota '+n+' ') || conc.includes('cuota '+n+',');
+          return new RegExp('cuota\s*'+n+'[\s,\(]').test(conc) || conc.includes('cuota '+n+' ') || conc.includes('cuota '+n+',');
         });
-        if (pagosEsta.length === 0) {
-          saldo -= montoC;
-          cuentaCorriente +=
-            '<tr style="border-bottom:1px solid var(--b)">'+
-              '<td></td>'+
-              '<td style="padding:4px 8px;font-size:11px;color:var(--m)">PAGO</td>'+
-              '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+(fechaC?String(fechaC).slice(0,10):'')+'</td>'+
-              '<td></td>'+
-              '<td style="padding:4px 8px;text-align:right;color:var(--s)">'+pesos(montoC)+'</td>'+
-              '<td style="padding:4px 8px;text-align:right;font-weight:700;color:'+(saldo>0?'var(--d)':saldo<0?'var(--s)':'var(--m)')+'">'+pesos(saldo)+'</td>'+
-            '</tr>';
+        if (pagoCuota) {
+          origenStr = (pagoCuota.origen||'')
+            .replace('Importado desde planilla','Excel')
+            .replace('Manual · ','')
+            .replace(/Banco \(CUIT \d+\)/,'Banco')
+            .replace('Bonificación manual','Bonificación')
+            .slice(0,20).toUpperCase();
         } else {
-          var esParcial = e==='pendiente' && montoC>0;
-          pagosEsta.forEach(function(p){
-            var aplicado = montoC; // monto aplicado a esta cuota
-            saldo -= aplicado;
-            var origenCorto = (p.origen||'')
-              .replace('Importado desde planilla','Excel')
-              .replace('Manual · ','')
-              .replace(/Banco \(CUIT \d+\)/,'Banco')
-              .replace('Bonificación manual','Bonificación')
-              .slice(0,20).toUpperCase();
-            cuentaCorriente +=
-              '<tr style="border-bottom:1px solid var(--b)">'+
-                '<td></td>'+
-                '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+origenCorto+(esParcial?' (PARCIAL)':'')+'</td>'+
-                '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+String(p.fecha).slice(0,10)+'</td>'+
-                '<td></td>'+
-                '<td style="padding:4px 8px;text-align:right;color:var(--s)">'+pesos(aplicado)+'</td>'+
-                '<td style="padding:4px 8px;text-align:right;font-weight:700;color:'+(saldo>0?'var(--d)':saldo<0?'var(--s)':'var(--m)')+'">'+pesos(saldo)+'</td>'+
-              '</tr>';
-          });
+          origenStr = 'PAGO';
         }
+        saldo -= montoC;
+        cuentaCorriente +=
+          '<tr style="border-bottom:1px solid var(--b)">'+
+            '<td></td>'+
+            '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+origenStr+(esParcial?' (PARCIAL)':'')+'</td>'+
+            '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+(fechaPago?String(fechaPago).slice(0,10):'')+'</td>'+
+            '<td></td>'+
+            '<td style="padding:4px 8px;text-align:right;color:var(--s)">'+pesos(montoC)+'</td>'+
+            '<td style="padding:4px 8px;text-align:right;font-weight:700;color:'+(saldo>0?'var(--d)':saldo<0?'var(--s)':'var(--m)')+'">'+pesos(saldo)+'</td>'+
+          '</tr>';
       }
     });
 
