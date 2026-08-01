@@ -2699,94 +2699,106 @@ async function abrirDetalleAlumno(id){
 
   var cuentaCorriente = '';
   if (pagosAlumno.length > 0) {
+    var mesesNombreCC = ['Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    var MESES_IDX_CC = [2,3,4,5,6,7,8,9,10,11];
+    var hoyMesCC = new Date().getMonth();
+
+    var totalIngresos2 = 0;
+    pagosAlumno.forEach(function(p){ totalIngresos2 += parseFloat(p.monto)||0; });
+    var totalAplicado2 = 0;
+    CUOTAS.forEach(function(c){
+      var n=c.num; var e=est[n]||est[String(n)]||'futura';
+      var monto=montos[n]||montos[String(n)]||0;
+      if(e==='pagada'||e==='compensada'||(e==='pendiente'&&monto>0)) totalAplicado2+=parseFloat(monto)||0;
+    });
+    var saldoPendiente = totalIngresos2 - totalAplicado2;
+
     cuentaCorriente = '<div style="margin-top:14px">'+
       '<div class="ctitle">Cuenta corriente</div>'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
+      '<table style="width:100%;font-size:12px;border-collapse:collapse">'+
+      '<thead><tr>'+
+        '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Cuota</th>'+
+        '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Concepto</th>'+
+        '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Fecha Vto/Pago</th>'+
+        '<th style="text-align:right;padding:5px 8px;background:var(--gl);color:var(--m)">Importe</th>'+
+        '<th style="text-align:right;padding:5px 8px;background:var(--gl);color:var(--m)">Pagos</th>'+
+        '<th style="text-align:right;padding:5px 8px;background:var(--gl);color:var(--m)">Saldo</th>'+
+      '</tr></thead><tbody>';
 
-      // Columna izquierda: Ingresos
-      '<div>'+
-        '<div style="font-size:11px;font-weight:700;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Ingresos</div>'+
-        '<table style="width:100%;font-size:12px;border-collapse:collapse">'+
-        '<thead><tr>'+
-          '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Fecha</th>'+
-          '<th style="text-align:right;padding:5px 8px;background:var(--gl);color:var(--m)">Monto</th>'+
-          '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Origen</th>'+
-        '</tr></thead><tbody>';
+    var saldo = 0;
+    CUOTAS.forEach(function(c) {
+      var n = c.num;
+      var e = est[n] || est[String(n)] || 'futura';
+      var montoC = parseFloat(montos[n] || montos[String(n)] || 0);
+      var fechaC = fechas[n] || fechas[String(n)] || '';
+      var mesIdx = MESES_IDX_CC[n-1];
+      if (mesIdx > hoyMesCC) return;
+      var precioCuota = getPrecioConVencFrontend(a, n, _vencimientosFrontend);
+      var vencTxt = _vencimientosFrontend && _vencimientosFrontend[n-1] ? _vencimientosFrontend[n-1].slice(0,5) : '';
+      saldo += precioCuota;
 
-    var totalIngresos = 0;
-    pagosAlumno.forEach(function(p){
-      totalIngresos += parseFloat(p.monto)||0;
-      var origenCorto = (p.origen||'')
-        .replace('Importado desde planilla','Excel')
-        .replace('Manual · ','')
-        .replace('Transferencia','Transfer.')
-        .slice(0,25);
+      // Fila encabezado de cuota
       cuentaCorriente +=
-        '<tr style="border-bottom:1px solid var(--b)">'+
-          '<td style="padding:5px 8px;color:var(--m);white-space:nowrap">'+p.fecha+'</td>'+
-          '<td style="padding:5px 8px;text-align:right;font-weight:600;color:var(--s)">+'+pesos(p.monto)+'</td>'+
-          '<td style="padding:5px 8px;font-size:10.5px;color:var(--m)">'+origenCorto+'</td>'+
-        '</tr>';
-    });
-    cuentaCorriente +=
-        '</tbody>'+
-        '<tfoot><tr style="background:var(--gl)">'+
-          '<td style="padding:6px 8px;font-weight:700">Total</td>'+
-          '<td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--s)">'+pesos(totalIngresos)+'</td>'+
+        '<tr style="background:#f5f5f5;border-top:2px solid var(--b)">'+
+          '<td style="padding:5px 8px;font-weight:700;color:var(--t);font-size:11px">('+mesesNombreCC[n-1].toUpperCase()+')</td>'+
+          '<td style="padding:5px 8px;font-size:11px;color:var(--m);font-weight:600">IMPORTE CUOTA</td>'+
+          '<td style="padding:5px 8px;font-size:11px;color:var(--m)">'+vencTxt+'</td>'+
+          '<td style="padding:5px 8px;text-align:right;font-weight:600">'+pesos(precioCuota)+'</td>'+
           '<td></td>'+
-        '</tr></tfoot>'+
-        '</table>'+
-      '</div>'+
+          '<td style="padding:5px 8px;text-align:right;font-weight:700;color:'+(saldo>0?'var(--d)':'var(--s)')+'">'+pesos(saldo)+'</td>'+
+        '</tr>';
 
-      // Columna derecha: Aplicaciones
-      '<div>'+
-        '<div style="font-size:11px;font-weight:700;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Aplicado a cuotas</div>'+
-        '<table style="width:100%;font-size:12px;border-collapse:collapse">'+
-        '<thead><tr>'+
-          '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Cuota</th>'+
-          '<th style="text-align:right;padding:5px 8px;background:var(--gl);color:var(--m)">Monto</th>'+
-          '<th style="text-align:left;padding:5px 8px;background:var(--gl);color:var(--m)">Fecha</th>'+
-        '</tr></thead><tbody>';
-
-    var totalAplicado = 0;
-    CUOTAS.forEach(function(c){
-      var _fk=c.num; var _fs=String(c.num);
-      var e=est[_fk]||est[_fs]||'futura';
-      var fecha=fechas.hasOwnProperty(_fk)?fechas[_fk]:(fechas.hasOwnProperty(_fs)?fechas[_fs]:'');
-      var monto=montos.hasOwnProperty(_fk)?montos[_fk]:(montos.hasOwnProperty(_fs)?montos[_fs]:0);
-      if((e==='pagada'||e==='compensada'||(e==='pendiente'&&monto>0))){
-        totalAplicado += parseFloat(monto)||0;
-        var fechaCorta = fecha?String(fecha).slice(0,10):'—';
-        var esParcial = e==='pendiente' && monto>0;
-        cuentaCorriente +=
-          '<tr style="border-bottom:1px solid var(--b)">'+
-            '<td style="padding:5px 8px;font-weight:600">C'+c.num+' '+c.mes+(esParcial?' <span style="font-size:9px;color:var(--w)">(parcial)</span>':'')+'</td>'+
-            '<td style="padding:5px 8px;text-align:right;color:'+(esParcial?'var(--w)':'var(--s)')+'">'+( monto?pesos(monto):'—')+'</td>'+
-            '<td style="padding:5px 8px;font-size:10.5px;color:var(--m)">'+fechaCorta+'</td>'+
-          '</tr>';
+      // Pagos de esta cuota
+      if (montoC > 0) {
+        var pagosEsta = pagosAlumno.filter(function(p){
+          var conc = (p.concepto||'').toLowerCase();
+          return new RegExp('cuota\\s*'+n+'[\\s,\\(]').test(conc) || conc.includes('cuota '+n+' ') || conc.includes('cuota '+n+',');
+        });
+        if (pagosEsta.length === 0) {
+          saldo -= montoC;
+          cuentaCorriente +=
+            '<tr style="border-bottom:1px solid var(--b)">'+
+              '<td></td>'+
+              '<td style="padding:4px 8px;font-size:11px;color:var(--m)">PAGO</td>'+
+              '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+(fechaC?String(fechaC).slice(0,10):'')+'</td>'+
+              '<td></td>'+
+              '<td style="padding:4px 8px;text-align:right;color:var(--s)">'+pesos(montoC)+'</td>'+
+              '<td style="padding:4px 8px;text-align:right;font-weight:700;color:'+(saldo>0?'var(--d)':saldo<0?'var(--s)':'var(--m)')+'">'+pesos(saldo)+'</td>'+
+            '</tr>';
+        } else {
+          var esParcial = e==='pendiente' && montoC>0;
+          pagosEsta.forEach(function(p){
+            var aplicado = montoC; // monto aplicado a esta cuota
+            saldo -= aplicado;
+            var origenCorto = (p.origen||'')
+              .replace('Importado desde planilla','Excel')
+              .replace('Manual · ','')
+              .replace(/Banco \(CUIT \d+\)/,'Banco')
+              .replace('Bonificación manual','Bonificación')
+              .slice(0,20).toUpperCase();
+            cuentaCorriente +=
+              '<tr style="border-bottom:1px solid var(--b)">'+
+                '<td></td>'+
+                '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+origenCorto+(esParcial?' (PARCIAL)':'')+'</td>'+
+                '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+String(p.fecha).slice(0,10)+'</td>'+
+                '<td></td>'+
+                '<td style="padding:4px 8px;text-align:right;color:var(--s)">'+pesos(aplicado)+'</td>'+
+                '<td style="padding:4px 8px;text-align:right;font-weight:700;color:'+(saldo>0?'var(--d)':saldo<0?'var(--s)':'var(--m)')+'">'+pesos(saldo)+'</td>'+
+              '</tr>';
+          });
+        }
       }
     });
 
-    var saldoPendiente = totalIngresos - totalAplicado;
     cuentaCorriente +=
-        '</tbody>'+
-        '<tfoot>'+
-          '<tr style="background:var(--gl)">'+
-            '<td style="padding:6px 8px;font-weight:700">Aplicado</td>'+
-            '<td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--s)">'+pesos(totalAplicado)+'</td>'+
-            '<td></td>'+
-          '</tr>'+
-          (saldoPendiente > 100 ?
-            '<tr style="background:var(--wl)">'+
-              '<td style="padding:6px 8px;font-weight:700;color:var(--w)">Saldo sin aplicar</td>'+
-              '<td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--w)">'+pesos(saldoPendiente)+'</td>'+
-              '<td style="padding:4px 8px;text-align:right"><button onclick="aplicarSaldoAlumno('+a.id+','+saldoPendiente+')" style="background:var(--w);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">Aplicar</button></td>'+
-            '</tr>' : '')+
-        '</tfoot>'+
-        '</table>'+
-      '</div>'+
-
-      '</div></div>'; // cierre grid y cuenta corriente
+      '</tbody><tfoot>'+
+      (saldoPendiente > 100 ?
+        '<tr style="background:var(--wl)">'+
+          '<td colspan="4" style="padding:6px 8px;font-weight:700;color:var(--w)">Saldo sin aplicar</td>'+
+          '<td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--w)">'+pesos(saldoPendiente)+'</td>'+
+          '<td style="padding:4px 8px;text-align:right"><button onclick="aplicarSaldoAlumno('+a.id+','+saldoPendiente+')" style="background:var(--w);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">Aplicar</button></td>'+
+        '</tr>' : '')+
+      '</tfoot></table></div>';
   }
 
   document.getElementById('det-body').innerHTML=
