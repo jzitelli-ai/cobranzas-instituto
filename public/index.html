@@ -2745,30 +2745,31 @@ async function abrirDetalleAlumno(id){
       }
 
       // Distribuir el monto entre las cuotas mencionadas
+      // Lógica: cubrir cada cuota en orden con su precio real; el sobrante va como compensación
       var restante = montoTotal;
       cuotasEnConc.forEach(function(num, idx) {
         if (restante <= 0) return;
         var eUltima = idx === cuotasEnConc.length - 1;
-        // Detectar pago parcial en la última cuota del concepto
-        var parcialMatch = conc.match(/pago parcial \$?([\d.,]+)/i);
+        // Detectar pago parcial explícito en la última cuota
+        var parcialMatch = conc.match(/pago parcial [$]?([0-9.,]+)/i);
         var montoEsta;
-        if (!eUltima) {
-          // Para cuotas intermedias: usar el precio de esa cuota como referencia
+        if (eUltima && parcialMatch) {
+          // Última cuota con pago parcial explícito
+          montoEsta = parseFloat(parcialMatch[1].replace(/\./g,'').replace(',','.')) || restante;
+          montoEsta = Math.min(montoEsta, restante);
+        } else if (!eUltima) {
+          // Cuotas intermedias: cubrir con precio real de esa cuota
           var precioRef = getPrecioConVencFrontend(a, num, _vencimientosFrontend, fechaP);
           montoEsta = Math.min(precioRef, restante);
         } else {
-          // Última cuota: lo que queda
-          if (parcialMatch) {
-            montoEsta = parseFloat(parcialMatch[1].replace(/\./g,'').replace(',','.')) || restante;
-          } else {
-            montoEsta = restante;
-          }
+          // Última cuota sin pago parcial: todo lo que queda
+          montoEsta = restante;
         }
         distribucion[num].push({monto:montoEsta, fecha:fechaP, origen:origen, tipo:'pago'});
         restante -= montoEsta;
       });
 
-      // Si sobró algo (saldo a favor), marcarlo en la siguiente cuota
+      // Si sobró algo después de la última cuota → compensación en cuota siguiente
       if (restante > 0.5) {
         var ultimaCuota = cuotasEnConc[cuotasEnConc.length-1];
         var sigCuota = ultimaCuota + 1;
@@ -2777,6 +2778,7 @@ async function abrirDetalleAlumno(id){
         }
       }
     });
+
 
     // Calcular saldo sin aplicar
     var totalIngresos2 = 0;
