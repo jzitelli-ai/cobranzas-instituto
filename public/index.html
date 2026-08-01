@@ -2713,6 +2713,71 @@ async function abrirDetalleAlumno(id){
     var MESES_IDX_CC = [2,3,4,5,6,7,8,9,10,11];
     var hoyMesCC = new Date().getMonth();
 
+    // ---- Distribuir pagos por cuota parseando conceptos ----
+    // Estructura: { numCuota: [ {monto, fecha, origen, tipo} ] }
+    var distribucion = {};
+    for (var ni=1; ni<=10; ni++) distribucion[ni] = [];
+
+    pagosAlumno.forEach(function(p) {
+      var conc = p.concepto || '';
+      var montoTotal = parseFloat(p.monto) || 0;
+      var origen = (p.origen||'')
+        .replace('Importado desde planilla','Excel')
+        .replace('Manual · ','')
+        .replace(/Banco \(CUIT \d+\)/,'Banco')
+        .replace('Bonificación manual','Bonificación')
+        .slice(0,20).toUpperCase();
+      var fechaP = String(p.fecha||'').slice(0,10);
+
+      // Extraer cuotas mencionadas en el concepto
+      var cuotasEnConc = [];
+      var reg = /cuota\s+(\d+)/gi;
+      var m;
+      while ((m = reg.exec(conc)) !== null) {
+        var num = parseInt(m[1]);
+        if (num>=1 && num<=10 && cuotasEnConc.indexOf(num)<0) cuotasEnConc.push(num);
+      }
+
+      if (cuotasEnConc.length === 0) {
+        // Bonificación u otro — intentar aplicar a la primera cuota pendiente mencionada
+        distribucion[1].push({monto:montoTotal, fecha:fechaP, origen:origen, tipo:'otro'});
+        return;
+      }
+
+      // Distribuir el monto entre las cuotas mencionadas
+      var restante = montoTotal;
+      cuotasEnConc.forEach(function(num, idx) {
+        if (restante <= 0) return;
+        var eUltima = idx === cuotasEnConc.length - 1;
+        // Detectar pago parcial en la última cuota del concepto
+        var parcialMatch = conc.match(/pago parcial \$?([\d.,]+)/i);
+        var montoEsta;
+        if (!eUltima) {
+          // Para cuotas intermedias: usar el precio de esa cuota como referencia
+          var precioRef = getPrecioConVencFrontend(a, num, _vencimientosFrontend, fechaP);
+          montoEsta = Math.min(precioRef, restante);
+        } else {
+          // Última cuota: lo que queda
+          if (parcialMatch) {
+            montoEsta = parseFloat(parcialMatch[1].replace(/\./g,'').replace(',','.')) || restante;
+          } else {
+            montoEsta = restante;
+          }
+        }
+        distribucion[num].push({monto:montoEsta, fecha:fechaP, origen:origen, tipo:'pago'});
+        restante -= montoEsta;
+      });
+
+      // Si sobró algo (saldo a favor), marcarlo en la siguiente cuota
+      if (restante > 0.5) {
+        var ultimaCuota = cuotasEnConc[cuotasEnConc.length-1];
+        var sigCuota = ultimaCuota + 1;
+        if (sigCuota <= 10) {
+          distribucion[sigCuota].push({monto:restante, fecha:fechaP, origen:'COMPENSACIÓN MES ANT.', tipo:'compensacion'});
+        }
+      }
+    });
+
     // Calcular saldo sin aplicar
     var totalIngresos2 = 0;
     pagosAlumno.forEach(function(p){ totalIngresos2 += parseFloat(p.monto)||0; });
@@ -2743,11 +2808,10 @@ async function abrirDetalleAlumno(id){
       var montoC = parseFloat(montos[n] || montos[String(n)] || 0);
       var fechaPago = fechas[n] || fechas[String(n)] || '';
       var mesIdx = MESES_IDX_CC[n-1];
-      if (mesIdx > hoyMesCC) return; // no mostrar futuras
+      if (mesIdx > hoyMesCC) return;
 
-      // Precio correcto: comparar fecha de pago (o hoy si no pagó) con vencimiento bonificado
-      var fechaRef = fechaPago || null;
-      var precioCuota = getPrecioConVencFrontend(a, n, _vencimientosFrontend, fechaRef);
+      // Precio usando fecha de pago como referencia
+      var precioCuota = getPrecioConVencFrontend(a, n, _vencimientosFrontend, fechaPago || null);
       var vencTxt = _vencimientosFrontend && _vencimientosFrontend[n-1] ? _vencimientosFrontend[n-1].slice(0,5) : '';
       saldo += precioCuota;
 
@@ -2762,35 +2826,26 @@ async function abrirDetalleAlumno(id){
           '<td style="padding:5px 8px;text-align:right;font-weight:700;color:'+(saldo>0?'var(--d)':'var(--s)')+'">'+pesos(saldo)+'</td>'+
         '</tr>';
 
-      // Fila de pago si hay monto aplicado
-      if (montoC > 0) {
-        var esParcial = e === 'pendiente';
-        var origenStr = '';
-        // Buscar el pago correspondiente para obtener el origen
-        var pagoCuota = pagosAlumno.find(function(p){
-          var conc = (p.concepto||'').toLowerCase();
-          return new RegExp('cuota\s*'+n+'[\s,\(]').test(conc) || conc.includes('cuota '+n+' ') || conc.includes('cuota '+n+',');
-        });
-        if (pagoCuota) {
-          origenStr = (pagoCuota.origen||'')
-            .replace('Importado desde planilla','Excel')
-            .replace('Manual · ','')
-            .replace(/Banco \(CUIT \d+\)/,'Banco')
-            .replace('Bonificación manual','Bonificación')
-            .slice(0,20).toUpperCase();
-        } else {
-          origenStr = 'PAGO';
-        }
-        saldo -= montoC;
+      // Filas de pagos/compensaciones para esta cuota
+      var pagosN = distribucion[n] || [];
+      pagosN.forEach(function(pg) {
+        saldo -= pg.monto;
+        var colorSaldo = saldo > 0 ? 'var(--d)' : saldo < 0 ? 'var(--s)' : 'var(--m)';
+        var colorPago = pg.tipo === 'compensacion' ? '#1565C0' : 'var(--s)';
         cuentaCorriente +=
           '<tr style="border-bottom:1px solid var(--b)">'+
             '<td></td>'+
-            '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+origenStr+(esParcial?' (PARCIAL)':'')+'</td>'+
-            '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+(fechaPago?String(fechaPago).slice(0,10):'')+'</td>'+
+            '<td style="padding:4px 8px;font-size:11px;color:'+(pg.tipo==='compensacion'?'#1565C0':'var(--m)')+'">'+pg.origen+'</td>'+
+            '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+pg.fecha+'</td>'+
             '<td></td>'+
-            '<td style="padding:4px 8px;text-align:right;color:var(--s)">'+pesos(montoC)+'</td>'+
-            '<td style="padding:4px 8px;text-align:right;font-weight:700;color:'+(saldo>0?'var(--d)':saldo<0?'var(--s)':'var(--m)')+'">'+pesos(saldo)+'</td>'+
+            '<td style="padding:4px 8px;text-align:right;color:'+colorPago+'">'+pesos(pg.monto)+'</td>'+
+            '<td style="padding:4px 8px;text-align:right;font-weight:700;color:'+colorSaldo+'">'+pesos(Math.abs(saldo))+(saldo<0?' ✦':'')+'</td>'+
           '</tr>';
+      });
+
+      // Si no hay pagos registrados pero la cuota está pendiente con deuda
+      if (pagosN.length === 0 && e !== 'futura' && e !== 'pagada' && e !== 'compensada' && e !== 'gratis') {
+        // No mostrar fila de pago — el saldo ya refleja la deuda
       }
     });
 
