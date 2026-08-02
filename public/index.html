@@ -2851,17 +2851,29 @@ async function abrirDetalleAlumno(id){
       // Filas de pagos/compensaciones para esta cuota
       var pagosN = distribucion[n] || [];
       pagosN.forEach(function(pg) {
+        // Compensación: solo visual, no afecta el saldo acumulado
+        if (pg.tipo === 'compensacion') {
+          cuentaCorriente +=
+            '<tr style="border-bottom:1px solid var(--b)">'+
+              '<td></td>'+
+              '<td style="padding:4px 8px;font-size:11px;color:#1565C0">'+pg.origen+'</td>'+
+              '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+pg.fecha+'</td>'+
+              '<td></td>'+
+              '<td style="padding:4px 8px;text-align:right;color:#1565C0">'+pesos(pg.monto)+'</td>'+
+              '<td style="padding:4px 8px;text-align:right;font-weight:700;color:'+(saldo>0?'var(--d)':saldo<0?'var(--s)':'var(--m)')+'">'+pesos(Math.abs(saldo))+(saldo<0?' ❖':'')+'</td>'+
+            '</tr>';
+          return;
+        }
         saldo -= pg.monto;
         var colorSaldo = saldo > 0 ? 'var(--d)' : saldo < 0 ? 'var(--s)' : 'var(--m)';
-        var colorPago = pg.tipo === 'compensacion' ? '#1565C0' : 'var(--s)';
         cuentaCorriente +=
           '<tr style="border-bottom:1px solid var(--b)">'+
             '<td></td>'+
-            '<td style="padding:4px 8px;font-size:11px;color:'+(pg.tipo==='compensacion'?'#1565C0':'var(--m)')+'">'+pg.origen+'</td>'+
+            '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+pg.origen+'</td>'+
             '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+pg.fecha+'</td>'+
             '<td></td>'+
-            '<td style="padding:4px 8px;text-align:right;color:'+colorPago+'">'+pesos(pg.monto)+'</td>'+
-            '<td style="padding:4px 8px;text-align:right;font-weight:700;color:'+colorSaldo+'">'+pesos(Math.abs(saldo))+(saldo<0?' ✦':'')+'</td>'+
+            '<td style="padding:4px 8px;text-align:right;color:var(--s)">'+pesos(pg.monto)+'</td>'+
+            '<td style="padding:4px 8px;text-align:right;font-weight:700;color:'+colorSaldo+'">'+pesos(Math.abs(saldo))+(saldo<0?' ❖':'')+'</td>'+
           '</tr>';
       });
 
