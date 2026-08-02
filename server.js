@@ -864,8 +864,15 @@ app.post('/api/banco', async (req,res) => {
     }
     const yaExiste = fechaDupStr
       ? await q1(`SELECT id, fecha, origen FROM pagos WHERE alumno_id=$1 AND monto=$2 AND (
-          LPAD(SPLIT_PART(REPLACE(fecha,'-','/'), '/', 1), 2, '0') = $3 AND
-          LPAD(SPLIT_PART(REPLACE(fecha,'-','/'), '/', 2), 2, '0') = $4
+          -- Formato dd/mm/yyyy
+          (fecha NOT LIKE '____-__-__%' AND
+           LPAD(SPLIT_PART(fecha, '/', 1), 2, '0') = $3 AND
+           LPAD(SPLIT_PART(fecha, '/', 2), 2, '0') = $4)
+          OR
+          -- Formato yyyy-mm-dd
+          (fecha LIKE '____-__-__%' AND
+           LPAD(SPLIT_PART(fecha, '-', 3), 2, '0') = $3 AND
+           LPAD(SPLIT_PART(fecha, '-', 2), 2, '0') = $4)
         )`, [alumno.id, monto,
           String(fechaDupStr.split('/')[0]).padStart(2,'0'),
           String(fechaDupStr.split('/')[1]).padStart(2,'0')])
