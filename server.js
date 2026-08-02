@@ -1490,6 +1490,40 @@ app.post('/api/alumno/:id/reordenar-imputaciones', async (req, res) => {
   }
 });
 
+// Reordenar imputaciones de TODOS los alumnos activos
+app.post('/api/reordenar-imputaciones-todos', async (req, res) => {
+  try {
+    const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
+    const vencimientos = await getVencimientos();
+    const resultados = [];
+    for (const alumno of alumnos) {
+      try {
+        const pagos = await q('SELECT * FROM pagos WHERE alumno_id=$1', [alumno.id]);
+        if (!pagos.length) continue;
+        function parseFechaLocal(f) {
+          const s = normalizarFechaAR(String(f||'').split(' ')[0]);
+          const p = s.split('/');
+          if (p.length===3) return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+          return new Date(0);
+        }
+        pagos.sort((a,b) => parseFechaLocal(a.fecha) - parseFechaLocal(b.fecha) || a.id - b.id);
+        await q('UPDATE cuotas SET estado=$1, monto_pagado=0, fecha_pago=$2 WHERE alumno_id=$3', ['pendiente','',alumno.id]);
+        for (const pago of pagos) {
+          const fecha = normalizarFechaAR(String(pago.fecha).split(' ')[0]);
+          await aplicarPagoYCrearCuotas(alumno.id, alumno, parseFloat(pago.monto), fecha, vencimientos);
+        }
+        resultados.push({ nombre: alumno.nombre, pagos: pagos.length, ok: true });
+      } catch(e) {
+        resultados.push({ nombre: alumno.nombre, ok: false, error: e.message });
+      }
+    }
+    const errores = resultados.filter(r => !r.ok);
+    res.json({ ok: true, procesados: resultados.length, errores: errores.length, detalle: errores });
+  } catch(e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 // Aplicar saldo disponible a cuotas pendientes para todos los alumnos con saldo sin aplicar
 app.get('/api/aplicar-saldos-pendientes', async (req,res) => {
   const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
