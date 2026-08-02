@@ -1491,6 +1491,49 @@ app.post('/api/alumno/:id/reordenar-imputaciones', async (req, res) => {
 });
 
 // Reordenar imputaciones de TODOS los alumnos activos
+// Generar cuotas faltantes para todos los meses vencidos de alumnos activos
+app.post('/api/generar-cuotas-faltantes', async (req, res) => {
+  try {
+    const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE');
+    const vencimientos = await getVencimientos();
+    const hoy = new Date();
+    const mesActual = hoy.getMonth(); // 0-based
+    let creadas = 0;
+    const detalle = [];
+
+    for (const alumno of alumnos) {
+      // Cuotas ya existentes para este alumno
+      const cuotasExist = await q('SELECT numero_cuota FROM cuotas WHERE alumno_id=$1', [alumno.id]);
+      const numerosExist = new Set(cuotasExist.map(c => c.numero_cuota));
+
+      for (let n = 1; n <= 10; n++) {
+        // Solo meses ya vencidos o en curso (hasta el mes actual inclusive)
+        if (MESES_IDX[n-1] > mesActual) continue;
+        // Si ya existe, saltar
+        if (numerosExist.has(n)) continue;
+        // Calcular precio usando fecha de vencimiento como referencia
+        const venc = vencimientos[n-1];
+        let precio = parseFloat(alumno.precio_normal) || 0;
+        if (venc) {
+          const [dv, mv, yv] = venc.split('/');
+          const dVenc = new Date(parseInt(yv), parseInt(mv)-1, parseInt(dv), 23, 59, 59);
+          // Cuota vencida → precio normal; dentro del plazo → bonificado
+          precio = hoy <= dVenc ? parseFloat(alumno.precio_bonificado)||0 : parseFloat(alumno.precio_normal)||0;
+        }
+        await q(
+          'INSERT INTO cuotas (alumno_id, numero_cuota, estado, monto_pagado, fecha_pago) VALUES ($1,$2,$3,0,$4)',
+          [alumno.id, n, 'pendiente', '']
+        );
+        creadas++;
+        detalle.push({ alumno: alumno.nombre, cuota: n });
+      }
+    }
+    res.json({ ok: true, creadas, detalle });
+  } catch(e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 app.post('/api/reordenar-imputaciones-todos', async (req, res) => {
   try {
     const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
@@ -1722,8 +1765,30 @@ async function ejecutarBackupSiNecesario() {
   const ultimoBackup = await getUltimoBackupFecha();
   if (ultimoBackup === hoyAR) return; // ya se hizo hoy
   console.log(`[backup] Ejecutando backup pendiente del día ${hoyAR}`);
+  // También generar cuotas faltantes del mes actual al arrancar el día
+  try { await generarCuotasFaltantesInterno(); } catch(e) { console.error('[cuotas] Error generando faltantes:', e.message); }
   await setUltimoBackupFecha(hoyAR);
   await ejecutarBackup().catch(e => console.error('Error backup:', e));
+}
+
+async function generarCuotasFaltantesInterno() {
+  const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE');
+  const vencimientos = await getVencimientos();
+  const hoy = new Date();
+  const mesActual = hoy.getMonth();
+  let creadas = 0;
+  for (const alumno of alumnos) {
+    const cuotasExist = await q('SELECT numero_cuota FROM cuotas WHERE alumno_id=$1', [alumno.id]);
+    const numerosExist = new Set(cuotasExist.map(c => c.numero_cuota));
+    for (let n = 1; n <= 10; n++) {
+      if (MESES_IDX[n-1] > mesActual) continue;
+      if (numerosExist.has(n)) continue;
+      await q('INSERT INTO cuotas (alumno_id, numero_cuota, estado, monto_pagado, fecha_pago) VALUES ($1,$2,$3,0,$4)',
+        [alumno.id, n, 'pendiente', '']);
+      creadas++;
+    }
+  }
+  if (creadas > 0) console.log(`[cuotas] Generadas ${creadas} cuotas faltantes`);
 }
 
 function programarBackup() {
