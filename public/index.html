@@ -1004,7 +1004,7 @@ function nav(id){
 async function actualizarDashboard(){
   _reporte=await api('GET','/api/reporte');
   var tot=_reporte.length;
-  var conDeuda=_reporte.filter(function(a){return Object.keys(a.estadoCuotas||{}).some(function(k){return a.estadoCuotas[k]==='pendiente';});}).length;
+  var conDeuda=_reporte.filter(function(a){return (a.deudaReal||0)>0;}).length;
   var cobrado=(_pagos||[]).reduce(function(s,p){return s+(parseFloat(p.monto)||0);},0);
   document.getElementById('dash-stats').innerHTML=
     sc('Total alumnos',tot,'p')+sc('Con deuda',conDeuda,'d')+sc('Al dia',tot-conDeuda,'s');
