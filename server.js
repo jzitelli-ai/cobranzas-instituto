@@ -1929,7 +1929,6 @@ app.get('/api/admin/stats', async (req, res) => {
   todosPagos.forEach(p => { mapPagos[p.alumno_id] = parseFloat(p.total||0); });
   const vencimientosStats = await getVencimientos();
   const hoy = new Date();
-  const mesActual = hoy.getMonth();
   const dia = hoy.getDate();
   let totalDeuda = 0;
   for (const a of alumnos) {
