@@ -1902,14 +1902,24 @@ app.post('/api/admin/verificar-codigo', (req, res) => {
 });
 
 app.get('/api/admin/stats', async (req, res) => {
-  const [totalAlumnos, totalPagos, porMedio, deudores, porCurso] = await Promise.all([
+  const mesActual = new Date().getMonth(); // 0-based
+  const numerosVencidos = MESES_IDX.map((m,i)=>({m,n:i+1})).filter(x=>x.m<=mesActual).map(x=>x.n);
+  const [totalAlumnos, totalPagos, porMedio, porCurso] = await Promise.all([
     q1('SELECT COUNT(*) as n FROM alumnos WHERE activo=TRUE'),
     q1('SELECT COUNT(*) as n, COALESCE(SUM(monto),0) as total FROM pagos'),
     q('SELECT medio, COUNT(*) as cantidad, SUM(monto) as total FROM pagos GROUP BY medio ORDER BY total DESC'),
-    q1('SELECT COUNT(DISTINCT alumno_id) as n FROM cuotas WHERE estado=$1', ['pendiente']),
     q(`SELECT a.curso, COUNT(DISTINCT a.id) as alumnos, COALESCE(SUM(p.monto),0) as cobrado FROM alumnos a LEFT JOIN pagos p ON a.id=p.alumno_id WHERE a.activo=TRUE GROUP BY a.curso ORDER BY cobrado DESC`)
   ]);
-  const alDia = parseInt(totalAlumnos?.n||0) - parseInt(deudores?.n||0);
+  // Contar deudores: alumnos con al menos una cuota de mes vencido con saldo pendiente (monto_pagado < precio)
+  const deudoresQ = await q(`
+    SELECT COUNT(DISTINCT c.alumno_id) as n FROM cuotas c
+    JOIN alumnos a ON a.id = c.alumno_id
+    WHERE a.activo=TRUE
+    AND c.estado = 'pendiente'
+    AND c.numero_cuota = ANY($1::int[])
+  `, [numerosVencidos]);
+  const deudoresN = parseInt(deudoresQ[0]?.n||0);
+  const alDia = parseInt(totalAlumnos?.n||0) - deudoresN;
 
   // Calcular deuda total con consultas masivas
   const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE');
@@ -1934,7 +1944,7 @@ app.get('/api/admin/stats', async (req, res) => {
     if (saldo < 0) totalDeuda += Math.abs(saldo);
   }
 
-  res.json({ totalAlumnos: parseInt(totalAlumnos?.n||0), totalPagos: parseInt(totalPagos?.n||0), totalCobrado: parseFloat(totalPagos?.total||0), conDeuda: parseInt(deudores?.n||0), alDia, totalDeuda, porMedio, porCurso });
+  res.json({ totalAlumnos: parseInt(totalAlumnos?.n||0), totalPagos: parseInt(totalPagos?.n||0), totalCobrado: parseFloat(totalPagos?.total||0), conDeuda: deudoresN, alDia, totalDeuda, porMedio, porCurso });
 });
 
 app.get('*', (req,res) => { res.sendFile(path.join(__dirname,'public','index.html')); });
