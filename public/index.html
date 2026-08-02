@@ -864,6 +864,7 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
     <div class="modal-title">Tabla de precios vigente</div>
     <div id="ver-vig-body" style="max-height:500px;overflow-y:auto;padding-right:4px"></div>
     <div class="modal-btns">
+      <button class="btn bob" onclick="exportarPreciosExcel()" style="font-size:11px">⬇ Exportar Excel</button>
       <button class="btn bpb" onclick="cerrarM('m-ver-vig')">Cerrar</button>
     </div>
   </div>
@@ -3248,6 +3249,60 @@ async function verPreciosVig(id){
   }
   document.getElementById('ver-vig-body').innerHTML=h;
   abrirM('m-ver-vig');
+}
+
+function exportarPreciosExcel() {
+  if (!_aranceles || !_aranceles.length) { toast('No hay datos para exportar', 'e'); return; }
+  var vig = _aranceles.filter(function(a){ return a.vigente; });
+  if (!vig.length) vig = _aranceles;
+  var v = vig[0];
+  var precios = v.precios || [];
+  var especiales = v.especiales || [];
+
+  // Agrupar por curso
+  var porCurso = {};
+  precios.forEach(function(p){
+    var c = p.curso||'Sin curso';
+    if (!porCurso[c]) porCurso[c] = [];
+    porCurso[c].push(p);
+  });
+
+  // Armar filas
+  var rows = [['TABLA DE PRECIOS VIGENTE', '', '', '']];
+  rows.push(['Vigente desde', v.fecha_inicio||'', '', '']);
+  rows.push(['']);
+  rows.push(['CURSO', 'P. NORMAL', 'P. BONIFICADO', 'ALUMNOS']);
+  Object.keys(porCurso).sort().forEach(function(curso){
+    var pp = porCurso[curso][0];
+    rows.push([curso, parseFloat(pp.precio_normal), parseFloat(pp.precio_bonificado), porCurso[curso].length]);
+  });
+
+  if (especiales.length) {
+    rows.push(['']);
+    rows.push(['PRECIOS ESPECIALES', '', '', '']);
+    rows.push(['ALUMNO', 'CURSO', 'P. NORMAL', 'P. BONIFICADO']);
+    especiales.forEach(function(p){
+      rows.push([p.nombre, p.curso, parseFloat(p.precio_normal), parseFloat(p.precio_bonificado)]);
+    });
+  }
+
+  // Generar CSV
+  var csv = rows.map(function(r){
+    return r.map(function(c){
+      var s = String(c===undefined||c===null?'':c);
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) s = '"'+s.replace(/"/g,'""')+'"';
+      return s;
+    }).join(',');
+  }).join('\n');
+
+  var bom = '\uFEFF';
+  var blob = new Blob([bom+csv], {type:'text/csv;charset=utf-8;'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'precios_vigentes_'+(v.fecha_inicio||'').replace(/\//g,'-')+'.csv';
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 async function abrirEditVig(id){
