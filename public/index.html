@@ -411,6 +411,9 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
           <button id="btn-aplicar-saldos" class="btn bob" onclick="aplicarSaldosPendientes()" style="font-size:11px;padding:4px 10px;display:none" title="Aplica saldo disponible a cuotas pendientes">
             ⚡ Aplicar saldos pendientes
           </button>
+          <button id="btn-reordenar-todos" class="btn bob" onclick="reordenarTodos()" style="font-size:11px;padding:4px 10px;display:none;background:#5c6bc0;border-color:#5c6bc0;color:#fff" title="Reordena imputaciones de todos los alumnos">
+            ↺ Reimputar todos
+          </button>
           <button class="btn bob" onclick="ejecutarBackup()" style="font-size:11px;padding:4px 10px;background:#25D366;color:#fff;border-color:#25D366" title="Ejecuta backup manual a Google Sheets">
             ☁ Backup ahora
           </button>
@@ -2021,9 +2024,25 @@ function actualizarBotonesAdmin() {
   var btnS = document.getElementById('btn-sincronizar');
   var btnR = document.getElementById('btn-reprocesar-excel');
   var btnA = document.getElementById('btn-aplicar-saldos');
+  var btnRT = document.getElementById('btn-reordenar-todos');
   if (btnS) btnS.style.display = display;
   if (btnR) btnR.style.display = display;
   if (btnA) btnA.style.display = display;
+  if (btnRT) btnRT.style.display = display;
+}
+
+async function reordenarTodos() {
+  if (!confirm('¿Reimputar todos los alumnos activos?\n\nEsto resetea todas las cuotas y reaplica los pagos cronológicamente.\n\nPuede tardar varios minutos. No cerrar la ventana.')) return;
+  var btn = document.getElementById('btn-reordenar-todos');
+  if (btn) { btn.disabled=true; btn.textContent='Procesando...'; }
+  var r = await api('POST', '/api/reordenar-imputaciones-todos');
+  if (btn) { btn.disabled=false; btn.textContent='↺ Reimputar todos'; }
+  if (!r || !r.ok) { toast('Error: '+(r&&r.error?r.error:'desconocido'), 'e'); return; }
+  var msg = 'Reimputación completada: '+r.procesados+' alumnos procesados';
+  if (r.errores > 0) msg += ', '+r.errores+' con errores';
+  toast(msg, 's');
+  _reporte = await api('GET', '/api/reporte');
+  _pagos = await api('GET', '/api/pagos');
 }
 var _adminLoginTime = 0;
 var _ADMIN_TIMEOUT = 5 * 60 * 1000; // 5 minutos en ms
