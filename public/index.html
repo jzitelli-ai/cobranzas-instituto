@@ -414,6 +414,9 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
           <button id="btn-reordenar-todos" class="btn bob" onclick="reordenarTodos()" style="font-size:11px;padding:4px 10px;display:none;background:#5c6bc0;border-color:#5c6bc0;color:#fff" title="Reordena imputaciones de todos los alumnos">
             ↺ Reimputar todos
           </button>
+          <button id="btn-generar-cuotas" class="btn bob" onclick="generarCuotasFaltantes()" style="font-size:11px;padding:4px 10px;display:none;background:#00796b;border-color:#00796b;color:#fff" title="Genera cuotas faltantes para meses vencidos">
+            + Generar cuotas faltantes
+          </button>
           <button class="btn bob" onclick="ejecutarBackup()" style="font-size:11px;padding:4px 10px;background:#25D366;color:#fff;border-color:#25D366" title="Ejecuta backup manual a Google Sheets">
             ☁ Backup ahora
           </button>
@@ -2025,16 +2028,32 @@ function actualizarBotonesAdmin() {
   var btnR = document.getElementById('btn-reprocesar-excel');
   var btnA = document.getElementById('btn-aplicar-saldos');
   var btnRT = document.getElementById('btn-reordenar-todos');
+  var btnGC = document.getElementById('btn-generar-cuotas');
   if (btnS) btnS.style.display = display;
   if (btnR) btnR.style.display = display;
   if (btnA) btnA.style.display = display;
   if (btnRT) btnRT.style.display = display;
+  if (btnGC) btnGC.style.display = display;
+}
+
+async function generarCuotasFaltantes() {
+  if (!confirm('¿Generar cuotas faltantes para todos los alumnos?\n\nEsto crea las cuotas de meses vencidos que no existen en la base de datos.')) return;
+  var btn = document.getElementById('btn-generar-cuotas');
+  if (btn) { btn.disabled=true; btn.textContent='Procesando...'; }
+  var r = await api('POST', '/api/generar-cuotas-faltantes');
+  if (btn) { btn.disabled=false; btn.textContent='+ Generar cuotas faltantes'; }
+  if (!r || !r.ok) { toast('Error: '+(r&&r.error?r.error:'desconocido'), 'e'); return; }
+  toast('Cuotas generadas: '+r.creadas, 's');
+  _reporte = await api('GET', '/api/reporte');
 }
 
 async function reordenarTodos() {
-  if (!confirm('¿Reimputar todos los alumnos activos?\n\nEsto resetea todas las cuotas y reaplica los pagos cronológicamente.\n\nPuede tardar varios minutos. No cerrar la ventana.')) return;
+  if (!confirm('¿Reimputar todos los alumnos activos?\n\nEsto genera cuotas faltantes, resetea todas las cuotas y reaplica los pagos cronológicamente.\n\nPuede tardar varios minutos. No cerrar la ventana.')) return;
   var btn = document.getElementById('btn-reordenar-todos');
-  if (btn) { btn.disabled=true; btn.textContent='Procesando...'; }
+  if (btn) { btn.disabled=true; btn.textContent='Generando cuotas...'; }
+  // Primero generar cuotas faltantes
+  await api('POST', '/api/generar-cuotas-faltantes');
+  if (btn) btn.textContent='Reimputando...';
   var r = await api('POST', '/api/reordenar-imputaciones-todos');
   if (btn) { btn.disabled=false; btn.textContent='↺ Reimputar todos'; }
   if (!r || !r.ok) { toast('Error: '+(r&&r.error?r.error:'desconocido'), 'e'); return; }
