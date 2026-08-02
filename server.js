@@ -999,16 +999,20 @@ app.get('/api/reporte', async (req,res) => {
       if(n===10&&c10g){
         precio=0;
       } else {
-        // Usar fecha de pago de la cuota si existe, sino fecha actual
+        // Usar fecha de pago de la cuota si existe; si no, comparar hoy con el vencimiento
         const fpCuota=fechasPago[n];
-        if(fpCuota&&vencimientosReporte){
+        if(vencimientosReporte){
           const venc=vencimientosReporte[n-1];
           if(venc){
             const [dv,mv,yv]=venc.split('/');
             const dVenc=new Date(parseInt(yv),parseInt(mv)-1,parseInt(dv),23,59,59);
             let dp;
-            if(String(fpCuota).includes('/')){const [d,m,y]=String(fpCuota).split('/');dp=new Date(parseInt(y),parseInt(m)-1,parseInt(d),12);}
-            else{const pts=String(fpCuota).split('-');dp=new Date(parseInt(pts[0]),parseInt(pts[1])-1,parseInt(pts[2]),12);}
+            if(fpCuota&&fpCuota!==''){
+              if(String(fpCuota).includes('/')){const [d,m,y]=String(fpCuota).split('/');dp=new Date(parseInt(y),parseInt(m)-1,parseInt(d),12);}
+              else{const pts=String(fpCuota).split('-');dp=new Date(parseInt(pts[0]),parseInt(pts[1])-1,parseInt(pts[2]),12);}
+            } else {
+              dp=new Date(); // sin fecha de pago → comparar con hoy
+            }
             precio=dp<=dVenc?parseFloat(a.precio_bonificado):parseFloat(a.precio_normal);
           } else {
             precio=getPrecio(a,n,dia,vencimientosReporte);
