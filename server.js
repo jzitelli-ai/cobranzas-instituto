@@ -590,8 +590,19 @@ async function aplicarPagoYCrearCuotas(alumnoId, alumno, monto, fechaPago, venci
   for (const n of orden) {
     if (restante <= 0) break;
     const esGratis = n === 10 && await cuota10Gratis(alumnoId, alumno);
-    const precio = esGratis ? 0 : getPrecioConVencLocal(n);
     const yaAbonado = estado[n].monto_pagado;
+    let precio;
+    if (esGratis) {
+      precio = 0;
+    } else if (yaAbonado > 0) {
+      // Si ya hay un pago parcial, usar el precio bonificado si yaAbonado <= precio_bonificado
+      // (respeta el precio original con que se comenzó a pagar)
+      const precioBonif = parseFloat(alumno.precio_bonificado);
+      const precioNorm = parseFloat(alumno.precio_normal);
+      precio = yaAbonado <= precioBonif ? precioBonif : precioNorm;
+    } else {
+      precio = getPrecioConVencLocal(n);
+    }
     const falta = precio - yaAbonado;
 
     if (falta <= 0) {
