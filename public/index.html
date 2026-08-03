@@ -864,7 +864,6 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
     <div class="modal-title">Tabla de precios vigente</div>
     <div id="ver-vig-body" style="max-height:500px;overflow-y:auto;padding-right:4px"></div>
     <div class="modal-btns">
-      <button class="btn bob" onclick="exportarPreciosExcel()" style="font-size:11px">⬇ Exportar Excel</button>
       <button class="btn bpb" onclick="cerrarM('m-ver-vig')">Cerrar</button>
     </div>
   </div>
@@ -2871,8 +2870,15 @@ async function abrirDetalleAlumno(id){
       var mesIdx = MESES_IDX_CC[n-1];
       if (mesIdx > hoyMesCC) return;
 
-      // Precio usando fecha de pago como referencia
-      var precioCuota = getPrecioConVencFrontend(a, n, _vencimientosFrontend, fechaPago || null);
+      // Buscar la fecha real del primer pago asociado a esta cuota (más confiable que fecha_pago de la cuota)
+      var pagoCuotaRef = pagosAlumno.find(function(p){
+        var conc = (p.concepto||'').toLowerCase();
+        return new RegExp('cuota\\s*'+n+'[\\s,\\(]').test(conc) || conc.includes('cuota '+n+' ') || conc.includes('cuota '+n+',');
+      });
+      var fechaRefPrecio = pagoCuotaRef ? String(pagoCuotaRef.fecha).split(' ')[0] : (fechaPago || null);
+
+      // Precio usando fecha real del pago como referencia
+      var precioCuota = getPrecioConVencFrontend(a, n, _vencimientosFrontend, fechaRefPrecio);
       var vencTxt = _vencimientosFrontend && _vencimientosFrontend[n-1] ? _vencimientosFrontend[n-1].slice(0,5) : '';
       saldo += precioCuota;
 
@@ -3249,87 +3255,6 @@ async function verPreciosVig(id){
   }
   document.getElementById('ver-vig-body').innerHTML=h;
   abrirM('m-ver-vig');
-}
-
-async function exportarPreciosExcel() {
-  if (!_aranceles || !_aranceles.length) { toast('No hay datos para exportar', 'e'); return; }
-  var hoy = new Date().toISOString().slice(0,10);
-  var v = _aranceles.find(function(a){ return a.desde <= hoy; }) || _aranceles[0];
-  if (!v) { toast('No hay tabla vigente', 'e'); return; }
-
-  var cursos = await api('GET', '/api/aranceles/'+v.id+'/cursos');
-  var precios = await api('GET', '/api/aranceles/'+v.id+'/precios');
-
-  // Contar alumnos por curso
-  var conteo = {};
-  var especiales = [];
-  (precios||[]).forEach(function(p){
-    var c = p.curso||'Sin curso';
-    if (!conteo[c]) conteo[c] = 0;
-    conteo[c]++;
-    if (p.precio_especial) especiales.push(p);
-  });
-
-  var rows = [];
-  rows.push(['TABLA DE PRECIOS VIGENTE']);
-  rows.push(['Vigente desde', v.desde + (v.descripcion?' — '+v.descripcion:'')]);
-  rows.push([]);
-  rows.push(['CURSO', 'P. NORMAL', 'P. BONIFICADO', 'ALUMNOS']);
-
-  if (cursos && cursos.length) {
-    cursos.forEach(function(c){
-      rows.push([c.curso, parseFloat(c.precio_normal), parseFloat(c.precio_bonificado), conteo[c.curso]||0]);
-    });
-    // FAMILIA individuales
-    var famAlumnos = (precios||[]).filter(function(p){ return p.curso==='FAMILIA'; });
-    if (famAlumnos.length) {
-      rows.push([]);
-      rows.push(['FAMILIA — precio individual']);
-      rows.push(['ALUMNO', 'P. NORMAL', 'P. BONIFICADO', '']);
-      famAlumnos.forEach(function(p){
-        rows.push([p.nombre, parseFloat(p.precio_normal), parseFloat(p.precio_bonificado), '']);
-      });
-    }
-  } else {
-    // Sin cursos — agrupar por alumno
-    var porCurso = {};
-    (precios||[]).forEach(function(p){
-      var c = p.curso||'Sin curso';
-      if (!porCurso[c]) porCurso[c] = [];
-      porCurso[c].push(p);
-    });
-    Object.keys(porCurso).sort().forEach(function(curso){
-      var pp = porCurso[curso][0];
-      rows.push([curso, parseFloat(pp.precio_normal), parseFloat(pp.precio_bonificado), porCurso[curso].length]);
-    });
-  }
-
-  // Precios especiales no familia
-  var espNofam = especiales.filter(function(p){ return p.curso !== 'FAMILIA'; });
-  if (espNofam.length) {
-    rows.push([]);
-    rows.push(['PRECIOS ESPECIALES']);
-    rows.push(['ALUMNO', 'CURSO', 'P. NORMAL', 'P. BONIFICADO']);
-    espNofam.forEach(function(p){
-      rows.push([p.nombre, p.curso, parseFloat(p.precio_normal), parseFloat(p.precio_bonificado)]);
-    });
-  }
-
-  var csv = rows.map(function(r){
-    return r.map(function(c){
-      var s = String(c===undefined||c===null?'':c);
-      if (s.includes(',') || s.includes('"') || s.includes('\n')) s = '"'+s.replace(/"/g,'""')+'"';
-      return s;
-    }).join(',');
-  }).join('\n');
-
-  var blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url;
-  a.download = 'precios_vigentes_'+(v.desde||'').replace(/\//g,'-')+'.csv';
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 async function abrirEditVig(id){
