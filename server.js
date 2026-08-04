@@ -612,11 +612,12 @@ async function aplicarPagoYCrearCuotas(alumnoId, alumno, monto, fechaPago, venci
     if (esGratis) {
       precio = 0;
     } else if (yaAbonado > 0) {
-      // Si ya hay un pago parcial, usar el precio bonificado si yaAbonado <= precio_bonificado
-      // (respeta el precio original con que se comenzó a pagar)
+      // Si ya hay un pago parcial (por ej. compensación de saldo del mes anterior):
+      // - si ese parcial por sí solo ya cubre el valor bonificado completo, la cuota queda a precio bonificado
+      // - si es parcial e insuficiente, el precio final depende de cuándo se complete el pago
+      //   (esta misma llamada), no del momento en que llegó el parcial anterior
       const precioBonif = parseFloat(alumno.precio_bonificado);
-      const precioNorm = parseFloat(alumno.precio_normal);
-      precio = yaAbonado <= precioBonif ? precioBonif : precioNorm;
+      precio = yaAbonado >= precioBonif ? precioBonif : getPrecioConVencLocal(n);
     } else {
       precio = getPrecioConVencLocal(n);
     }
