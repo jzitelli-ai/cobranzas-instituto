@@ -463,10 +463,11 @@ app.post('/api/cobro', async (req,res) => {
       if(nuevoEstado==='pagada') conceptos.push(label);
       else conceptos.push(`${label} — pago parcial $${nuevoMonto.toLocaleString('es-AR')}, saldo pendiente $${(precio-nuevoMonto).toLocaleString('es-AR')}`);
     }
-    // Si sobra saldo aplicar automáticamente a siguientes cuotas
+    // Si sobra saldo después de cubrir las cuotas que el usuario seleccionó a mano,
+    // NO aplicarlo automáticamente a otra cuota (eso ignoraría la selección manual).
+    // Queda como saldo a favor del alumno.
     if(restante > 0){
-      const {conceptos: conceptosExtra} = await aplicarPagoYCrearCuotas(alumnoId, alumno, restante, fechaPago, vencimientos);
-      conceptos.push(...conceptosExtra);
+      conceptos.push(`Saldo a favor: $${restante.toLocaleString('es-AR')}`);
     }
   } else {
     // Sin selección manual — aplicar lógica automática cronológica
@@ -476,6 +477,8 @@ app.post('/api/cobro', async (req,res) => {
 
   const r=await q('INSERT INTO pagos (fecha,alumno_id,alumno_nombre,curso,monto,concepto,medio,origen) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
     [fechaCompleta, alumnoId, alumno.nombre, alumno.curso, monto, conceptos.join(', '), medio, origen]);
+  // Dejar saldo_favor consistente con lo realmente pagado vs. lo realmente aplicado a cuotas
+  await recalcularSaldoFavor(alumnoId);
   res.json({ok:true,pagoId:r[0].id,fecha:fechaCompleta,conceptos});
 });
 
