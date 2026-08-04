@@ -2807,15 +2807,10 @@ async function abrirDetalleAlumno(id){
       var mesIdx = MESES_IDX_CC[n-1];
       if (mesIdx > hoyMesCC) return;
 
-      // Buscar la fecha real del primer pago asociado a esta cuota (más confiable que fecha_pago de la cuota)
-      var pagoCuotaRef = pagosAlumno.find(function(p){
-        var conc = (p.concepto||'').toLowerCase();
-        return new RegExp('cuota\\s*'+n+'[\\s,\\(]').test(conc) || conc.includes('cuota '+n+' ') || conc.includes('cuota '+n+',');
-      });
-      var fechaRefPrecio = pagoCuotaRef ? String(pagoCuotaRef.fecha).split(' ')[0] : (fechaPago || null);
-
-      // Precio usando fecha real del pago como referencia
-      var precioCuota = getPrecioConVencFrontend(a, n, _vencimientosFrontend, fechaRefPrecio);
+      // Precio de la cuota: si ya está pagada, usar el monto real que definió el backend
+      // (ya resuelto con la lógica correcta de bonificación). Si sigue pendiente/parcial,
+      // estimar con la fecha de hoy — todavía no está definido a qué precio se va a completar.
+      var precioCuota = (e === 'pagada' && montoC > 0) ? montoC : getPrecioConVencFrontend(a, n, _vencimientosFrontend);
       var vencTxt = _vencimientosFrontend && _vencimientosFrontend[n-1] ? _vencimientosFrontend[n-1].slice(0,5) : '';
       saldo += precioCuota;
 
