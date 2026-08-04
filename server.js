@@ -391,9 +391,21 @@ app.get('/api/cuotas/:alumnoId', async (req,res) => { res.json(await q('SELECT *
 app.get('/api/pagos', async (req,res) => { res.json(await q('SELECT * FROM pagos ORDER BY id DESC')); });
 app.get('/api/exportar/pagos', async (req,res) => { res.json(await q('SELECT * FROM pagos ORDER BY id')); });
 
+// Recalcula saldo_favor real de un alumno a partir de sus pagos y cuotas actuales
+async function recalcularSaldoFavor(alumnoId) {
+  const totalPagado = parseFloat((await q1('SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE alumno_id=$1',[alumnoId]))?.t||0);
+  const cuotas = await q('SELECT * FROM cuotas WHERE alumno_id=$1',[alumnoId]);
+  const totalAplicado = cuotas.reduce((s,c)=>s+parseFloat(c.monto_pagado||0),0);
+  const saldo = Math.max(0, totalPagado - totalAplicado);
+  await q('UPDATE alumnos SET saldo_favor=$1 WHERE id=$2', [saldo, alumnoId]);
+  return saldo;
+}
+
 app.put('/api/pagos/:id', async (req,res) => {
   const {monto,concepto,medio,fecha}=req.body;
+  const pago=await q1('SELECT * FROM pagos WHERE id=$1',[req.params.id]);
   await q('UPDATE pagos SET monto=$1,concepto=$2,medio=$3,fecha=$4 WHERE id=$5',[monto,concepto,medio,fecha,req.params.id]);
+  if(pago) await recalcularSaldoFavor(pago.alumno_id);
   res.json({ok:true});
 });
 
@@ -405,7 +417,9 @@ app.delete('/api/pagos/:id', async (req,res) => {
     const matches=(pago.concepto||'').match(/Cuota (\d+)/g)||[];
     for(const m of matches) { const n=parseInt(m.replace('Cuota ','')); await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE alumno_id=$4 AND numero_cuota=$5',['pendiente','',0,pago.alumno_id,n]); }
   }
-  await q('DELETE FROM pagos WHERE id=$1',[req.params.id]); res.json({ok:true});
+  await q('DELETE FROM pagos WHERE id=$1',[req.params.id]);
+  await recalcularSaldoFavor(pago.alumno_id);
+  res.json({ok:true});
 });
 
 app.post('/api/cobro', async (req,res) => {
@@ -652,9 +666,9 @@ async function aplicarPagoYCrearCuotas(alumnoId, alumno, monto, fechaPago, venci
     }
   }
   
-  // Saldo a favor si sobra
+  // Saldo a favor: siempre reflejar el valor real (incluso si quedó en 0)
+  await q('UPDATE alumnos SET saldo_favor=$1 WHERE id=$2', [restante, alumnoId]);
   if (restante > 0) {
-    await q('UPDATE alumnos SET saldo_favor=$1 WHERE id=$2', [restante, alumnoId]);
     conceptos.push(`Saldo a favor: $${restante.toLocaleString('es-AR')}`);
   }
   
@@ -1637,6 +1651,25 @@ app.get('/api/aplicar-saldos-pendientes', async (req,res) => {
   }
 
   res.json({ ok: true, corregidos, detalle });
+});
+
+// Recalcula saldo_favor de TODOS los alumnos activos a partir de sus pagos/cuotas reales.
+// No inventa saldo nuevo: solo corrige la columna cacheada para que refleje totalPagado - totalAplicado.
+app.get('/api/recalcular-saldos-favor', async (req,res) => {
+  try {
+    const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
+    const cambios = [];
+    for (const a of alumnos) {
+      const anterior = parseFloat(a.saldo_favor) || 0;
+      const nuevo = await recalcularSaldoFavor(a.id);
+      if (Math.abs(nuevo - anterior) >= 1) {
+        cambios.push({ id: a.id, nombre: a.nombre, curso: a.curso, saldoAnterior: anterior, saldoNuevo: nuevo });
+      }
+    }
+    res.json({ ok: true, revisados: alumnos.length, corregidos: cambios.length, cambios });
+  } catch(e) {
+    res.json({ ok: false, error: e.message });
+  }
 });
 
 // Verificar qué alumnos tienen saldo sin aplicar (pagos sin cuota asignada)
