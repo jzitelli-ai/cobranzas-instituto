@@ -2665,70 +2665,6 @@ async function abrirDetalleAlumno(id){
   var msg=encodeURIComponent('Hola! Le recordamos que tiene las siguientes cuotas pendientes en el Instituto Cultural Cerrillos:\n'+(lineasPend2.length?lineasPend2.join('\n'):'cuotas pendientes')+'\nTotal: '+pesos(a.deudaReal)+'\nPor favor comuniquese para regularizar su situacion. Gracias!');
   var waLink=tel?'https://wa.me/549'+tel+'?text='+msg:'';
 
-  var cuotasHtml='<table style="width:100%;font-size:12.5px;border-collapse:collapse"><thead><tr>'+
-    '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Cuota</th>'+
-    '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Mes</th>'+
-    '<th style="text-align:center;padding:6px 10px;background:var(--gl);color:var(--m)">Estado</th>'+
-    '<th style="text-align:right;padding:6px 10px;background:var(--gl);color:var(--m)">Monto</th>'+
-    '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Vence</th>'+
-    '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Fecha de pago</th>'+
-    '<th style="padding:6px 10px;background:var(--gl)"></th>'+
-    '</tr></thead><tbody>';
-
-  CUOTAS.forEach(function(c){
-    var e=est[c.num]||est[String(c.num)]||'futura';
-    // Buscar fecha — puede venir como numero de cuota entero o string
-    var _fk = c.num; var _fs = String(c.num);
-    var fecha = fechas.hasOwnProperty(_fk) ? fechas[_fk] : (fechas.hasOwnProperty(_fs) ? fechas[_fs] : '');
-    var monto = montos.hasOwnProperty(_fk) ? montos[_fk] : (montos.hasOwnProperty(_fs) ? montos[_fs] : 0);
-    var fechaCorta = fecha && fecha !== '' ? String(fecha).slice(0,10) : '—';
-    var estadoHtml='',bg='var(--gl)',montoTxt='—',accion='';
-    if(e==='futura'){bg='';estadoHtml='<span style="color:var(--m)">No generada</span>';montoTxt='—';}
-    else if(e==='pagada'){
-      bg='var(--sl)';estadoHtml='<span style="color:var(--s);font-weight:600">✓ Pagada</span>';
-      montoTxt=monto?pesos(monto):'—';
-      accion='<button class="btn bob" style="padding:2px 7px;font-size:10px" onclick="event.stopPropagation();abrirReimputar('+a.id+','+c.num+')">Reimputar</button>';
-    }
-    else if(e==='compensada'){bg='#FFF3E0';estadoHtml='<span style="color:#E65100;font-weight:600">↔ Compensada</span>';montoTxt='—';}
-    else if(e==='gratis'){bg='#c8f7c5';estadoHtml='<span style="color:#1a7a1a;font-weight:600">★ Gratis</span>';montoTxt='$0';}
-    else{
-      bg='var(--dl)';
-      var precioCuota=getPrecioConVencFrontend(a, c.num, _vencimientosFrontend);
-      // Verificar si hay pago parcial (monto_pagado > 0 pero cuota pendiente)
-      if(monto && monto > 0 && monto < precioCuota){
-        var saldoRest=precioCuota-monto;
-        estadoHtml='<span style="color:var(--w);font-weight:600">⚠ Pago parcial</span>';
-        montoTxt='<span style="color:var(--w)">'+pesos(monto)+'</span><span style="color:var(--d);font-size:10px"> (falta '+pesos(saldoRest)+')</span>';
-        fechaCorta=fecha?String(fecha).slice(0,10):'—';
-        bg='var(--wl)';
-      } else {
-        montoTxt=pesos(precioCuota); fechaCorta='—';
-      }
-      accion='<button class="btn bob" style="padding:2px 7px;font-size:10px;background:#FF9800;color:#fff;border-color:#FF9800" onclick="event.stopPropagation();abrirBonificar('+a.id+','+c.num+','+precioCuota+')">Bonificar</button>';
-    }
-    var vencTxt = '—';
-    if (_vencimientosFrontend && _vencimientosFrontend[c.num-1]) {
-      var vencFull = _vencimientosFrontend[c.num-1]; // dd/mm/yyyy
-      vencTxt = vencFull.slice(0,5); // solo dd/mm
-      // Si ya venció → mostrar en rojo
-      var partsV = vencFull.split('/');
-      var dVenc = new Date(parseInt(partsV[2]), parseInt(partsV[1])-1, parseInt(partsV[0]), 23,59,59);
-      if (e !== 'futura' && e !== 'pagada' && e !== 'gratis' && new Date() > dVenc) {
-        vencTxt = '<span style="color:var(--d);font-weight:600">'+vencTxt+'</span>';
-      }
-    }
-    cuotasHtml+='<tr style="background:'+bg+'">'+
-      '<td style="padding:6px 10px;font-weight:600">'+c.num+'</td>'+
-      '<td style="padding:6px 10px">'+c.mes+' 2026</td>'+
-      '<td style="padding:6px 10px;text-align:center">'+estadoHtml+'</td>'+
-      '<td style="padding:6px 10px;text-align:right;font-weight:600">'+montoTxt+'</td>'+
-      '<td style="padding:6px 10px;color:var(--m);font-size:11px">'+vencTxt+'</td>'+
-      '<td style="padding:6px 10px;color:var(--m)">'+fechaCorta+'</td>'+
-      '<td style="padding:6px 10px">'+accion+'</td>'+
-    '</tr>';
-  });
-  cuotasHtml+='</tbody></table>';
-
   // Cargar pagos del alumno para cuenta corriente
   var pagosAlumno = await api('GET', '/api/pagos?alumnoId=' + id) || [];
   // Filtrar pagos de este alumno del historial
@@ -2746,7 +2682,7 @@ async function abrirDetalleAlumno(id){
     });
 
   var cuentaCorriente = '';
-  if (pagosAlumno.length > 0) {
+  {
     var mesesNombreCC = ['Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
     var MESES_IDX_CC = [2,3,4,5,6,7,8,9,10,11];
     var hoyMesCC = new Date().getMonth();
@@ -2859,6 +2795,7 @@ async function abrirDetalleAlumno(id){
         '<th style="text-align:right;padding:5px 8px;background:var(--gl);color:var(--m)">Importe</th>'+
         '<th style="text-align:right;padding:5px 8px;background:var(--gl);color:var(--m)">Pagos</th>'+
         '<th style="text-align:right;padding:5px 8px;background:var(--gl);color:var(--m)">Saldo</th>'+
+        '<th style="text-align:center;padding:5px 8px;background:var(--gl);color:var(--m)">Acción</th>'+
       '</tr></thead><tbody>';
 
     var saldo = 0;
@@ -2882,6 +2819,14 @@ async function abrirDetalleAlumno(id){
       var vencTxt = _vencimientosFrontend && _vencimientosFrontend[n-1] ? _vencimientosFrontend[n-1].slice(0,5) : '';
       saldo += precioCuota;
 
+      // Acción disponible según estado de la cuota
+      var accionCC='';
+      if (e==='pagada') {
+        accionCC='<button class="btn bob" style="padding:2px 7px;font-size:10px" onclick="event.stopPropagation();abrirReimputar('+a.id+','+n+')">Reimputar</button>';
+      } else if (e!=='futura' && e!=='gratis' && e!=='compensada') {
+        accionCC='<button class="btn bob" style="padding:2px 7px;font-size:10px;background:#FF9800;color:#fff;border-color:#FF9800" onclick="event.stopPropagation();abrirBonificar('+a.id+','+n+','+precioCuota+')">Bonificar</button>';
+      }
+
       // Fila encabezado de cuota
       cuentaCorriente +=
         '<tr style="background:#f5f5f5;border-top:2px solid var(--b)">'+
@@ -2891,6 +2836,7 @@ async function abrirDetalleAlumno(id){
           '<td style="padding:5px 8px;text-align:right;font-weight:600">'+pesos(precioCuota)+'</td>'+
           '<td></td>'+
           '<td style="padding:5px 8px;text-align:right;font-weight:700;color:'+(saldo>0?'var(--d)':'var(--s)')+'">'+pesos(saldo)+'</td>'+
+          '<td style="padding:5px 8px;text-align:center">'+accionCC+'</td>'+
         '</tr>';
 
       // Filas de pagos/compensaciones para esta cuota
@@ -2906,6 +2852,7 @@ async function abrirDetalleAlumno(id){
               '<td></td>'+
               '<td style="padding:4px 8px;text-align:right;color:#1565C0">'+pesos(pg.monto)+'</td>'+
               '<td style="padding:4px 8px;text-align:right;font-weight:700;color:'+(saldo>0?'var(--d)':saldo<0?'var(--s)':'var(--m)')+'">'+pesos(Math.abs(saldo))+(saldo<0?' ❖':'')+'</td>'+
+              '<td></td>'+
             '</tr>';
           return;
         }
@@ -2919,6 +2866,7 @@ async function abrirDetalleAlumno(id){
             '<td></td>'+
             '<td style="padding:4px 8px;text-align:right;color:var(--s)">'+pesos(pg.monto)+'</td>'+
             '<td style="padding:4px 8px;text-align:right;font-weight:700;color:'+colorSaldo+'">'+pesos(Math.abs(saldo))+(saldo<0?' ❖':'')+'</td>'+
+            '<td></td>'+
           '</tr>';
       });
 
@@ -2932,9 +2880,9 @@ async function abrirDetalleAlumno(id){
       '</tbody><tfoot>'+
       (saldoPendiente > 100 ?
         '<tr style="background:var(--wl)">'+
-          '<td colspan="4" style="padding:6px 8px;font-weight:700;color:var(--w)">Saldo sin aplicar</td>'+
+          '<td colspan="5" style="padding:6px 8px;font-weight:700;color:var(--w)">Saldo sin aplicar</td>'+
           '<td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--w)">'+pesos(saldoPendiente)+'</td>'+
-          '<td style="padding:4px 8px;text-align:right"><button onclick="aplicarSaldoAlumno('+a.id+','+saldoPendiente+')" style="background:var(--w);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">Aplicar</button></td>'+
+          '<td style="padding:4px 8px;text-align:center"><button onclick="aplicarSaldoAlumno('+a.id+','+saldoPendiente+')" style="background:var(--w);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">Aplicar</button></td>'+
         '</tr>' : '')+
       '</tfoot></table></div>';
   }
@@ -2976,7 +2924,6 @@ async function abrirDetalleAlumno(id){
         '<button class="btn" style="font-size:10px;padding:3px 8px;background:#FF9800;color:#fff;border-color:#FF9800" onclick="event.stopPropagation();bonificarMora('+a.id+','+moraDet+')">Bonificar mora</button>'+
       '</div>';})()
     :'')+
-    cuotasHtml +
     cuentaCorriente;
   abrirM('m-det-alumno');
 }
