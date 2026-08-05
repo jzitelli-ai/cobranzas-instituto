@@ -417,6 +417,11 @@ app.patch('/api/alumnos/:id/alta', async (req,res) => { await q('UPDATE alumnos 
 app.get('/api/cuotas/:alumnoId', async (req,res) => { res.json(await q('SELECT * FROM cuotas WHERE alumno_id=$1 ORDER BY numero_cuota',[req.params.alumnoId])); });
 
 app.get('/api/pagos', async (req,res) => { res.json(await q('SELECT * FROM pagos ORDER BY id DESC')); });
+// Solo lectura — para inspeccionar el concepto real de los pagos de un alumno puntual
+app.get('/api/alumno/:id/pagos-raw', async (req,res) => {
+  const pagos = await q('SELECT id,fecha,monto,concepto,medio,origen FROM pagos WHERE alumno_id=$1 ORDER BY fecha,id', [req.params.id]);
+  res.json({ ok:true, pagos });
+});
 app.get('/api/exportar/pagos', async (req,res) => { res.json(await q('SELECT * FROM pagos ORDER BY id')); });
 
 // Recalcula saldo_favor real de un alumno a partir de sus pagos y cuotas actuales
