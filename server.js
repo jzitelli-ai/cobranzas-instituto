@@ -476,10 +476,11 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
         montoEsta = parseFloat(parcialMatch[1].replace(/\./g,'').replace(',','.')) || restante;
         montoEsta = Math.min(montoEsta, restante);
       } else {
-        // Siempre topear al precio real de la cuota — cualquier excedente pasa a la
-        // cuota siguiente como compensación, sea esta la única cuota mencionada o no.
+        // Topear contra lo que a esta cuota YA le falta — no contra su precio entero —
+        // para no ignorar lo que ya le asignaron otros pagos anteriores en el historial.
         const precioRef = await getPrecioConVenc(alumno, num, fechaP, vencimientos);
-        montoEsta = Math.min(precioRef, restante);
+        const disponible = Math.max(0, precioRef - acumulado[num].monto);
+        montoEsta = Math.min(disponible, restante);
       }
       acumulado[num].monto += montoEsta;
       if (!acumulado[num].fecha) acumulado[num].fecha = fechaP;
@@ -1145,6 +1146,9 @@ app.get('/api/reporte', async (req,res) => {
       let precio;
       if(n===10&&c10g){
         precio=0;
+      } else if(MESES_TODO_EL_MES.includes(n)){
+        // Meses "todo el mes bonificado" — precio con descuento siempre, sin mirar fecha
+        precio=parseFloat(a.precio_bonificado);
       } else {
         // Usar fecha de pago de la cuota si existe; si no, comparar hoy con el vencimiento
         const fpCuota=fechasPago[n];
