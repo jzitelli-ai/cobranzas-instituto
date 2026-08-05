@@ -2822,29 +2822,18 @@ async function abrirDetalleAlumno(id){
 
       // Filas de pagos/compensaciones para esta cuota
       pagosN.forEach(function(pg) {
-        // Compensación: solo visual, no afecta el saldo acumulado
-        if (pg.tipo === 'compensacion') {
-          cuentaCorriente +=
-            '<tr style="border-bottom:1px solid var(--b)">'+
-              '<td></td>'+
-              '<td style="padding:4px 8px;font-size:11px;color:#1565C0">'+pg.origen+'</td>'+
-              '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+pg.fecha+'</td>'+
-              '<td></td>'+
-              '<td style="padding:4px 8px;text-align:right;color:#1565C0">'+pesos(pg.monto)+'</td>'+
-              '<td style="padding:4px 8px;text-align:right;font-weight:700;color:'+(saldo>0?'var(--d)':saldo<0?'var(--s)':'var(--m)')+'">'+pesos(Math.abs(saldo))+(saldo<0?' ❖':'')+'</td>'+
-              '<td></td>'+
-            '</tr>';
-          return;
-        }
+        // Compensación: es plata real que ya se cobró antes y ahora se aplica a esta cuota —
+        // tiene que restar del saldo igual que un pago, o queda como si nunca se hubiera usado.
         saldo -= pg.monto;
         var colorSaldo = saldo > 0 ? 'var(--d)' : saldo < 0 ? 'var(--s)' : 'var(--m)';
+        var colorOrigen = pg.tipo === 'compensacion' ? '#1565C0' : 'var(--m)';
         cuentaCorriente +=
           '<tr style="border-bottom:1px solid var(--b)">'+
             '<td></td>'+
-            '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+pg.origen+'</td>'+
+            '<td style="padding:4px 8px;font-size:11px;color:'+colorOrigen+'">'+pg.origen+'</td>'+
             '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+pg.fecha+'</td>'+
             '<td></td>'+
-            '<td style="padding:4px 8px;text-align:right;color:var(--s)">'+pesos(pg.monto)+'</td>'+
+            '<td style="padding:4px 8px;text-align:right;color:'+(pg.tipo==='compensacion'?colorOrigen:'var(--s)')+'">'+pesos(pg.monto)+'</td>'+
             '<td style="padding:4px 8px;text-align:right;font-weight:700;color:'+colorSaldo+'">'+pesos(Math.abs(saldo))+(saldo<0?' ❖':'')+'</td>'+
             '<td></td>'+
           '</tr>';
