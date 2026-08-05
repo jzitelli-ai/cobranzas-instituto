@@ -151,6 +151,34 @@ async function inicializarDB() {
     ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS precio_especial BOOLEAN DEFAULT FALSE;
   `);
   await q("ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS saldo_favor NUMERIC DEFAULT 0");
+
+  // Trigger de consistencia: cada vez que se inserta o actualiza una fila en "cuotas",
+  // recalcula automáticamente saldo_favor del alumno a partir de sus datos reales
+  // (total pagado en "pagos" menos lo efectivamente aplicado a cuotas). Así, sin importar
+  // qué endpoint toque "cuotas" — actual o uno que se agregue en el futuro — saldo_favor
+  // nunca puede quedar desactualizado, sin tener que acordarse de llamarlo a mano en cada lugar.
+  await q(`
+    CREATE OR REPLACE FUNCTION fn_recalcular_saldo_favor() RETURNS TRIGGER AS $$
+    DECLARE
+      v_alumno_id INTEGER;
+      v_total_pagado NUMERIC;
+      v_total_aplicado NUMERIC;
+    BEGIN
+      v_alumno_id := COALESCE(NEW.alumno_id, OLD.alumno_id);
+      SELECT COALESCE(SUM(monto),0) INTO v_total_pagado FROM pagos WHERE alumno_id = v_alumno_id;
+      SELECT COALESCE(SUM(monto_pagado),0) INTO v_total_aplicado FROM cuotas
+        WHERE alumno_id = v_alumno_id AND (estado='pagada' OR (estado='pendiente' AND monto_pagado>0));
+      UPDATE alumnos SET saldo_favor = GREATEST(0, v_total_pagado - v_total_aplicado) WHERE id = v_alumno_id;
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS trg_recalcular_saldo_favor ON cuotas;
+    CREATE TRIGGER trg_recalcular_saldo_favor
+      AFTER INSERT OR UPDATE ON cuotas
+      FOR EACH ROW EXECUTE FUNCTION fn_recalcular_saldo_favor();
+  `);
+
   const iniciado = await q1("SELECT valor FROM config WHERE clave='iniciado'");
   if (!iniciado) {
     if (!DEMO_MODE) await cargarDatosIniciales();
@@ -1673,6 +1701,42 @@ app.get('/api/recalcular-saldos-favor', async (req,res) => {
     res.json({ ok: true, revisados: alumnos.length, corregidos: cambios.length, cambios });
   } catch(e) {
     res.json({ ok: false, error: e.message });
+  }
+});
+
+// Auditoría general: para cada alumno, compara la plata realmente recibida (tabla pagos)
+// contra lo que el sistema tiene asignado a cuotas + saldo a favor. Si no cierra, hay una
+// cuota marcada como pagada sin respaldo real (o plata real que no quedó reflejada en ningún lado).
+app.get('/api/auditoria/consistencia', async (req,res) => {
+  try {
+    const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
+    const problemas = [];
+    for (const al of alumnos) {
+      const totalPagado = parseFloat((await q1('SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE alumno_id=$1',[al.id]))?.t || 0);
+      const cuotas = await q('SELECT * FROM cuotas WHERE alumno_id=$1', [al.id]);
+      let totalAsignado = 0;
+      const cuotasPagadaSinPlata = [];
+      cuotas.forEach(c => {
+        const mp = parseFloat(c.monto_pagado) || 0;
+        if (c.estado === 'pagada' || (c.estado === 'pendiente' && mp > 0)) totalAsignado += mp;
+        if (c.estado === 'pagada' && mp <= 0) cuotasPagadaSinPlata.push(c.numero_cuota);
+      });
+      const saldoFavor = parseFloat(al.saldo_favor) || 0;
+      const diferencia = totalPagado - (totalAsignado + saldoFavor);
+      if (Math.abs(diferencia) >= 100 || cuotasPagadaSinPlata.length > 0) {
+        problemas.push({
+          id: al.id, nombre: al.nombre, curso: al.curso,
+          totalPagado, totalAsignado, saldoFavor,
+          diferencia, // > 0: hay plata real sin reflejar en ninguna cuota ni saldo a favor
+                      // < 0: hay cuotas marcadas pagadas con más plata "asignada" que la recibida (el caso grave)
+          cuotasPagadaSinPlata // cuotas 'pagada' con monto_pagado = 0 — señal más directa del problema
+        });
+      }
+    }
+    problemas.sort((a,b)=>Math.abs(b.diferencia)-Math.abs(a.diferencia));
+    res.json({ ok:true, revisados: alumnos.length, conProblemas: problemas.length, problemas });
+  } catch(e) {
+    res.json({ ok:false, error: e.message });
   }
 });
 
