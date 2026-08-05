@@ -2692,7 +2692,8 @@ async function abrirDetalleAlumno(id){
     // ---- Distribuir pagos por cuota parseando conceptos ----
     // Estructura: { numCuota: [ {monto, fecha, origen, tipo} ] }
     var distribucion = {};
-    for (var ni=1; ni<=10; ni++) distribucion[ni] = [];
+    var acumuladoPorCuota = {};
+    for (var ni=1; ni<=10; ni++) { distribucion[ni] = []; acumuladoPorCuota[ni] = 0; }
 
     pagosAlumno.forEach(function(p) {
       var conc = p.concepto || '';
@@ -2717,12 +2718,15 @@ async function abrirDetalleAlumno(id){
       if (cuotasEnConc.length === 0) {
         // Bonificación u otro — intentar aplicar a la primera cuota pendiente mencionada
         distribucion[1].push({monto:montoTotal, fecha:fechaP, origen:origen, tipo:'otro'});
+        acumuladoPorCuota[1] += montoTotal;
         return;
       }
 
       // Distribuir el monto entre las cuotas mencionadas
-      // Lógica: topear cada cuota a su precio real; el excedente pasa como compensación
-      // a la cuota siguiente, sea la única cuota mencionada o no.
+      // Lógica: topear cada cuota contra lo que YA le falta (precio menos lo que otros pagos
+      // anteriores ya le asignaron) — no contra su precio entero — así dos pagos que mencionen
+      // la misma cuota no la sobrecargan sin límite. El excedente pasa como compensación a la
+      // cuota siguiente, sea la única cuota mencionada o no.
       var restante = montoTotal;
       cuotasEnConc.forEach(function(num, idx) {
         if (restante <= 0) return;
@@ -2735,9 +2739,11 @@ async function abrirDetalleAlumno(id){
           montoEsta = Math.min(montoEsta, restante);
         } else {
           var precioRef2 = getPrecioConVencFrontend(a, num, _vencimientosFrontend, fechaP);
-          montoEsta = Math.min(precioRef2, restante);
+          var disponible = Math.max(0, precioRef2 - acumuladoPorCuota[num]);
+          montoEsta = Math.min(disponible, restante);
         }
         distribucion[num].push({monto:montoEsta, fecha:fechaP, origen:origen, tipo:'pago'});
+        acumuladoPorCuota[num] += montoEsta;
         restante -= montoEsta;
       });
 
@@ -2747,6 +2753,7 @@ async function abrirDetalleAlumno(id){
         var sigCuota2 = ultimaCuota + 1;
         if (sigCuota2 <= 10) {
           distribucion[sigCuota2].push({monto:restante, fecha:fechaP, origen:'COMPENSACIÓN MES ANT.', tipo:'compensacion'});
+          acumuladoPorCuota[sigCuota2] += restante;
         }
       }
     });
