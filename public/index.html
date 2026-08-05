@@ -2776,14 +2776,13 @@ async function abrirDetalleAlumno(id){
     });
 
 
-    // Calcular saldo sin aplicar
+    // Calcular saldo sin aplicar — usando la MISMA fuente que arma la tabla (distribucion),
+    // no el estado guardado en cuotas, para que nunca contradiga lo que se ve en pantalla.
     var totalIngresos2 = 0;
     pagosAlumno.forEach(function(p){ totalIngresos2 += parseFloat(p.monto)||0; });
     var totalAplicado2 = 0;
-    CUOTAS.forEach(function(c){
-      var n=c.num; var e=est[n]||est[String(n)]||'futura';
-      var monto=montos[n]||montos[String(n)]||0;
-      if(e==='pagada'||e==='compensada'||(e==='pendiente'&&monto>0)) totalAplicado2+=parseFloat(monto)||0;
+    Object.keys(distribucion).forEach(function(k){
+      (distribucion[k]||[]).forEach(function(pg){ totalAplicado2 += parseFloat(pg.monto)||0; });
     });
     var saldoPendiente = totalIngresos2 - totalAplicado2;
 
