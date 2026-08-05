@@ -2730,17 +2730,22 @@ async function abrirDetalleAlumno(id){
       // Lógica: topear cada cuota contra lo que YA le falta (precio menos lo que otros pagos
       // anteriores ya le asignaron) — no contra su precio entero — así dos pagos que mencionen
       // la misma cuota no la sobrecargan sin límite. El excedente pasa como compensación a la
-      // cuota siguiente, sea la única cuota mencionada o no.
+      // cuota siguiente, sea la única cuota mencionada o no — salvo que el texto del pago
+      // declare que la última cuota mencionada queda incompleta ("pago parcial $X"), en cuyo
+      // caso lo que sobra se queda ahí mismo en vez de saltar a la próxima.
       var restante = montoTotal;
-      cuotasEnConc.forEach(function(num, idx) {
-        if (restante <= 0) return;
-        var eUltima = idx === cuotasEnConc.length - 1;
+      var ultimaQuedoIncompleta = false;
+      for (var idxC=0; idxC<cuotasEnConc.length; idxC++) {
+        if (restante <= 0) break;
+        var num = cuotasEnConc[idxC];
+        var eUltima = idxC === cuotasEnConc.length - 1;
         var parcialMatch = eUltima ? conc.match(/pago parcial [$]?([0-9.,]+)/i) : null;
         var montoEsta;
 
         if (parcialMatch) {
           montoEsta = parseFloat(parcialMatch[1].replace(/\./g,'').replace(',','.')) || restante;
           montoEsta = Math.min(montoEsta, restante);
+          if (montoEsta < restante) ultimaQuedoIncompleta = true;
         } else {
           var precioRef2 = getPrecioConVencFrontend(a, num, _vencimientosFrontend, fechaP);
           var disponible = Math.max(0, precioRef2 - acumuladoPorCuota[num]);
@@ -2749,7 +2754,16 @@ async function abrirDetalleAlumno(id){
         distribucion[num].push({monto:montoEsta, fecha:fechaP, origen:origen, tipo:'pago'});
         acumuladoPorCuota[num] += montoEsta;
         restante -= montoEsta;
-      });
+      }
+
+      if (ultimaQuedoIncompleta && restante > 0.5) {
+        // No generar compensación: la última cuota mencionada quedó explícitamente incompleta,
+        // así que el sobrante se suma ahí mismo.
+        var ultimaCuotaInc = cuotasEnConc[cuotasEnConc.length-1];
+        distribucion[ultimaCuotaInc].push({monto:restante, fecha:fechaP, origen:origen, tipo:'pago'});
+        acumuladoPorCuota[ultimaCuotaInc] += restante;
+        restante = 0;
+      }
 
       // Si sobró algo → compensación en cuota siguiente
       if (restante > 0.5) {
