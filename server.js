@@ -588,6 +588,8 @@ async function aplicarPagoYCrearCuotas(alumnoId, alumno, monto, fechaPago, venci
   
   // Precio de una cuota según su vencimiento vs fecha de pago
   const getPrecioConVencLocal = (numCuota) => {
+    // Meses "todo el mes bonificado" — precio con descuento siempre, sin importar la fecha de pago
+    if (MESES_TODO_EL_MES.includes(numCuota)) return parseFloat(alumno.precio_bonificado);
     const venc = vencimientos[numCuota-1];
     if (!venc) return parseFloat(alumno.precio_normal);
     const [dv,mv,yv] = venc.split('/');
