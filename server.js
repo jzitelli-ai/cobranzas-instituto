@@ -470,41 +470,20 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
     for (let idx=0; idx<cuotasEnConc.length; idx++) {
       if (restante <= 0) break;
       const num = cuotasEnConc[idx];
-      const esPrimera = idx===0;
       const eUltima = idx===cuotasEnConc.length-1;
       let montoEsta;
-      if (esPrimera && cuotasEnConc.length>1) {
-        const precioRef = await getPrecioConVenc(alumno, num, fechaP, vencimientos);
-        const exceso = montoTotal - precioRef;
-        if (exceso > 0.5) {
-          acumulado[num].monto += precioRef;
-          if (!acumulado[num].fecha) acumulado[num].fecha = fechaP;
-          restante = 0;
-          const sig = num+1;
-          if (sig<=10) { acumulado[sig].monto += exceso; if(!acumulado[sig].fecha) acumulado[sig].fecha=fechaP; }
-          break;
-        }
-        montoEsta = Math.min(precioRef, restante);
-        acumulado[num].monto += montoEsta;
-        if (!acumulado[num].fecha) acumulado[num].fecha = fechaP;
-        restante -= montoEsta;
-      } else if (eUltima && parcialMatch) {
+      if (eUltima && parcialMatch) {
         montoEsta = parseFloat(parcialMatch[1].replace(/\./g,'').replace(',','.')) || restante;
         montoEsta = Math.min(montoEsta, restante);
-        acumulado[num].monto += montoEsta;
-        if (!acumulado[num].fecha) acumulado[num].fecha = fechaP;
-        restante -= montoEsta;
-      } else if (!eUltima) {
-        const precioRef2 = await getPrecioConVenc(alumno, num, fechaP, vencimientos);
-        montoEsta = Math.min(precioRef2, restante);
-        acumulado[num].monto += montoEsta;
-        if (!acumulado[num].fecha) acumulado[num].fecha = fechaP;
-        restante -= montoEsta;
       } else {
-        acumulado[num].monto += restante;
-        if (!acumulado[num].fecha) acumulado[num].fecha = fechaP;
-        restante = 0;
+        // Siempre topear al precio real de la cuota — cualquier excedente pasa a la
+        // cuota siguiente como compensación, sea esta la única cuota mencionada o no.
+        const precioRef = await getPrecioConVenc(alumno, num, fechaP, vencimientos);
+        montoEsta = Math.min(precioRef, restante);
       }
+      acumulado[num].monto += montoEsta;
+      if (!acumulado[num].fecha) acumulado[num].fecha = fechaP;
+      restante -= montoEsta;
     }
     if (restante > 0.5) {
       const ultima = cuotasEnConc[cuotasEnConc.length-1];
