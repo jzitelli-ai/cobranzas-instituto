@@ -499,7 +499,10 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
     if (acc.monto <= 0) continue;
     const esGratis = n===10 && await cuota10Gratis(alumnoId, alumno);
     const precio = esGratis ? 0 : await getPrecioConVenc(alumno, n, acc.fecha, vencimientos);
-    const montoFinal = precio > 0 ? Math.min(acc.monto, precio) : acc.monto;
+    // No volver a topear acá: el reparto ya topeó cada aporte contra lo que a la cuota le
+    // faltaba en cada paso. Re-topear con un precio recalculado (que puede diferir si el
+    // precio de la cuota cambió según la fecha de cada pago) pierde plata sin motivo.
+    const montoFinal = acc.monto;
     const nuevoEstado = (precio===0 || montoFinal >= precio - 1) ? 'pagada' : 'pendiente';
     const existente = await q1('SELECT id FROM cuotas WHERE alumno_id=$1 AND numero_cuota=$2', [alumnoId, n]);
     if (existente) {
