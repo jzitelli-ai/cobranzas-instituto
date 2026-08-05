@@ -1223,7 +1223,9 @@ async function cargarVencimientosFrontend() {
 }
 
 function getPrecioConVencFrontend(alumno, numCuota, vencimientos, fechaRef) {
-  // Cuota 10 gratuita — manejada aparte
+  // Meses "todo el mes bonificado" — el precio con descuento aplica siempre, sin importar
+  // cuándo se pague (misma regla que el backend en getPrecioConVenc).
+  if (MESES_TODO_EL_MES.indexOf(numCuota) >= 0) return parseFloat(alumno.precio_bonificado)||0;
   if (!vencimientos) return parseFloat(alumno.precio_normal)||0;
   var venc = vencimientos[numCuota-1];
   if (!venc) return parseFloat(alumno.precio_normal)||0;
@@ -2802,23 +2804,32 @@ async function abrirDetalleAlumno(id){
     CUOTAS.forEach(function(c) {
       var n = c.num;
       var e = est[n] || est[String(n)] || 'futura';
-      var montoC = parseFloat(montos[n] || montos[String(n)] || 0);
-      var fechaPago = fechas[n] || fechas[String(n)] || '';
       var mesIdx = MESES_IDX_CC[n-1];
       if (mesIdx > hoyMesCC) return;
 
-      // Precio de la cuota: si ya está pagada, usar el monto real que definió el backend
-      // (ya resuelto con la lógica correcta de bonificación). Si sigue pendiente/parcial,
-      // estimar con la fecha de hoy — todavía no está definido a qué precio se va a completar.
-      var precioCuota = (e === 'pagada' && montoC > 0) ? montoC : getPrecioConVencFrontend(a, n, _vencimientosFrontend);
+      // Pagos/compensaciones ya asignados a esta cuota en la cuenta corriente
+      var pagosN = distribucion[n] || [];
+      var montoAsignado = pagosN.reduce(function(s,pg){ return s + (parseFloat(pg.monto)||0); }, 0);
+      var pagoReal = pagosN.find(function(pg){ return pg.tipo === 'pago'; });
+      var fechaRefPago = pagoReal ? pagoReal.fecha : (pagosN[0] ? pagosN[0].fecha : null);
+
+      // Precio de la cuota: si tiene pago(s) reales asociados, usar esa fecha para decidir
+      // bonificado/normal (aunque el estado en la base todavía no diga "pagada").
+      // Sin ningún pago asociado, estimar con la fecha de hoy.
+      var precioCuota = getPrecioConVencFrontend(a, n, _vencimientosFrontend, fechaRefPago);
       var vencTxt = _vencimientosFrontend && _vencimientosFrontend[n-1] ? _vencimientosFrontend[n-1].slice(0,5) : '';
       saldo += precioCuota;
 
-      // Acción disponible según estado de la cuota
+      // Acción: se basa en si ESTA cuota quedó cubierta en la cuenta corriente que se ve acá,
+      // para que el botón nunca contradiga lo que muestra la tabla (ej: no mostrar "Reimputar"
+      // en una cuota que en esta tabla figura sin pagos y en rojo).
+      var cubierta = montoAsignado >= (precioCuota - 1);
       var accionCC='';
-      if (e==='pagada') {
+      if (e==='gratis' || e==='compensada' || e==='futura') {
+        accionCC='';
+      } else if (cubierta) {
         accionCC='<button class="btn bob" style="padding:2px 7px;font-size:10px" onclick="event.stopPropagation();abrirReimputar('+a.id+','+n+')">Reimputar</button>';
-      } else if (e!=='futura' && e!=='gratis' && e!=='compensada') {
+      } else {
         accionCC='<button class="btn bob" style="padding:2px 7px;font-size:10px;background:#FF9800;color:#fff;border-color:#FF9800" onclick="event.stopPropagation();abrirBonificar('+a.id+','+n+','+precioCuota+')">Bonificar</button>';
       }
 
@@ -2835,7 +2846,6 @@ async function abrirDetalleAlumno(id){
         '</tr>';
 
       // Filas de pagos/compensaciones para esta cuota
-      var pagosN = distribucion[n] || [];
       pagosN.forEach(function(pg) {
         // Compensación: solo visual, no afecta el saldo acumulado
         if (pg.tipo === 'compensacion') {
