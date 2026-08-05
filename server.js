@@ -1139,10 +1139,25 @@ app.post('/api/reimputar', async (req,res) => {
   const {alumnoId,cuotaOrigen,cuotaDestino}=req.body;
   const origen=await q1('SELECT * FROM cuotas WHERE alumno_id=$1 AND numero_cuota=$2',[alumnoId,cuotaOrigen]);
   if(!origen||origen.estado!=='pagada') return res.json({ok:false,error:'Cuota origen no está pagada'});
-  await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3,compensada=$4 WHERE alumno_id=$5 AND numero_cuota=$6',['pagada',origen.fecha_pago,origen.monto_pagado,origen.compensada,alumnoId,cuotaDestino]);
-  await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3,compensada=$4 WHERE alumno_id=$5 AND numero_cuota=$6',['pendiente','',0,false,alumnoId,cuotaOrigen]);
-  const pago=await q1('SELECT * FROM pagos WHERE alumno_id=$1 AND concepto LIKE $2 ORDER BY id DESC LIMIT 1',[alumnoId,`%Cuota ${cuotaOrigen}%`]);
+  const destino=await q1('SELECT * FROM cuotas WHERE alumno_id=$1 AND numero_cuota=$2',[alumnoId,cuotaDestino]);
+
+  if (destino && (destino.estado==='pagada' || parseFloat(destino.monto_pagado)>0)) {
+    // La cuota destino ya tiene datos propios (pago real o una reimputación previa):
+    // intercambiar en vez de pisar, para no perder esa información.
+    await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3,compensada=$4 WHERE alumno_id=$5 AND numero_cuota=$6',
+      [origen.estado,origen.fecha_pago,origen.monto_pagado,origen.compensada,alumnoId,cuotaDestino]);
+    await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3,compensada=$4 WHERE alumno_id=$5 AND numero_cuota=$6',
+      [destino.estado,destino.fecha_pago,destino.monto_pagado,destino.compensada,alumnoId,cuotaOrigen]);
+  } else {
+    // Cuota destino vacía: mover el pago tal cual, sin nada que perder
+    await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3,compensada=$4 WHERE alumno_id=$5 AND numero_cuota=$6',['pagada',origen.fecha_pago,origen.monto_pagado,origen.compensada,alumnoId,cuotaDestino]);
+    await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3,compensada=$4 WHERE alumno_id=$5 AND numero_cuota=$6',['pendiente','',0,false,alumnoId,cuotaOrigen]);
+  }
+
+  // Actualizar el texto del pago que menciona la cuota origen para reflejar el nuevo número
+  const pago=await q1('SELECT * FROM pagos WHERE alumno_id=$1 AND concepto ~ $2 ORDER BY id DESC LIMIT 1',[alumnoId,`Cuota ${cuotaOrigen}( |,|\\()`]);
   if(pago){await q('UPDATE pagos SET concepto=$1 WHERE id=$2',[pago.concepto.replace(`Cuota ${cuotaOrigen} (${MESES_NOMBRE_ALL[cuotaOrigen-1]} 2026)`,`Cuota ${cuotaDestino} (${MESES_NOMBRE_ALL[cuotaDestino-1]} 2026)`),pago.id]);}
+  await recalcularSaldoFavor(alumnoId);
   res.json({ok:true});
 });
 
