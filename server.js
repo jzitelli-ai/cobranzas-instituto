@@ -429,6 +429,108 @@ async function recalcularSaldoFavor(alumnoId) {
   return saldo;
 }
 
+// Resincroniza las cuotas de un alumno a partir del CONCEPTO de sus pagos reales —
+// la misma lógica que arma la cuenta corriente en el frontend (cuál cuota menciona cada
+// pago, y el sobrante como compensación en la siguiente). Reemplaza el criterio cronológico
+// "a la cuota pendiente más vieja" que usaba antes, para que cuenta corriente, reporte de
+// deuda y saldo a favor sean siempre el mismo número, calculado de la misma forma.
+async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos) {
+  const pagos = await q('SELECT * FROM pagos WHERE alumno_id=$1', [alumnoId]);
+  if (!pagos.length) return { ok:false, error:'No hay pagos registrados' };
+
+  function parseFechaLocal(f) {
+    const s = normalizarFechaAR(String(f||'').split(' ')[0]);
+    const p = s.split('/');
+    if (p.length===3) return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+    return new Date(0);
+  }
+  pagos.sort((a,b) => parseFechaLocal(a.fecha) - parseFechaLocal(b.fecha) || a.id - b.id);
+
+  const acumulado = {};
+  for (let n=1;n<=10;n++) acumulado[n] = {monto:0, fecha:null};
+
+  for (const pago of pagos) {
+    const conc = pago.concepto || '';
+    const montoTotal = parseFloat(pago.monto) || 0;
+    const fechaP = normalizarFechaAR(String(pago.fecha).split(' ')[0]);
+    const cuotasEnConc = [];
+    const reg = /cuota\s+(\d+)/gi;
+    let m;
+    while ((m = reg.exec(conc)) !== null) {
+      const num = parseInt(m[1]);
+      if (num>=1 && num<=10 && cuotasEnConc.indexOf(num)<0) cuotasEnConc.push(num);
+    }
+    if (cuotasEnConc.length === 0) {
+      acumulado[1].monto += montoTotal;
+      if (!acumulado[1].fecha) acumulado[1].fecha = fechaP;
+      continue;
+    }
+    let restante = montoTotal;
+    const parcialMatch = conc.match(/pago parcial [$]?([0-9.,]+)/i);
+    for (let idx=0; idx<cuotasEnConc.length; idx++) {
+      if (restante <= 0) break;
+      const num = cuotasEnConc[idx];
+      const esPrimera = idx===0;
+      const eUltima = idx===cuotasEnConc.length-1;
+      let montoEsta;
+      if (esPrimera && cuotasEnConc.length>1) {
+        const precioRef = await getPrecioConVenc(alumno, num, fechaP, vencimientos);
+        const exceso = montoTotal - precioRef;
+        if (exceso > 0.5) {
+          acumulado[num].monto += precioRef;
+          if (!acumulado[num].fecha) acumulado[num].fecha = fechaP;
+          restante = 0;
+          const sig = num+1;
+          if (sig<=10) { acumulado[sig].monto += exceso; if(!acumulado[sig].fecha) acumulado[sig].fecha=fechaP; }
+          break;
+        }
+        montoEsta = Math.min(precioRef, restante);
+        acumulado[num].monto += montoEsta;
+        if (!acumulado[num].fecha) acumulado[num].fecha = fechaP;
+        restante -= montoEsta;
+      } else if (eUltima && parcialMatch) {
+        montoEsta = parseFloat(parcialMatch[1].replace(/\./g,'').replace(',','.')) || restante;
+        montoEsta = Math.min(montoEsta, restante);
+        acumulado[num].monto += montoEsta;
+        if (!acumulado[num].fecha) acumulado[num].fecha = fechaP;
+        restante -= montoEsta;
+      } else if (!eUltima) {
+        const precioRef2 = await getPrecioConVenc(alumno, num, fechaP, vencimientos);
+        montoEsta = Math.min(precioRef2, restante);
+        acumulado[num].monto += montoEsta;
+        if (!acumulado[num].fecha) acumulado[num].fecha = fechaP;
+        restante -= montoEsta;
+      } else {
+        acumulado[num].monto += restante;
+        if (!acumulado[num].fecha) acumulado[num].fecha = fechaP;
+        restante = 0;
+      }
+    }
+    if (restante > 0.5) {
+      const ultima = cuotasEnConc[cuotasEnConc.length-1];
+      const sig2 = ultima+1;
+      if (sig2<=10) { acumulado[sig2].monto += restante; if(!acumulado[sig2].fecha) acumulado[sig2].fecha=fechaP; }
+    }
+  }
+
+  await q('UPDATE cuotas SET estado=$1, monto_pagado=0, fecha_pago=$2 WHERE alumno_id=$3', ['pendiente','',alumnoId]);
+  for (let n=1;n<=10;n++) {
+    const acc = acumulado[n];
+    if (acc.monto <= 0) continue;
+    const esGratis = n===10 && await cuota10Gratis(alumnoId, alumno);
+    const precio = esGratis ? 0 : await getPrecioConVenc(alumno, n, acc.fecha, vencimientos);
+    const montoFinal = precio > 0 ? Math.min(acc.monto, precio) : acc.monto;
+    const nuevoEstado = (precio===0 || montoFinal >= precio - 1) ? 'pagada' : 'pendiente';
+    const existente = await q1('SELECT id FROM cuotas WHERE alumno_id=$1 AND numero_cuota=$2', [alumnoId, n]);
+    if (existente) {
+      await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', [nuevoEstado, acc.fecha, montoFinal, existente.id]);
+    } else {
+      await q('INSERT INTO cuotas (alumno_id,numero_cuota,estado,fecha_pago,monto_pagado,compensada) VALUES ($1,$2,$3,$4,$5,false)', [alumnoId, n, nuevoEstado, acc.fecha, montoFinal]);
+    }
+  }
+  return { ok:true, pagosReaplicados: pagos.length };
+}
+
 app.put('/api/pagos/:id', async (req,res) => {
   const {monto,concepto,medio,fecha}=req.body;
   const pago=await q1('SELECT * FROM pagos WHERE id=$1',[req.params.id]);
@@ -1548,28 +1650,9 @@ app.post('/api/alumno/:id/reordenar-imputaciones', async (req, res) => {
     const alumno = await q1('SELECT * FROM alumnos WHERE id=$1', [alumnoId]);
     if (!alumno) return res.json({ ok: false, error: 'Alumno no encontrado' });
     const vencimientos = await getVencimientos();
-    // 1. Traer todos los pagos y ordenarlos por fecha real
-    const pagos = await q('SELECT * FROM pagos WHERE alumno_id=$1', [alumnoId]);
-    if (!pagos.length) return res.json({ ok: false, error: 'No hay pagos registrados' });
-
-    // Convertir fecha a Date para ordenar correctamente independiente del formato
-    function parseFechaAR(f) {
-      const s = normalizarFechaAR(String(f || ''));
-      if (!s) return new Date(0);
-      const p = s.split('/');
-      if (p.length === 3) return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
-      return new Date(0);
-    }
-    pagos.sort((a, b) => parseFechaAR(a.fecha) - parseFechaAR(b.fecha) || a.id - b.id);
-
-    // 2. Resetear todas las cuotas del alumno
-    await q('UPDATE cuotas SET estado=$1, monto_pagado=0, fecha_pago=$2 WHERE alumno_id=$3', ['pendiente', '', alumnoId]);
-    // 3. Reaplicar cada pago en orden cronológico
-    for (const pago of pagos) {
-      const fecha = normalizarFechaAR(String(pago.fecha));
-      await aplicarPagoYCrearCuotas(alumnoId, alumno, parseFloat(pago.monto), fecha, vencimientos);
-    }
-    res.json({ ok: true, pagosReaplicados: pagos.length });
+    const resultado = await resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos);
+    if (resultado.ok) await recalcularSaldoFavor(alumnoId);
+    res.json(resultado);
   } catch(e) {
     res.json({ ok: false, error: e.message });
   }
@@ -1626,21 +1709,10 @@ app.post('/api/reordenar-imputaciones-todos', async (req, res) => {
     const resultados = [];
     for (const alumno of alumnos) {
       try {
-        const pagos = await q('SELECT * FROM pagos WHERE alumno_id=$1', [alumno.id]);
-        if (!pagos.length) continue;
-        function parseFechaLocal(f) {
-          const s = normalizarFechaAR(String(f||'').split(' ')[0]);
-          const p = s.split('/');
-          if (p.length===3) return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
-          return new Date(0);
-        }
-        pagos.sort((a,b) => parseFechaLocal(a.fecha) - parseFechaLocal(b.fecha) || a.id - b.id);
-        await q('UPDATE cuotas SET estado=$1, monto_pagado=0, fecha_pago=$2 WHERE alumno_id=$3', ['pendiente','',alumno.id]);
-        for (const pago of pagos) {
-          const fecha = normalizarFechaAR(String(pago.fecha).split(' ')[0]);
-          await aplicarPagoYCrearCuotas(alumno.id, alumno, parseFloat(pago.monto), fecha, vencimientos);
-        }
-        resultados.push({ nombre: alumno.nombre, pagos: pagos.length, ok: true });
+        const r = await resincronizarAlumnoDesdeConceptos(alumno.id, alumno, vencimientos);
+        if (!r.ok) continue; // sin pagos, no hay nada que reordenar
+        await recalcularSaldoFavor(alumno.id);
+        resultados.push({ nombre: alumno.nombre, pagos: r.pagosReaplicados, ok: true });
       } catch(e) {
         resultados.push({ nombre: alumno.nombre, ok: false, error: e.message });
       }
