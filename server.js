@@ -472,14 +472,20 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
     }
     let restante = montoTotal;
     const parcialMatch = conc.match(/pago parcial [$]?([0-9.,]+)/i);
+    let ultimaQuedoIncompleta = false;
     for (let idx=0; idx<cuotasEnConc.length; idx++) {
       if (restante <= 0) break;
       const num = cuotasEnConc[idx];
       const eUltima = idx===cuotasEnConc.length-1;
       let montoEsta;
       if (eUltima && parcialMatch) {
+        // El texto declara explícitamente que esta cuota queda incompleta ("pago parcial $X,
+        // saldo pendiente $Y") — se respeta ese monto, pero no se debe generar sobrante para
+        // la cuota siguiente: si algo del pago no fue reclamado por esta declaración, se queda
+        // acá mismo (la cuota sigue debiendo), nunca salta a la próxima.
         montoEsta = parseFloat(parcialMatch[1].replace(/\./g,'').replace(',','.')) || restante;
         montoEsta = Math.min(montoEsta, restante);
+        if (montoEsta < restante) ultimaQuedoIncompleta = true;
       } else {
         // Topear contra lo que a esta cuota YA le falta — no contra su precio entero —
         // para no ignorar lo que ya le asignaron otros pagos anteriores en el historial.
@@ -490,6 +496,13 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
       acumulado[num].monto += montoEsta;
       if (!acumulado[num].fecha) acumulado[num].fecha = fechaP;
       restante -= montoEsta;
+    }
+    if (ultimaQuedoIncompleta && restante > 0.5) {
+      // No empujar a la cuota siguiente: la última mencionada quedó explícitamente incompleta,
+      // así que lo que sobra del pago se suma ahí mismo en vez de generar saldo a favor.
+      const ultima2 = cuotasEnConc[cuotasEnConc.length-1];
+      acumulado[ultima2].monto += restante;
+      restante = 0;
     }
     if (restante > 0.5) {
       const ultima = cuotasEnConc[cuotasEnConc.length-1];
