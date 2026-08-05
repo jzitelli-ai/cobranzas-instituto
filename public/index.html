@@ -2721,48 +2721,24 @@ async function abrirDetalleAlumno(id){
       }
 
       // Distribuir el monto entre las cuotas mencionadas
-      // Lógica: mostrar el pago completo en la primera cuota; el sobrante como compensación en la siguiente
+      // Lógica: topear cada cuota a su precio real; el excedente pasa como compensación
+      // a la cuota siguiente, sea la única cuota mencionada o no.
       var restante = montoTotal;
       cuotasEnConc.forEach(function(num, idx) {
         if (restante <= 0) return;
-        var esPrimera = idx === 0;
         var eUltima = idx === cuotasEnConc.length - 1;
-        var parcialMatch = conc.match(/pago parcial [$]?([0-9.,]+)/i);
+        var parcialMatch = eUltima ? conc.match(/pago parcial [$]?([0-9.,]+)/i) : null;
         var montoEsta;
 
-        if (esPrimera && cuotasEnConc.length > 1) {
-          // Primera de varias cuotas: aplicar el precio de esta cuota
-          var precioRef = getPrecioConVencFrontend(a, num, _vencimientosFrontend, fechaP);
-          montoEsta = Math.min(precioRef, restante);
-          // Si el pago total supera el precio, registrar el pago completo y el exceso como saldo a favor
-          var exceso = montoTotal - precioRef;
-          if (exceso > 0.5) {
-            // Mostrar pago completo en esta cuota
-            distribucion[num].push({monto:montoTotal, fecha:fechaP, origen:origen, tipo:'pago'});
-            restante = 0; // ya distribuimos todo visualmente
-            // Compensación en la siguiente cuota
-            var sigCuota = num + 1;
-            if (sigCuota <= 10) {
-              distribucion[sigCuota].push({monto:exceso, fecha:fechaP, origen:'COMPENSACIÓN MES ANT.', tipo:'compensacion'});
-            }
-            return;
-          }
-          distribucion[num].push({monto:montoEsta, fecha:fechaP, origen:origen, tipo:'pago'});
-          restante -= montoEsta;
-        } else if (eUltima && parcialMatch) {
+        if (parcialMatch) {
           montoEsta = parseFloat(parcialMatch[1].replace(/\./g,'').replace(',','.')) || restante;
           montoEsta = Math.min(montoEsta, restante);
-          distribucion[num].push({monto:montoEsta, fecha:fechaP, origen:origen, tipo:'pago'});
-          restante -= montoEsta;
-        } else if (!eUltima) {
+        } else {
           var precioRef2 = getPrecioConVencFrontend(a, num, _vencimientosFrontend, fechaP);
           montoEsta = Math.min(precioRef2, restante);
-          distribucion[num].push({monto:montoEsta, fecha:fechaP, origen:origen, tipo:'pago'});
-          restante -= montoEsta;
-        } else {
-          distribucion[num].push({monto:restante, fecha:fechaP, origen:origen, tipo:'pago'});
-          restante = 0;
         }
+        distribucion[num].push({monto:montoEsta, fecha:fechaP, origen:origen, tipo:'pago'});
+        restante -= montoEsta;
       });
 
       // Si sobró algo → compensación en cuota siguiente
