@@ -2881,6 +2881,32 @@ async function abrirDetalleAlumno(id){
       }
     });
 
+    // Saldo a favor generado por cuotas ya cubiertas, todavía sin cuota futura donde aplicarse
+    // (por ej. la cuota de septiembre aún no se generó). Antes quedaba invisible, solo sumado
+    // en "Saldo sin aplicar" — ahora se muestra de dónde sale.
+    var saldoFavorSinDestino = [];
+    Object.keys(distribucion).forEach(function(k){
+      var nn = parseInt(k);
+      var mIdx = MESES_IDX_CC[nn-1];
+      if (mIdx === undefined || mIdx <= hoyMesCC) return; // ya se mostró arriba
+      (distribucion[nn]||[]).forEach(function(pg){ saldoFavorSinDestino.push(pg); });
+    });
+    if (saldoFavorSinDestino.length) {
+      cuentaCorriente += '<tr style="background:#eef6ff"><td colspan="7" style="padding:5px 8px;font-size:11px;font-weight:700;color:#1565C0">SALDO A FAVOR (sin cuota generada todavía donde aplicarlo)</td></tr>';
+      saldoFavorSinDestino.forEach(function(pg){
+        saldo -= pg.monto;
+        cuentaCorriente += '<tr style="border-bottom:1px solid var(--b)">'+
+            '<td></td>'+
+            '<td style="padding:4px 8px;font-size:11px;color:#1565C0">'+pg.origen+'</td>'+
+            '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+pg.fecha+'</td>'+
+            '<td></td>'+
+            '<td style="padding:4px 8px;text-align:right;color:#1565C0">'+pesos(pg.monto)+'</td>'+
+            '<td style="padding:4px 8px;text-align:right;font-weight:700;color:var(--s)">'+pesos(Math.abs(saldo))+' ❖</td>'+
+            '<td></td>'+
+          '</tr>';
+      });
+    }
+
     cuentaCorriente +=
       '</tbody><tfoot>'+
       (saldoPendiente > 100 ?
@@ -2890,6 +2916,54 @@ async function abrirDetalleAlumno(id){
           '<td style="padding:4px 8px;text-align:center"><button onclick="aplicarSaldoAlumno('+a.id+','+saldoPendiente+')" style="background:var(--w);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">Aplicar</button></td>'+
         '</tr>' : '')+
       '</tfoot></table></div>';
+
+    // Detalle de pagos por cuota (1 a 10) — la tabla que mostraba el reporte anterior,
+    // agregada debajo de la cuenta corriente como referencia adicional.
+    cuentaCorriente += '<div style="margin-top:18px">'+
+      '<div class="ctitle">Detalle de pagos</div>'+
+      '<table style="width:100%;font-size:12.5px;border-collapse:collapse"><thead><tr>'+
+        '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Cuota</th>'+
+        '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Mes</th>'+
+        '<th style="text-align:center;padding:6px 10px;background:var(--gl);color:var(--m)">Estado</th>'+
+        '<th style="text-align:right;padding:6px 10px;background:var(--gl);color:var(--m)">Monto</th>'+
+        '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Vence</th>'+
+        '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Fecha de pago</th>'+
+      '</tr></thead><tbody>';
+    CUOTAS.forEach(function(c){
+      var nD = c.num;
+      var eD = est[nD] || est[String(nD)] || 'futura';
+      var montoD = parseFloat(montos[nD] || montos[String(nD)] || 0);
+      var fechaD = fechas[nD] || fechas[String(nD)] || '';
+      var fechaCortaD = fechaD ? String(fechaD).slice(0,10) : '—';
+      var bgD='', estadoHtmlD='', montoTxtD='—';
+      if (eD==='futura') { estadoHtmlD='<span style="color:var(--m)">No generada</span>'; }
+      else if (eD==='pagada') { bgD='var(--sl)'; estadoHtmlD='<span style="color:var(--s);font-weight:600">✓ Pagada</span>'; montoTxtD=montoD?pesos(montoD):'—'; }
+      else if (eD==='compensada') { bgD='#FFF3E0'; estadoHtmlD='<span style="color:#E65100;font-weight:600">↔ Compensada</span>'; montoTxtD='—'; }
+      else if (eD==='gratis') { bgD='#c8f7c5'; estadoHtmlD='<span style="color:#1a7a1a;font-weight:600">★ Gratis</span>'; montoTxtD='$0'; }
+      else {
+        bgD='var(--dl)';
+        var precioD = getPrecioConVencFrontend(a, nD, _vencimientosFrontend);
+        if (montoD > 0 && montoD < precioD) {
+          bgD='var(--wl)';
+          estadoHtmlD='<span style="color:var(--w);font-weight:600">⚠ Pago parcial</span>';
+          montoTxtD='<span style="color:var(--w)">'+pesos(montoD)+'</span><span style="color:var(--d);font-size:10px"> (falta '+pesos(precioD-montoD)+')</span>';
+        } else {
+          estadoHtmlD='<span style="color:var(--d);font-weight:600">Debe</span>';
+          montoTxtD=pesos(precioD);
+          fechaCortaD='—';
+        }
+      }
+      var vencTxtD = _vencimientosFrontend && _vencimientosFrontend[nD-1] ? _vencimientosFrontend[nD-1].slice(0,5) : '—';
+      cuentaCorriente += '<tr style="background:'+bgD+'">'+
+        '<td style="padding:6px 10px;font-weight:600">'+nD+'</td>'+
+        '<td style="padding:6px 10px">'+c.mes+' 2026</td>'+
+        '<td style="padding:6px 10px;text-align:center">'+estadoHtmlD+'</td>'+
+        '<td style="padding:6px 10px;text-align:right;font-weight:600">'+montoTxtD+'</td>'+
+        '<td style="padding:6px 10px;color:var(--m);font-size:11px">'+vencTxtD+'</td>'+
+        '<td style="padding:6px 10px;color:var(--m)">'+fechaCortaD+'</td>'+
+      '</tr>';
+    });
+    cuentaCorriente += '</tbody></table></div>';
   }
 
   document.getElementById('det-body').innerHTML=
