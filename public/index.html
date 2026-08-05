@@ -2047,6 +2047,7 @@ async function generarCuotasFaltantes() {
   if (!r || !r.ok) { toast('Error: '+(r&&r.error?r.error:'desconocido'), 'e'); return; }
   toast('Cuotas generadas: '+r.creadas, 's');
   _reporte = await api('GET', '/api/reporte');
+  filtrarReporte();
 }
 
 async function reordenarTodos() {
@@ -2064,6 +2065,7 @@ async function reordenarTodos() {
   toast(msg, 's');
   _reporte = await api('GET', '/api/reporte');
   _pagos = await api('GET', '/api/pagos');
+  filtrarReporte();
 }
 var _adminLoginTime = 0;
 var _ADMIN_TIMEOUT = 5 * 60 * 1000; // 5 minutos en ms
@@ -2622,6 +2624,7 @@ async function reordenarImputaciones() {
   if (!r || !r.ok) { toast(r && r.error ? r.error : 'Error al reordenar', 'e'); return; }
   toast('Imputaciones reordenadas — ' + r.pagosReaplicados + ' pago' + (r.pagosReaplicados !== 1 ? 's' : '') + ' replicado' + (r.pagosReaplicados !== 1 ? 's' : ''), 's');
   _reporte = await api('GET', '/api/reporte');
+  filtrarReporte();
   abrirDetalleAlumno(_detAlumnoId);
 }
 
@@ -2639,6 +2642,7 @@ async function aplicarSaldoAlumno(id, saldo) {
   toast(msg, 's');
   // Recargar reporte y reabrir ficha
   _reporte = await api('GET', '/api/reporte');
+  filtrarReporte();
   abrirDetalleAlumno(id);
 }
 
