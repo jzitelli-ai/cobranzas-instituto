@@ -411,8 +411,11 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
           <button id="btn-aplicar-saldos" class="btn bob" onclick="aplicarSaldosPendientes()" style="font-size:11px;padding:4px 10px;display:none" title="Aplica saldo disponible a cuotas pendientes">
             ⚡ Aplicar saldos pendientes
           </button>
-          <button id="btn-reordenar-todos" class="btn bob" onclick="reordenarTodos()" style="font-size:11px;padding:4px 10px;display:none;background:#5c6bc0;border-color:#5c6bc0;color:#fff" title="Reordena imputaciones de todos los alumnos">
+          <button id="btn-reordenar-todos" class="btn bob" onclick="reordenarTodos()" style="font-size:11px;padding:4px 10px;display:none;background:#5c6bc0;border-color:#5c6bc0;color:#fff" title="Reordena imputaciones de todos los alumnos, según el concepto de cada pago">
             ↺ Reimputar todos
+          </button>
+          <button id="btn-reordenar-fecha-todos" class="btn bob" onclick="reordenarPorFechaTodos()" style="font-size:11px;padding:4px 10px;display:none;background:#8d6e63;border-color:#8d6e63;color:#fff" title="Reordena imputaciones de todos los alumnos, ignorando el concepto — solo fecha y monto">
+            ↺ Reordenar todos por fecha
           </button>
           <button id="btn-generar-cuotas" class="btn bob" onclick="generarCuotasFaltantes()" style="font-size:11px;padding:4px 10px;display:none;background:#00796b;border-color:#00796b;color:#fff" title="Genera cuotas faltantes para meses vencidos">
             + Generar cuotas faltantes
@@ -2033,11 +2036,13 @@ function actualizarBotonesAdmin() {
   var btnR = document.getElementById('btn-reprocesar-excel');
   var btnA = document.getElementById('btn-aplicar-saldos');
   var btnRT = document.getElementById('btn-reordenar-todos');
+  var btnRFT = document.getElementById('btn-reordenar-fecha-todos');
   var btnGC = document.getElementById('btn-generar-cuotas');
   if (btnS) btnS.style.display = display;
   if (btnR) btnR.style.display = display;
   if (btnA) btnA.style.display = display;
   if (btnRT) btnRT.style.display = display;
+  if (btnRFT) btnRFT.style.display = display;
   if (btnGC) btnGC.style.display = display;
 }
 
@@ -2054,7 +2059,7 @@ async function generarCuotasFaltantes() {
 }
 
 async function reordenarTodos() {
-  if (!confirm('¿Reimputar todos los alumnos activos?\n\nEsto genera cuotas faltantes, resetea todas las cuotas y reaplica los pagos cronológicamente.\n\nPuede tardar varios minutos. No cerrar la ventana.')) return;
+  if (!confirm('¿Reimputar todos los alumnos activos?\n\nEsto genera cuotas faltantes, resetea todas las cuotas y reaplica los pagos según el concepto de cada uno.\n\nPuede tardar varios minutos. No cerrar la ventana.')) return;
   var btn = document.getElementById('btn-reordenar-todos');
   if (btn) { btn.disabled=true; btn.textContent='Generando cuotas...'; }
   // Primero generar cuotas faltantes
@@ -2064,6 +2069,23 @@ async function reordenarTodos() {
   if (btn) { btn.disabled=false; btn.textContent='↺ Reimputar todos'; }
   if (!r || !r.ok) { toast('Error: '+(r&&r.error?r.error:'desconocido'), 'e'); return; }
   var msg = 'Reimputación completada: '+r.procesados+' alumnos procesados';
+  if (r.errores > 0) msg += ', '+r.errores+' con errores';
+  toast(msg, 's');
+  _reporte = await api('GET', '/api/reporte');
+  _pagos = await api('GET', '/api/pagos');
+  filtrarReporte();
+}
+
+async function reordenarPorFechaTodos() {
+  if (!confirm('¿Reordenar por fecha a todos los alumnos activos?\n\nIgnora por completo el concepto de cada pago — solo mira monto y fecha, y llena la cuota pendiente más vieja en orden cronológico estricto, para todos a la vez.\n\nUsalo solo si sabés que hay varios pagos con el concepto mal cargado. La cuenta corriente de cada ficha seguirá mostrando la interpretación por concepto hasta que corrijas esos textos; esto solo actualiza el reporte general y el saldo de cada uno.\n\nPuede tardar varios minutos. No cerrar la ventana.')) return;
+  var btn = document.getElementById('btn-reordenar-fecha-todos');
+  if (btn) { btn.disabled=true; btn.textContent='Generando cuotas...'; }
+  await api('POST', '/api/generar-cuotas-faltantes');
+  if (btn) btn.textContent='Reordenando...';
+  var r = await api('POST', '/api/reordenar-por-fecha-todos');
+  if (btn) { btn.disabled=false; btn.textContent='↺ Reordenar todos por fecha'; }
+  if (!r || !r.ok) { toast('Error: '+(r&&r.error?r.error:'desconocido'), 'e'); return; }
+  var msg = 'Reordenamiento por fecha completado: '+r.procesados+' alumnos procesados';
   if (r.errores > 0) msg += ', '+r.errores+' con errores';
   toast(msg, 's');
   _reporte = await api('GET', '/api/reporte');
