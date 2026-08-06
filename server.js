@@ -430,6 +430,12 @@ app.get('/api/alumno/:id/pagos-raw', async (req,res) => {
   const pagos = await q('SELECT id,fecha,monto,concepto,medio,origen FROM pagos WHERE alumno_id=$1 ORDER BY fecha,id', [req.params.id]);
   res.json({ ok:true, pagos });
 });
+// Solo lectura — ver tal cual quedó guardada la tabla cuotas de un alumno, para comparar
+// contra lo que muestra la cuenta corriente (que se recalcula siempre en vivo)
+app.get('/api/alumno/:id/cuotas-raw', async (req,res) => {
+  const cuotas = await q('SELECT numero_cuota,estado,monto_pagado,fecha_pago,compensada FROM cuotas WHERE alumno_id=$1 ORDER BY numero_cuota', [req.params.id]);
+  res.json({ ok:true, cuotas });
+});
 // Solo lectura — buscar un alumno por nombre (activo o no) y ver en qué vigencias de
 // precios tiene fila, para diagnosticar por qué no aparece en "Tabla de precios vigente"
 app.get('/api/buscar-alumno', async (req,res) => {
@@ -1961,6 +1967,31 @@ app.post('/api/reordenar-imputaciones-todos', async (req, res) => {
       try {
         const r = await resincronizarAlumnoDesdeConceptos(alumno.id, alumno, vencimientos);
         if (!r.ok) continue; // sin pagos, no hay nada que reordenar
+        await recalcularSaldoFavor(alumno.id);
+        resultados.push({ nombre: alumno.nombre, pagos: r.pagosReaplicados, ok: true });
+      } catch(e) {
+        resultados.push({ nombre: alumno.nombre, ok: false, error: e.message });
+      }
+    }
+    const errores = resultados.filter(r => !r.ok);
+    res.json({ ok: true, procesados: resultados.length, errores: errores.length, detalle: errores });
+  } catch(e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// Igual que el anterior, pero ignorando el concepto de cada pago — solo fecha y monto,
+// llenando la cuota pendiente más vieja en orden cronológico. Para cuando el concepto de
+// varios pagos no representa la realidad y conviene resincronizar todo por fecha.
+app.post('/api/reordenar-por-fecha-todos', async (req, res) => {
+  try {
+    const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
+    const vencimientos = await getVencimientos();
+    const resultados = [];
+    for (const alumno of alumnos) {
+      try {
+        const r = await resincronizarAlumnoPorFecha(alumno.id, alumno, vencimientos);
+        if (!r.ok) continue;
         await recalcularSaldoFavor(alumno.id);
         resultados.push({ nombre: alumno.nombre, pagos: r.pagosReaplicados, ok: true });
       } catch(e) {
