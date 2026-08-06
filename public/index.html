@@ -762,6 +762,7 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
     <div class="modal-btns">
       <button class="btn bob" onclick="cerrarM('m-det-alumno')">Cerrar</button>
       <button id="btn-reordenar" class="btn bob" style="display:none;font-size:11px;color:var(--m)" onclick="reordenarImputaciones()">↺ Reordenar imputaciones</button>
+      <button id="btn-reordenar-fecha" class="btn bob" style="display:none;font-size:11px;color:var(--m)" onclick="reordenarPorFecha()">↺ Reordenar por fecha</button>
       <button class="btn bpb" onclick="cerrarM('m-det-alumno');nav('cobro')">Registrar pago</button>
     </div>
   </div>
@@ -864,6 +865,8 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
     <div class="modal-title">Tabla de precios vigente</div>
     <div id="ver-vig-body" style="max-height:500px;overflow-y:auto;padding-right:4px"></div>
     <div class="modal-btns">
+      <button class="btn bob" id="btn-completar-faltantes" style="display:none" onclick="completarFaltantesVig()">Completar faltantes</button>
+      <button class="btn bob" onclick="exportarTablaPrecios()">📥 Exportar Excel</button>
       <button class="btn bpb" onclick="cerrarM('m-ver-vig')">Cerrar</button>
     </div>
   </div>
@@ -2619,10 +2622,22 @@ function rsc(l,v,c){return '<div class="sc" style="padding:8px 12px"><div class=
 async function reordenarImputaciones() {
   var a = _reporte.find(function(x){ return x.id === _detAlumnoId; });
   var nombre = a ? a.nombre : 'este alumno';
-  if (!confirm('¿Reordenar imputaciones de ' + nombre + '?\n\nEsto va a resetear todas las cuotas y reaplicar los pagos desde el más antiguo al más nuevo.\n\nEsta acción no se puede deshacer.')) return;
+  if (!confirm('¿Reordenar imputaciones de ' + nombre + '?\n\nEsto va a resetear todas las cuotas y reaplicar los pagos desde el más antiguo al más nuevo, según lo que diga el concepto de cada pago.\n\nEsta acción no se puede deshacer.')) return;
   var r = await api('POST', '/api/alumno/' + _detAlumnoId + '/reordenar-imputaciones');
   if (!r || !r.ok) { toast(r && r.error ? r.error : 'Error al reordenar', 'e'); return; }
   toast('Imputaciones reordenadas — ' + r.pagosReaplicados + ' pago' + (r.pagosReaplicados !== 1 ? 's' : '') + ' replicado' + (r.pagosReaplicados !== 1 ? 's' : ''), 's');
+  _reporte = await api('GET', '/api/reporte');
+  filtrarReporte();
+  abrirDetalleAlumno(_detAlumnoId);
+}
+
+async function reordenarPorFecha() {
+  var a = _reporte.find(function(x){ return x.id === _detAlumnoId; });
+  var nombre = a ? a.nombre : 'este alumno';
+  if (!confirm('¿Reordenar por fecha a ' + nombre + '?\n\nIgnora por completo el concepto de cada pago — solo mira monto y fecha, y llena la cuota pendiente más vieja en orden cronológico estricto.\n\nUsalo solo si sabés que el concepto de algún pago está mal cargado. La cuenta corriente de esta pantalla seguirá mostrando la interpretación por concepto hasta que corrijas el texto del pago; este reordenamiento solo actualiza el reporte general y el saldo.\n\nEsta acción no se puede deshacer.')) return;
+  var r = await api('POST', '/api/alumno/' + _detAlumnoId + '/reordenar-por-fecha');
+  if (!r || !r.ok) { toast(r && r.error ? r.error : 'Error al reordenar', 'e'); return; }
+  toast('Reordenado por fecha — ' + r.pagosReaplicados + ' pago' + (r.pagosReaplicados !== 1 ? 's' : '') + ' aplicado' + (r.pagosReaplicados !== 1 ? 's' : ''), 's');
   _reporte = await api('GET', '/api/reporte');
   filtrarReporte();
   abrirDetalleAlumno(_detAlumnoId);
@@ -2652,6 +2667,8 @@ async function abrirDetalleAlumno(id){
   // Mostrar botón reordenar solo para admins
   var btnR = document.getElementById('btn-reordenar');
   if (btnR) btnR.style.display = _adminAutenticado ? '' : 'none';
+  var btnRF = document.getElementById('btn-reordenar-fecha');
+  if (btnRF) btnRF.style.display = _adminAutenticado ? '' : 'none';
   var a=_reporte.find(function(x){return x.id===id;});
   if(!a)return;
   var est=a.estadoCuotas||{};
@@ -3236,10 +3253,15 @@ async function crearVigencia(){
   toast('Vigencia creada. Edita los precios si es necesario.','s');
 }
 
+var _verVigId = null;
+var _verVigData = null;
 async function verPreciosVig(id){
   var v=_aranceles.find(function(x){return x.id===id;});
   var cursos=await api('GET','/api/aranceles/'+id+'/cursos');
   var precios=await api('GET','/api/aranceles/'+id+'/precios');
+  _verVigId = id;
+  _verVigData = {v:v, cursos:cursos, precios:precios};
+  document.getElementById('btn-completar-faltantes').style.display='';
   // Contar alumnos por curso y detectar especiales
   var conteo={};
   var especiales=[];
@@ -3307,6 +3329,37 @@ async function verPreciosVig(id){
   }
   document.getElementById('ver-vig-body').innerHTML=h;
   abrirM('m-ver-vig');
+}
+
+async function completarFaltantesVig(){
+  if(!_verVigId) return;
+  var r = await api('POST', '/api/aranceles/'+_verVigId+'/completar-faltantes');
+  if(r && r.ok){
+    if(r.agregados > 0){
+      toast(r.agregados+' alumno(s) agregado(s): '+r.alumnos.join(', '), 's');
+      verPreciosVig(_verVigId); // refrescar la vista con los nuevos
+    } else {
+      toast('No había alumnos faltantes en esta vigencia', 's');
+    }
+  }
+}
+
+function exportarTablaPrecios(){
+  if(!_verVigData){ toast('Sin datos para exportar','e'); return; }
+  var rows = [];
+  _verVigData.precios.forEach(function(p){
+    rows.push({
+      'Alumno': p.nombre,
+      'Curso': p.curso || 'Sin curso',
+      'Precio normal': Number(p.precio_normal)||0,
+      'Precio bonificado': Number(p.precio_bonificado)||0,
+      'Precio especial': p.precio_especial ? 'Sí' : 'No'
+    });
+  });
+  var ws = XLSX.utils.json_to_sheet(rows);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Precios');
+  XLSX.writeFile(wb, 'tabla_precios_'+(_verVigData.v.desde||fechaLocalAR())+'.xlsx');
 }
 
 async function abrirEditVig(id){
