@@ -636,6 +636,14 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
       await q('INSERT INTO cuotas (alumno_id,numero_cuota,estado,fecha_pago,monto_pagado,compensada) VALUES ($1,$2,$3,$4,$5,false)', [alumnoId, n, r.estado, r.fecha||'', r.monto]);
     }
   }
+  // Limpieza: sacar cuotas de meses que todavia no llegaron y quedaron en $0 (restos de
+  // una resincronizacion anterior, ej. una corrida con una version vieja del motor)
+  const mesActualLimpieza = new Date().getMonth();
+  for (let n=1;n<=10;n++) {
+    if (MESES_IDX[n-1] > mesActualLimpieza) {
+      await q('DELETE FROM cuotas WHERE alumno_id=$1 AND numero_cuota=$2 AND monto_pagado<=0', [alumnoId, n]);
+    }
+  }
   return { ok:true, pagosReaplicados: pagos.length };
 }
 
@@ -749,6 +757,14 @@ async function resincronizarAlumnoPorFecha(alumnoId, alumno, vencimientos) {
       await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', [r.estado, r.fecha||'', r.monto, existente.id]);
     } else {
       await q('INSERT INTO cuotas (alumno_id,numero_cuota,estado,fecha_pago,monto_pagado,compensada) VALUES ($1,$2,$3,$4,$5,false)', [alumnoId, n, r.estado, r.fecha||'', r.monto]);
+    }
+  }
+  // Limpieza: sacar cuotas de meses que todavia no llegaron y quedaron en $0 (restos de
+  // una resincronizacion anterior, ej. una corrida con una version vieja del motor)
+  const mesActualLimpieza = new Date().getMonth();
+  for (let n=1;n<=10;n++) {
+    if (MESES_IDX[n-1] > mesActualLimpieza) {
+      await q('DELETE FROM cuotas WHERE alumno_id=$1 AND numero_cuota=$2 AND monto_pagado<=0', [alumnoId, n]);
     }
   }
   return { ok:true, pagosReaplicados: pagos.length };
@@ -1400,6 +1416,9 @@ app.get('/api/reporte', async (req,res) => {
     const deudaReal=Object.entries(estadoCuotas).reduce((s,[k,v])=>{
       if(v!=='pendiente')return s;
       const n=parseInt(k);
+      // No contar cuotas de meses que todavía no llegaron (ej. un resto de una cuota
+      // futura que quedó en 0 de una resincronización anterior)
+      if(MESES_IDX[n-1] > new Date().getMonth()) return s;
       const mp=montosPago[n]||0;
       let precio;
       if(n===10&&c10g){
