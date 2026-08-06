@@ -451,8 +451,15 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
   }
   pagos.sort((a,b) => parseFechaLocal(a.fecha) - parseFechaLocal(b.fecha) || a.id - b.id);
 
-  const acumulado = {};
-  for (let n=1;n<=10;n++) acumulado[n] = {monto:0, fecha:null};
+  const precioNormalBase = parseFloat(alumno.precio_normal);
+  const precioBonifBase = parseFloat(alumno.precio_bonificado);
+
+  // ---- PASE 1: repartir cada pago entre las cuotas que menciona su concepto ----
+  // Se usa el precio NORMAL (el techo más alto posible) como tope provisorio para no
+  // cortarle plata de más a una cuota antes de saber si en definitiva le corresponde
+  // bonificado o normal — eso recién se resuelve en el Pase 2.
+  const aportes = {};
+  for (let n=1;n<=10;n++) aportes[n] = [];
 
   for (const pago of pagos) {
     const conc = pago.concepto || '';
@@ -466,67 +473,97 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
       if (num>=1 && num<=10 && cuotasEnConc.indexOf(num)<0) cuotasEnConc.push(num);
     }
     if (cuotasEnConc.length === 0) {
-      acumulado[1].monto += montoTotal;
-      if (!acumulado[1].fecha) acumulado[1].fecha = fechaP;
+      aportes[1].push({monto:montoTotal, fecha:fechaP});
       continue;
     }
     let restante = montoTotal;
     const parcialMatch = conc.match(/pago parcial [$]?([0-9.,]+)/i);
-    let ultimaQuedoIncompleta = false;
     for (let idx=0; idx<cuotasEnConc.length; idx++) {
       if (restante <= 0) break;
       const num = cuotasEnConc[idx];
       const eUltima = idx===cuotasEnConc.length-1;
       let montoEsta;
       if (eUltima && parcialMatch) {
-        // El texto declara explícitamente que esta cuota queda incompleta ("pago parcial $X,
-        // saldo pendiente $Y") — se respeta ese monto, pero no se debe generar sobrante para
-        // la cuota siguiente: si algo del pago no fue reclamado por esta declaración, se queda
-        // acá mismo (la cuota sigue debiendo), nunca salta a la próxima.
+        // El texto declara explícitamente cuánto va a esta cuota — se respeta tal cual.
         montoEsta = parseFloat(parcialMatch[1].replace(/\./g,'').replace(',','.')) || restante;
         montoEsta = Math.min(montoEsta, restante);
-        if (montoEsta < restante) ultimaQuedoIncompleta = true;
       } else {
-        // Topear contra lo que a esta cuota YA le falta — no contra su precio entero —
-        // para no ignorar lo que ya le asignaron otros pagos anteriores en el historial.
-        const precioRef = await getPrecioConVenc(alumno, num, fechaP, vencimientos);
-        const disponible = Math.max(0, precioRef - acumulado[num].monto);
+        const yaAsignado = aportes[num].reduce((s,x)=>s+x.monto,0);
+        const disponible = Math.max(0, precioNormalBase - yaAsignado);
         montoEsta = Math.min(disponible, restante);
       }
-      acumulado[num].monto += montoEsta;
-      if (!acumulado[num].fecha) acumulado[num].fecha = fechaP;
+      aportes[num].push({monto:montoEsta, fecha:fechaP});
       restante -= montoEsta;
-    }
-    if (ultimaQuedoIncompleta && restante > 0.5) {
-      // No empujar a la cuota siguiente: la última mencionada quedó explícitamente incompleta,
-      // así que lo que sobra del pago se suma ahí mismo en vez de generar saldo a favor.
-      const ultima2 = cuotasEnConc[cuotasEnConc.length-1];
-      acumulado[ultima2].monto += restante;
-      restante = 0;
     }
     if (restante > 0.5) {
       const ultima = cuotasEnConc[cuotasEnConc.length-1];
-      const sig2 = ultima+1;
-      if (sig2<=10) { acumulado[sig2].monto += restante; if(!acumulado[sig2].fecha) acumulado[sig2].fecha=fechaP; }
+      const sig = ultima+1;
+      if (sig<=10) aportes[sig].push({monto:restante, fecha:fechaP});
     }
   }
 
+  // ---- PASE 2: por cada cuota, ¿lo que llegó A TIEMPO alcanza el bonificado? ----
+  // Si sí: cierra bonificada, y todo lo que sobre (lo que llegó a tiempo de más, más
+  // cualquier pago tardío) viaja a la cuota siguiente. Si no llegó a tiempo pero el total
+  // (a tiempo + tardío) alcanza el normal: cierra a precio normal, con el mismo traspaso
+  // de sobrante. Si ni así se completa: queda pendiente con lo que efectivamente se juntó.
+  const resultado = {};
+  for (let n=1;n<=10;n++) resultado[n] = {monto:0, fecha:null, estado:'pendiente'};
+
+  for (let n=1;n<=10;n++) {
+    const lista = aportes[n];
+    if (!lista.length) continue;
+    lista.sort((a,b)=> parseFechaLocal(a.fecha) - parseFechaLocal(b.fecha));
+
+    const esGratis = n===10 && await cuota10Gratis(alumnoId, alumno);
+    if (esGratis) { resultado[n] = {monto:0, fecha:lista[0].fecha, estado:'pagada'}; continue; }
+
+    const precioBonifN = precioBonifBase;
+    // "Todo el mes bonificado": el techo alto es igual al bonificado, no hay precio normal distinto
+    const precioNormalN = MESES_TODO_EL_MES.includes(n) ? precioBonifBase : precioNormalBase;
+
+    const vencN = vencimientos[n-1];
+    let dVenc = null;
+    if (vencN) {
+      const [dv,mv,yv] = vencN.split('/');
+      dVenc = new Date(parseInt(yv), parseInt(mv)-1, parseInt(dv), 23,59,59);
+    }
+    function esATiempo(fechaStr) {
+      if (!dVenc) return false;
+      const p = String(fechaStr).split('/');
+      const d = new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]), 12);
+      return d <= dVenc;
+    }
+
+    const aTiempoSum = lista.filter(x=>esATiempo(x.fecha)).reduce((s,x)=>s+x.monto,0);
+    const totalTodo = lista.reduce((s,x)=>s+x.monto,0);
+    const primeraFecha = lista[0].fecha;
+    let exceso = 0;
+
+    if (aTiempoSum >= precioBonifN - 1) {
+      resultado[n] = {monto:precioBonifN, fecha:primeraFecha, estado:'pagada'};
+      exceso = totalTodo - precioBonifN;
+    } else if (totalTodo >= precioNormalN - 1) {
+      resultado[n] = {monto:precioNormalN, fecha:primeraFecha, estado:'pagada'};
+      exceso = totalTodo - precioNormalN;
+    } else {
+      resultado[n] = {monto:totalTodo, fecha:primeraFecha, estado:'pendiente'};
+    }
+    if (exceso > 0.5 && n < 10) {
+      aportes[n+1].push({monto:exceso, fecha:lista[lista.length-1].fecha});
+    }
+  }
+
+  // ---- Persistir ----
   await q('UPDATE cuotas SET estado=$1, monto_pagado=0, fecha_pago=$2 WHERE alumno_id=$3', ['pendiente','',alumnoId]);
   for (let n=1;n<=10;n++) {
-    const acc = acumulado[n];
-    if (acc.monto <= 0) continue;
-    const esGratis = n===10 && await cuota10Gratis(alumnoId, alumno);
-    const precio = esGratis ? 0 : await getPrecioConVenc(alumno, n, acc.fecha, vencimientos);
-    // No volver a topear acá: el reparto ya topeó cada aporte contra lo que a la cuota le
-    // faltaba en cada paso. Re-topear con un precio recalculado (que puede diferir si el
-    // precio de la cuota cambió según la fecha de cada pago) pierde plata sin motivo.
-    const montoFinal = acc.monto;
-    const nuevoEstado = (precio===0 || montoFinal >= precio - 1) ? 'pagada' : 'pendiente';
+    const r = resultado[n];
+    if (r.monto <= 0 && r.estado !== 'pagada') continue;
     const existente = await q1('SELECT id FROM cuotas WHERE alumno_id=$1 AND numero_cuota=$2', [alumnoId, n]);
     if (existente) {
-      await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', [nuevoEstado, acc.fecha, montoFinal, existente.id]);
+      await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', [r.estado, r.fecha||'', r.monto, existente.id]);
     } else {
-      await q('INSERT INTO cuotas (alumno_id,numero_cuota,estado,fecha_pago,monto_pagado,compensada) VALUES ($1,$2,$3,$4,$5,false)', [alumnoId, n, nuevoEstado, acc.fecha, montoFinal]);
+      await q('INSERT INTO cuotas (alumno_id,numero_cuota,estado,fecha_pago,monto_pagado,compensada) VALUES ($1,$2,$3,$4,$5,false)', [alumnoId, n, r.estado, r.fecha||'', r.monto]);
     }
   }
   return { ok:true, pagosReaplicados: pagos.length };
