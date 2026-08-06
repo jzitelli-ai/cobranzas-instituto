@@ -2808,7 +2808,18 @@ async function abrirDetalleAlumno(id){
         resultado[n] = {monto:totalTodo, fecha:primeraFecha, estado:'pendiente'};
       }
       if (exceso > 0.5 && n < 10) {
+        // Recortar las filas de ESTA cuota para que sumen justo lo que cerró — si no, la
+        // plata se ve dos veces: completa acá y de nuevo como compensación en la siguiente.
+        var restanteExceso = exceso;
+        for (var ie = lista.length - 1; ie >= 0 && restanteExceso > 0.5; ie--) {
+          var quitar = Math.min(lista[ie].monto, restanteExceso);
+          lista[ie].monto -= quitar;
+          restanteExceso -= quitar;
+        }
+        aportes[n] = lista.filter(function(x){ return x.monto > 0.5; });
         aportes[n+1].push({monto:exceso, fecha: lista[lista.length-1].fecha, origen:'COMPENSACIÓN MES ANT.', esCompensacion:true});
+      } else {
+        aportes[n] = lista;
       }
     });
 
