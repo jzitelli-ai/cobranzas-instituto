@@ -510,7 +510,19 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
       if (num>=1 && num<=10 && cuotasEnConc.indexOf(num)<0) cuotasEnConc.push(num);
     }
     if (cuotasEnConc.length === 0) {
-      aportes[1].push({monto:montoTotal, fecha:fechaP});
+      // Sin ninguna cuota mencionada (ej. "Saldo a favor: $X" cargado a mano): en vez de
+      // mandarlo siempre a la cuota 1, recorrer desde la 1 en adelante y aplicarlo a la
+      // primera que todavía tenga lugar en esa fecha — igual que el reordenamiento por fecha.
+      let restanteSC = montoTotal;
+      for (let numSC=1; numSC<=10 && restanteSC > 0.5; numSC++) {
+        const yaAsignadoATiempoSC = aportes[numSC].filter(x=>esATiempoDe(numSC,x.fecha)).reduce((s,x)=>s+x.monto,0);
+        const yaAsignadoSC = aportes[numSC].reduce((s,x)=>s+x.monto,0);
+        const disponibleSC = (yaAsignadoATiempoSC >= precioBonifBase - 1) ? 0 : Math.max(0, precioNormalBase - yaAsignadoSC);
+        const montoEstaSC = Math.min(disponibleSC, restanteSC);
+        if (montoEstaSC > 0.5) aportes[numSC].push({monto:montoEstaSC, fecha:fechaP});
+        restanteSC -= montoEstaSC;
+      }
+      if (restanteSC > 0.5) aportes[10].push({monto:restanteSC, fecha:fechaP});
       continue;
     }
     let restante = montoTotal;
