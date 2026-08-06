@@ -2705,6 +2705,26 @@ async function abrirDetalleAlumno(id){
     var precioNormalBase = parseFloat(a.precio_normal);
     var precioBonifBase = parseFloat(a.precio_bonificado);
 
+    function parseFechaCC(f) {
+      var s = String(f||'').trim().split(' ')[0];
+      var iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (iso) return new Date(parseInt(iso[1]), parseInt(iso[2])-1, parseInt(iso[3]));
+      var p = s.split('/');
+      if (p.length===3) return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+      return new Date(0);
+    }
+    function dVencDeFrontend(num) {
+      var venc = _vencimientosFrontend && _vencimientosFrontend[num-1];
+      if (!venc) return null;
+      var pv = venc.split('/');
+      return new Date(parseInt(pv[2]), parseInt(pv[1])-1, parseInt(pv[0]), 23,59,59);
+    }
+    function esATiempoDeFrontend(num, fechaStr) {
+      var dVenc = dVencDeFrontend(num);
+      if (!dVenc) return false;
+      return parseFechaCC(fechaStr) <= dVenc;
+    }
+
     var aportes = {};
     for (var ni=1; ni<=10; ni++) aportes[ni] = [];
 
@@ -2745,11 +2765,12 @@ async function abrirDetalleAlumno(id){
           montoEsta = Math.min(montoEsta, restante);
           if (montoEsta < restante) esParcialIncompleta = true;
         } else {
-          // Si esta cuota ya juntó el bonificado con pagos anteriores, queda cerrada — no
-          // acepta más plata solo porque un pago posterior también la menciona; esa plata
-          // en realidad es para la cuota que sigue.
+          // Cerrada de verdad solo si lo que juntó A TIEMPO ya alcanza el bonificado — recién
+          // ahí se bloquea. Si el bonificado se completó con plata tardía, todavía puede
+          // necesitar más (hasta el normal), así que sigue aceptando.
+          var yaAsignadoATiempo = aportes[num2].filter(function(x){return esATiempoDeFrontend(num2,x.fecha);}).reduce(function(s,x){return s+x.monto;},0);
           var yaAsignado = aportes[num2].reduce(function(s,x){return s+x.monto;},0);
-          var disponible = (yaAsignado >= precioBonifBase - 1) ? 0 : Math.max(0, precioNormalBase - yaAsignado);
+          var disponible = (yaAsignadoATiempo >= precioBonifBase - 1) ? 0 : Math.max(0, precioNormalBase - yaAsignado);
           montoEsta = Math.min(disponible, restante);
         }
         aportes[num2].push({monto:montoEsta, fecha:fechaP, origen:origen});
