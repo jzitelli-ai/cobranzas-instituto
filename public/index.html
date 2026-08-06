@@ -2807,19 +2807,12 @@ async function abrirDetalleAlumno(id){
       } else {
         resultado[n] = {monto:totalTodo, fecha:primeraFecha, estado:'pendiente'};
       }
+      // No recortar el pago original: se muestra completo en el mes en que se generó, para
+      // que quede claro de dónde sale el excedente. El traspaso a la cuota siguiente se marca
+      // como informativo (no vuelve a restar del saldo — esa plata ya se descontó acá).
+      aportes[n] = lista;
       if (exceso > 0.5 && n < 10) {
-        // Recortar las filas de ESTA cuota para que sumen justo lo que cerró — si no, la
-        // plata se ve dos veces: completa acá y de nuevo como compensación en la siguiente.
-        var restanteExceso = exceso;
-        for (var ie = lista.length - 1; ie >= 0 && restanteExceso > 0.5; ie--) {
-          var quitar = Math.min(lista[ie].monto, restanteExceso);
-          lista[ie].monto -= quitar;
-          restanteExceso -= quitar;
-        }
-        aportes[n] = lista.filter(function(x){ return x.monto > 0.5; });
-        aportes[n+1].push({monto:exceso, fecha: lista[lista.length-1].fecha, origen:'COMPENSACIÓN MES ANT.', esCompensacion:true});
-      } else {
-        aportes[n] = lista;
+        aportes[n+1].push({monto:exceso, fecha: lista[lista.length-1].fecha, origen:'COMPENSACIÓN MES ANT.', esCompensacion:true, informativo:true});
       }
     });
 
@@ -2827,7 +2820,7 @@ async function abrirDetalleAlumno(id){
     var totalIngresos2 = 0;
     pagosAlumno.forEach(function(p){ totalIngresos2 += parseFloat(p.monto)||0; });
     var totalAplicado2 = 0;
-    for (var nk=1; nk<=10; nk++) { (aportes[nk]||[]).forEach(function(pg){ totalAplicado2 += pg.monto; }); }
+    for (var nk=1; nk<=10; nk++) { (aportes[nk]||[]).forEach(function(pg){ if (!pg.informativo) totalAplicado2 += pg.monto; }); }
     var saldoPendiente = totalIngresos2 - totalAplicado2;
 
     cuentaCorriente = '<div style="margin-top:14px">'+
@@ -2856,12 +2849,11 @@ async function abrirDetalleAlumno(id){
       // concepto mencionaba de más una cuota que ya estaba saldada) — se fusionan en una fila.
       var pagosNMerged = [];
       pagosN.forEach(function(pg){
-        var existente = pagosNMerged.find(function(x){ return x.fecha === pg.fecha; });
+        var existente = !pg.informativo && pagosNMerged.find(function(x){ return x.fecha === pg.fecha && !x.informativo; });
         if (existente) {
           existente.monto += pg.monto;
-          if (existente.esCompensacion && !pg.esCompensacion) { existente.origen = pg.origen; existente.esCompensacion = false; }
         } else {
-          pagosNMerged.push({monto:pg.monto, fecha:pg.fecha, origen:pg.origen, esCompensacion:pg.esCompensacion});
+          pagosNMerged.push({monto:pg.monto, fecha:pg.fecha, origen:pg.origen, esCompensacion:pg.esCompensacion, informativo:pg.informativo});
         }
       });
       pagosN = pagosNMerged;
@@ -2893,13 +2885,13 @@ async function abrirDetalleAlumno(id){
         '</tr>';
 
       pagosN.forEach(function(pg) {
-        saldo -= pg.monto;
+        if (!pg.informativo) saldo -= pg.monto;
         var colorSaldo = saldo > 0 ? 'var(--d)' : saldo < 0 ? 'var(--s)' : 'var(--m)';
         var colorOrigen = pg.esCompensacion ? '#1565C0' : 'var(--m)';
         cuentaCorriente +=
-          '<tr style="border-bottom:1px solid var(--b)">'+
+          '<tr style="border-bottom:1px solid var(--b)'+(pg.informativo?';opacity:.65':'')+'">'+
             '<td></td>'+
-            '<td style="padding:4px 8px;font-size:11px;color:'+colorOrigen+'">'+pg.origen+'</td>'+
+            '<td style="padding:4px 8px;font-size:11px;color:'+colorOrigen+'">'+pg.origen+(pg.informativo?' <span style="font-style:italic">(ya contado en el mes de origen)</span>':'')+'</td>'+
             '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+pg.fecha+'</td>'+
             '<td></td>'+
             '<td style="padding:4px 8px;text-align:right;color:'+(pg.esCompensacion?colorOrigen:'var(--s)')+'">'+pesos(pg.monto)+'</td>'+
@@ -2918,10 +2910,10 @@ async function abrirDetalleAlumno(id){
     if (saldoFavorSinDestino.length) {
       cuentaCorriente += '<tr style="background:#eef6ff"><td colspan="7" style="padding:5px 8px;font-size:11px;font-weight:700;color:#1565C0">SALDO A FAVOR (sin cuota generada todavía donde aplicarlo)</td></tr>';
       saldoFavorSinDestino.forEach(function(pg){
-        saldo -= pg.monto;
-        cuentaCorriente += '<tr style="border-bottom:1px solid var(--b)">'+
+        if (!pg.informativo) saldo -= pg.monto;
+        cuentaCorriente += '<tr style="border-bottom:1px solid var(--b)'+(pg.informativo?';opacity:.65':'')+'">'+
             '<td></td>'+
-            '<td style="padding:4px 8px;font-size:11px;color:#1565C0">'+pg.origen+'</td>'+
+            '<td style="padding:4px 8px;font-size:11px;color:#1565C0">'+pg.origen+(pg.informativo?' <span style="font-style:italic">(ya contado en el mes de origen)</span>':'')+'</td>'+
             '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+pg.fecha+'</td>'+
             '<td></td>'+
             '<td style="padding:4px 8px;text-align:right;color:#1565C0">'+pesos(pg.monto)+'</td>'+
