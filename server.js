@@ -454,6 +454,18 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
   const precioNormalBase = parseFloat(alumno.precio_normal);
   const precioBonifBase = parseFloat(alumno.precio_bonificado);
 
+  function dVencDe(num) {
+    const venc = vencimientos[num-1];
+    if (!venc) return null;
+    const [dv,mv,yv] = venc.split('/');
+    return new Date(parseInt(yv), parseInt(mv)-1, parseInt(dv), 23,59,59);
+  }
+  function esATiempoDe(num, fechaStr) {
+    const dVenc = dVencDe(num);
+    if (!dVenc) return false;
+    return parseFechaLocal(fechaStr) <= dVenc;
+  }
+
   // ---- PASE 1: repartir cada pago entre las cuotas que menciona su concepto ----
   // Se usa el precio NORMAL (el techo más alto posible) como tope provisorio para no
   // cortarle plata de más a una cuota antes de saber si en definitiva le corresponde
@@ -490,11 +502,12 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
         montoEsta = Math.min(montoEsta, restante);
         if (montoEsta < restante) esParcialIncompleta = true;
       } else {
-        // Si esta cuota ya juntó el bonificado con pagos anteriores, queda cerrada — no
-        // acepta más plata solo porque un pago posterior (y quizás tardío) también la
-        // menciona; esa plata en realidad es para la cuota que sigue.
+        // Cerrada de verdad solo si lo que juntó A TIEMPO ya alcanza el bonificado — recién
+        // ahí se bloquea. Si el bonificado se completó con plata tardía, todavía puede
+        // necesitar más (hasta el normal), así que sigue aceptando.
+        const yaAsignadoATiempo = aportes[num].filter(x=>esATiempoDe(num,x.fecha)).reduce((s,x)=>s+x.monto,0);
         const yaAsignado = aportes[num].reduce((s,x)=>s+x.monto,0);
-        const disponible = (yaAsignado >= precioBonifBase - 1) ? 0 : Math.max(0, precioNormalBase - yaAsignado);
+        const disponible = (yaAsignadoATiempo >= precioBonifBase - 1) ? 0 : Math.max(0, precioNormalBase - yaAsignado);
         montoEsta = Math.min(disponible, restante);
       }
       aportes[num].push({monto:montoEsta, fecha:fechaP});
