@@ -2693,11 +2693,20 @@ async function abrirDetalleAlumno(id){
     var MESES_IDX_CC = [2,3,4,5,6,7,8,9,10,11];
     var hoyMesCC = new Date().getMonth();
 
-    // ---- Distribuir pagos por cuota parseando conceptos ----
-    // Estructura: { numCuota: [ {monto, fecha, origen, tipo} ] }
-    var distribucion = {};
-    var acumuladoPorCuota = {};
-    for (var ni=1; ni<=10; ni++) { distribucion[ni] = []; acumuladoPorCuota[ni] = 0; }
+    // ==== Motor de reparto en dos pasadas ====
+    // Pase 1: repartir cada pago entre las cuotas que menciona su concepto, usando el precio
+    // normal (el techo más alto) como tope provisorio para no cortarle plata de más a una
+    // cuota antes de saber si en definitiva cierra a bonificado o a normal.
+    // Pase 2: por cada cuota, ¿lo que llegó A TIEMPO (antes del vencimiento, sea con pago
+    // directo o saldo a favor de un período anterior) alcanza el bonificado? Si sí, cierra
+    // bonificada y el resto viaja a la cuota siguiente. Si no, pero el total (a tiempo +
+    // tardío) alcanza el normal, cierra a normal con el mismo traspaso. Si ni así, queda
+    // pendiente con lo que se juntó — sin generar saldo a favor donde no corresponde.
+    var precioNormalBase = parseFloat(a.precio_normal);
+    var precioBonifBase = parseFloat(a.precio_bonificado);
+
+    var aportes = {};
+    for (var ni=1; ni<=10; ni++) aportes[ni] = [];
 
     pagosAlumno.forEach(function(p) {
       var conc = p.concepto || '';
@@ -2710,7 +2719,6 @@ async function abrirDetalleAlumno(id){
         .slice(0,20).toUpperCase();
       var fechaP = String(p.fecha||'').slice(0,10);
 
-      // Extraer cuotas mencionadas en el concepto
       var cuotasEnConc = [];
       var reg = /cuota\s+(\d+)/gi;
       var m;
@@ -2720,71 +2728,95 @@ async function abrirDetalleAlumno(id){
       }
 
       if (cuotasEnConc.length === 0) {
-        // Bonificación u otro — intentar aplicar a la primera cuota pendiente mencionada
-        distribucion[1].push({monto:montoTotal, fecha:fechaP, origen:origen, tipo:'otro'});
-        acumuladoPorCuota[1] += montoTotal;
+        aportes[1].push({monto:montoTotal, fecha:fechaP, origen:origen});
         return;
       }
 
-      // Distribuir el monto entre las cuotas mencionadas
-      // Lógica: topear cada cuota contra lo que YA le falta (precio menos lo que otros pagos
-      // anteriores ya le asignaron) — no contra su precio entero — así dos pagos que mencionen
-      // la misma cuota no la sobrecargan sin límite. El excedente pasa como compensación a la
-      // cuota siguiente, sea la única cuota mencionada o no — salvo que el texto del pago
-      // declare que la última cuota mencionada queda incompleta ("pago parcial $X"), en cuyo
-      // caso lo que sobra se queda ahí mismo en vez de saltar a la próxima.
       var restante = montoTotal;
-      var ultimaQuedoIncompleta = false;
+      var parcialMatch = conc.match(/pago parcial [$]?([0-9.,]+)/i);
       for (var idxC=0; idxC<cuotasEnConc.length; idxC++) {
         if (restante <= 0) break;
-        var num = cuotasEnConc[idxC];
+        var num2 = cuotasEnConc[idxC];
         var eUltima = idxC === cuotasEnConc.length - 1;
-        var parcialMatch = eUltima ? conc.match(/pago parcial [$]?([0-9.,]+)/i) : null;
         var montoEsta;
-
-        if (parcialMatch) {
+        if (eUltima && parcialMatch) {
           montoEsta = parseFloat(parcialMatch[1].replace(/\./g,'').replace(',','.')) || restante;
           montoEsta = Math.min(montoEsta, restante);
-          if (montoEsta < restante) ultimaQuedoIncompleta = true;
         } else {
-          var precioRef2 = getPrecioConVencFrontend(a, num, _vencimientosFrontend, fechaP);
-          var disponible = Math.max(0, precioRef2 - acumuladoPorCuota[num]);
+          var yaAsignado = aportes[num2].reduce(function(s,x){return s+x.monto;},0);
+          var disponible = Math.max(0, precioNormalBase - yaAsignado);
           montoEsta = Math.min(disponible, restante);
         }
-        distribucion[num].push({monto:montoEsta, fecha:fechaP, origen:origen, tipo:'pago'});
-        acumuladoPorCuota[num] += montoEsta;
+        aportes[num2].push({monto:montoEsta, fecha:fechaP, origen:origen});
         restante -= montoEsta;
       }
-
-      if (ultimaQuedoIncompleta && restante > 0.5) {
-        // No generar compensación: la última cuota mencionada quedó explícitamente incompleta,
-        // así que el sobrante se suma ahí mismo.
-        var ultimaCuotaInc = cuotasEnConc[cuotasEnConc.length-1];
-        distribucion[ultimaCuotaInc].push({monto:restante, fecha:fechaP, origen:origen, tipo:'pago'});
-        acumuladoPorCuota[ultimaCuotaInc] += restante;
-        restante = 0;
-      }
-
-      // Si sobró algo → compensación en cuota siguiente
       if (restante > 0.5) {
-        var ultimaCuota = cuotasEnConc[cuotasEnConc.length-1];
-        var sigCuota2 = ultimaCuota + 1;
-        if (sigCuota2 <= 10) {
-          distribucion[sigCuota2].push({monto:restante, fecha:fechaP, origen:'COMPENSACIÓN MES ANT.', tipo:'compensacion'});
-          acumuladoPorCuota[sigCuota2] += restante;
-        }
+        var ultima = cuotasEnConc[cuotasEnConc.length-1];
+        var sig = ultima + 1;
+        if (sig <= 10) aportes[sig].push({monto:restante, fecha:fechaP, origen:origen});
       }
     });
 
+    function parseFechaDMY(f) {
+      var p = String(f).split('/');
+      if (p.length===3) return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+      return new Date(0);
+    }
 
-    // Calcular saldo sin aplicar — usando la MISMA fuente que arma la tabla (distribucion),
-    // no el estado guardado en cuotas, para que nunca contradiga lo que se ve en pantalla.
+    var resultado = {};
+    for (var ni2=1; ni2<=10; ni2++) resultado[ni2] = {monto:0, fecha:null, estado:'futura'};
+
+    CUOTAS.forEach(function(c) {
+      var n = c.num;
+      var eBase = est[n] || est[String(n)] || 'futura';
+      if (eBase === 'gratis') { resultado[n] = {monto:0, fecha:null, estado:'gratis'}; return; }
+      if (eBase === 'compensada') { resultado[n] = {monto:0, fecha:null, estado:'compensada'}; return; }
+
+      var lista = aportes[n];
+      if (!lista.length) {
+        resultado[n] = {monto:0, fecha:null, estado: (MESES_IDX_CC[n-1] > hoyMesCC ? 'futura' : 'pendiente')};
+        return;
+      }
+      lista.sort(function(x,y){ return parseFechaDMY(x.fecha) - parseFechaDMY(y.fecha); });
+
+      var precioBonifN = precioBonifBase;
+      var precioNormalN = MESES_TODO_EL_MES.indexOf(n)>=0 ? precioBonifBase : precioNormalBase;
+
+      var vencStr = _vencimientosFrontend && _vencimientosFrontend[n-1];
+      var dVenc = null;
+      if (vencStr) {
+        var pv = vencStr.split('/');
+        dVenc = new Date(parseInt(pv[2]), parseInt(pv[1])-1, parseInt(pv[0]), 23,59,59);
+      }
+      function esATiempo(fechaStr) {
+        if (!dVenc) return false;
+        return parseFechaDMY(fechaStr) <= dVenc;
+      }
+
+      var aTiempoSum = 0, totalTodo = 0;
+      lista.forEach(function(x){ totalTodo += x.monto; if (esATiempo(x.fecha)) aTiempoSum += x.monto; });
+      var primeraFecha = lista[0].fecha;
+      var exceso = 0;
+
+      if (aTiempoSum >= precioBonifN - 1) {
+        resultado[n] = {monto:precioBonifN, fecha:primeraFecha, estado:'pagada'};
+        exceso = totalTodo - precioBonifN;
+      } else if (totalTodo >= precioNormalN - 1) {
+        resultado[n] = {monto:precioNormalN, fecha:primeraFecha, estado:'pagada'};
+        exceso = totalTodo - precioNormalN;
+      } else {
+        resultado[n] = {monto:totalTodo, fecha:primeraFecha, estado:'pendiente'};
+      }
+      if (exceso > 0.5 && n < 10) {
+        aportes[n+1].push({monto:exceso, fecha: lista[lista.length-1].fecha, origen:'COMPENSACIÓN MES ANT.', esCompensacion:true});
+      }
+    });
+
+    // Saldo sin aplicar: plata real que no llegó a asentarse en ninguna cuota (1 a 10)
     var totalIngresos2 = 0;
     pagosAlumno.forEach(function(p){ totalIngresos2 += parseFloat(p.monto)||0; });
     var totalAplicado2 = 0;
-    Object.keys(distribucion).forEach(function(k){
-      (distribucion[k]||[]).forEach(function(pg){ totalAplicado2 += parseFloat(pg.monto)||0; });
-    });
+    for (var nk=1; nk<=10; nk++) { (aportes[nk]||[]).forEach(function(pg){ totalAplicado2 += pg.monto; }); }
     var saldoPendiente = totalIngresos2 - totalAplicado2;
 
     cuentaCorriente = '<div style="margin-top:14px">'+
@@ -2803,37 +2835,27 @@ async function abrirDetalleAlumno(id){
     var saldo = 0;
     CUOTAS.forEach(function(c) {
       var n = c.num;
-      var e = est[n] || est[String(n)] || 'futura';
       var mesIdx = MESES_IDX_CC[n-1];
       if (mesIdx > hoyMesCC) return;
 
-      // Pagos/compensaciones ya asignados a esta cuota en la cuenta corriente
-      var pagosN = distribucion[n] || [];
-      var montoAsignado = pagosN.reduce(function(s,pg){ return s + (parseFloat(pg.monto)||0); }, 0);
-      var pagoReal = pagosN.find(function(pg){ return pg.tipo === 'pago'; });
-      var fechaRefPago = pagoReal ? pagoReal.fecha : (pagosN[0] ? pagosN[0].fecha : null);
-
-      // Precio de la cuota: si tiene pago(s) reales asociados, usar esa fecha para decidir
-      // bonificado/normal (aunque el estado en la base todavía no diga "pagada").
-      // Sin ningún pago asociado, estimar con la fecha de hoy.
-      var precioCuota = getPrecioConVencFrontend(a, n, _vencimientosFrontend, fechaRefPago);
+      var r = resultado[n];
+      var pagosN = aportes[n] || [];
+      // Precio a mostrar: si cerró (bonif o normal), el valor con el que efectivamente cerró.
+      // Si sigue pendiente, se expone considerando la fecha de HOY (regla: mientras no se
+      // cancele, el saldo se calcula a la fecha de la consulta).
+      var precioCuota = (r.estado === 'pagada') ? r.monto : getPrecioConVencFrontend(a, n, _vencimientosFrontend);
       var vencTxt = _vencimientosFrontend && _vencimientosFrontend[n-1] ? _vencimientosFrontend[n-1].slice(0,5) : '';
       saldo += precioCuota;
 
-      // Acción: se basa en si ESTA cuota quedó cubierta en la cuenta corriente que se ve acá,
-      // para que el botón nunca contradiga lo que muestra la tabla (ej: no mostrar "Reimputar"
-      // en una cuota que en esta tabla figura sin pagos y en rojo).
-      var cubierta = montoAsignado >= (precioCuota - 1);
       var accionCC='';
-      if (e==='gratis' || e==='compensada' || e==='futura') {
+      if (r.estado==='gratis' || r.estado==='compensada' || r.estado==='futura') {
         accionCC='';
-      } else if (cubierta) {
+      } else if (r.estado==='pagada') {
         accionCC='<button class="btn bob" style="padding:2px 7px;font-size:10px" onclick="event.stopPropagation();abrirReimputar('+a.id+','+n+')">Reimputar</button>';
       } else {
         accionCC='<button class="btn bob" style="padding:2px 7px;font-size:10px;background:#FF9800;color:#fff;border-color:#FF9800" onclick="event.stopPropagation();abrirBonificar('+a.id+','+n+','+precioCuota+')">Bonificar</button>';
       }
 
-      // Fila encabezado de cuota
       cuentaCorriente +=
         '<tr style="background:#f5f5f5;border-top:2px solid var(--b)">'+
           '<td style="padding:5px 8px;font-weight:700;color:var(--t);font-size:11px">('+mesesNombreCC[n-1].toUpperCase()+')</td>'+
@@ -2845,41 +2867,29 @@ async function abrirDetalleAlumno(id){
           '<td style="padding:5px 8px;text-align:center">'+accionCC+'</td>'+
         '</tr>';
 
-      // Filas de pagos/compensaciones para esta cuota
       pagosN.forEach(function(pg) {
-        // Compensación: es plata real que ya se cobró antes y ahora se aplica a esta cuota —
-        // tiene que restar del saldo igual que un pago, o queda como si nunca se hubiera usado.
         saldo -= pg.monto;
         var colorSaldo = saldo > 0 ? 'var(--d)' : saldo < 0 ? 'var(--s)' : 'var(--m)';
-        var colorOrigen = pg.tipo === 'compensacion' ? '#1565C0' : 'var(--m)';
+        var colorOrigen = pg.esCompensacion ? '#1565C0' : 'var(--m)';
         cuentaCorriente +=
           '<tr style="border-bottom:1px solid var(--b)">'+
             '<td></td>'+
             '<td style="padding:4px 8px;font-size:11px;color:'+colorOrigen+'">'+pg.origen+'</td>'+
             '<td style="padding:4px 8px;font-size:11px;color:var(--m)">'+pg.fecha+'</td>'+
             '<td></td>'+
-            '<td style="padding:4px 8px;text-align:right;color:'+(pg.tipo==='compensacion'?colorOrigen:'var(--s)')+'">'+pesos(pg.monto)+'</td>'+
+            '<td style="padding:4px 8px;text-align:right;color:'+(pg.esCompensacion?colorOrigen:'var(--s)')+'">'+pesos(pg.monto)+'</td>'+
             '<td style="padding:4px 8px;text-align:right;font-weight:700;color:'+colorSaldo+'">'+pesos(Math.abs(saldo))+(saldo<0?' ❖':'')+'</td>'+
             '<td></td>'+
           '</tr>';
       });
-
-      // Si no hay pagos registrados pero la cuota está pendiente con deuda
-      if (pagosN.length === 0 && e !== 'futura' && e !== 'pagada' && e !== 'compensada' && e !== 'gratis') {
-        // No mostrar fila de pago — el saldo ya refleja la deuda
-      }
     });
 
     // Saldo a favor generado por cuotas ya cubiertas, todavía sin cuota futura donde aplicarse
-    // (por ej. la cuota de septiembre aún no se generó). Antes quedaba invisible, solo sumado
-    // en "Saldo sin aplicar" — ahora se muestra de dónde sale.
     var saldoFavorSinDestino = [];
-    Object.keys(distribucion).forEach(function(k){
-      var nn = parseInt(k);
-      var mIdx = MESES_IDX_CC[nn-1];
-      if (mIdx === undefined || mIdx <= hoyMesCC) return; // ya se mostró arriba
-      (distribucion[nn]||[]).forEach(function(pg){ saldoFavorSinDestino.push(pg); });
-    });
+    for (var nf=1; nf<=10; nf++) {
+      if (MESES_IDX_CC[nf-1] <= hoyMesCC) continue;
+      (aportes[nf]||[]).forEach(function(pg){ saldoFavorSinDestino.push(pg); });
+    }
     if (saldoFavorSinDestino.length) {
       cuentaCorriente += '<tr style="background:#eef6ff"><td colspan="7" style="padding:5px 8px;font-size:11px;font-weight:700;color:#1565C0">SALDO A FAVOR (sin cuota generada todavía donde aplicarlo)</td></tr>';
       saldoFavorSinDestino.forEach(function(pg){
@@ -2962,7 +2972,7 @@ async function abrirDetalleAlumno(id){
         '<div style="font-weight:700;font-size:14px">'+a.nombre+'</div>'+
         '<div style="font-size:12px;color:var(--m)">'+a.curso+' · Tel: '+(a.telefono||'no registrado')+'</div>'+
       '</div>'+
-      (a.deudaReal>0&&waLink?'<a href="'+waLink+'" target="_blank" style="background:#25D366;color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;text-decoration:none">WhatsApp</a>':'<span class="badge bs">Al dia</span>')+
+      (a.deudaReal>0 ? (waLink?'<a href="'+waLink+'" target="_blank" style="background:#25D366;color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;text-decoration:none">WhatsApp</a>':'<span class="badge bd">Con deuda</span>') : '<span class="badge bs">Al dia</span>')+
     '</div>'+
     '<div class="r2" style="margin-bottom:14px">'+
       '<div style="background:var(--gl);padding:10px;border-radius:var(--rs)"><div style="font-size:11px;color:var(--m)">Total pagado</div><div style="font-weight:700;font-size:15px;color:var(--s)">'+pesos(a.totalPagado)+'</div></div>'+
