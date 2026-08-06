@@ -2857,7 +2857,7 @@ async function abrirDetalleAlumno(id){
       if (mesIdx > hoyMesCC) return;
 
       var r = resultado[n];
-      var pagosN = aportes[n] || [];
+      var pagosN = (aportes[n] || []).filter(function(pg){ return pg.monto > 0.5; });
       // Si un pago y una compensación caen exactamente el mismo día en la misma cuota, es
       // casi seguro que son la misma plata partida sin necesidad (por ej. un pago cuyo
       // concepto mencionaba de más una cuota que ya estaba saldada) — se fusionan en una fila.
@@ -2919,7 +2919,7 @@ async function abrirDetalleAlumno(id){
     var saldoFavorSinDestino = [];
     for (var nf=1; nf<=10; nf++) {
       if (MESES_IDX_CC[nf-1] <= hoyMesCC) continue;
-      (aportes[nf]||[]).forEach(function(pg){ saldoFavorSinDestino.push(pg); });
+      (aportes[nf]||[]).forEach(function(pg){ if (pg.monto > 0.5) saldoFavorSinDestino.push(pg); });
     }
     if (saldoFavorSinDestino.length) {
       cuentaCorriente += '<tr style="background:#eef6ff"><td colspan="7" style="padding:5px 8px;font-size:11px;font-weight:700;color:#1565C0">SALDO A FAVOR (sin cuota generada todavía donde aplicarlo)</td></tr>';
