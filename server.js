@@ -647,7 +647,172 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
   return { ok:true, pagosReaplicados: pagos.length };
 }
 
-// Resincroniza ignorando por completo el concepto de cada pago: solo mira el MONTO y la
+// Solo lectura — calcula, PARA CADA ALUMNO, el resultado de los dos métodos de reordenar
+// (por concepto y por fecha) sin guardar nada en la base, y devuelve en cuáles difieren.
+// Sirve para estimar el impacto de correr "Reordenar todos por fecha" antes de aplicarlo.
+async function calcularResultadoPuro(pagosOriginal, alumno, alumnoId, vencimientos, porFecha) {
+  const pagos = pagosOriginal.slice();
+  function parseFechaLocal(f) {
+    const s = normalizarFechaAR(String(f||'').split(' ')[0]);
+    const p = s.split('/');
+    if (p.length===3) return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+    return new Date(0);
+  }
+  pagos.sort((a,b) => parseFechaLocal(a.fecha) - parseFechaLocal(b.fecha) || a.id - b.id);
+  const precioNormalBase = parseFloat(alumno.precio_normal);
+  const precioBonifBase = parseFloat(alumno.precio_bonificado);
+  function dVencDe(num) {
+    const venc = vencimientos[num-1];
+    if (!venc) return null;
+    const [dv,mv,yv] = venc.split('/');
+    return new Date(parseInt(yv), parseInt(mv)-1, parseInt(dv), 23,59,59);
+  }
+  function esATiempoDe(num, fechaStr) {
+    const dVenc = dVencDe(num);
+    if (!dVenc) return false;
+    return parseFechaLocal(fechaStr) <= dVenc;
+  }
+  const aportes = {};
+  for (let n=1;n<=10;n++) aportes[n] = [];
+
+  if (porFecha) {
+    for (const pago of pagos) {
+      const montoTotal = parseFloat(pago.monto) || 0;
+      const fechaP = normalizarFechaAR(String(pago.fecha).split(' ')[0]);
+      let restante = montoTotal;
+      for (let num=1; num<=10 && restante > 0.5; num++) {
+        const yaAsignadoATiempo = aportes[num].filter(x=>esATiempoDe(num,x.fecha)).reduce((s,x)=>s+x.monto,0);
+        const yaAsignado = aportes[num].reduce((s,x)=>s+x.monto,0);
+        const disponible = (yaAsignadoATiempo >= precioBonifBase - 1) ? 0 : Math.max(0, precioNormalBase - yaAsignado);
+        const montoEsta = Math.min(disponible, restante);
+        if (montoEsta > 0.5) aportes[num].push({monto:montoEsta, fecha:fechaP});
+        restante -= montoEsta;
+      }
+      if (restante > 0.5) aportes[10].push({monto:restante, fecha:fechaP});
+    }
+  } else {
+    for (const pago of pagos) {
+      const conc = pago.concepto || '';
+      const montoTotal = parseFloat(pago.monto) || 0;
+      const fechaP = normalizarFechaAR(String(pago.fecha).split(' ')[0]);
+      const cuotasEnConc = [];
+      const reg = /cuota\s+(\d+)/gi;
+      let m;
+      while ((m = reg.exec(conc)) !== null) {
+        const num = parseInt(m[1]);
+        if (num>=1 && num<=10 && cuotasEnConc.indexOf(num)<0) cuotasEnConc.push(num);
+      }
+      if (cuotasEnConc.length === 0) {
+        let restanteSC = montoTotal;
+        for (let numSC=1; numSC<=10 && restanteSC > 0.5; numSC++) {
+          const yaAsignadoATiempoSC = aportes[numSC].filter(x=>esATiempoDe(numSC,x.fecha)).reduce((s,x)=>s+x.monto,0);
+          const yaAsignadoSC = aportes[numSC].reduce((s,x)=>s+x.monto,0);
+          const disponibleSC = (yaAsignadoATiempoSC >= precioBonifBase - 1) ? 0 : Math.max(0, precioNormalBase - yaAsignadoSC);
+          const montoEstaSC = Math.min(disponibleSC, restanteSC);
+          if (montoEstaSC > 0.5) aportes[numSC].push({monto:montoEstaSC, fecha:fechaP});
+          restanteSC -= montoEstaSC;
+        }
+        if (restanteSC > 0.5) aportes[10].push({monto:restanteSC, fecha:fechaP});
+        continue;
+      }
+      let restante = montoTotal;
+      const parcialMatch = conc.match(/pago parcial [$]?([0-9.,]+)/i);
+      for (let idx=0; idx<cuotasEnConc.length; idx++) {
+        if (restante <= 0) break;
+        const num = cuotasEnConc[idx];
+        const eUltima = idx===cuotasEnConc.length-1;
+        let montoEsta;
+        let esParcialIncompleta = false;
+        if (eUltima && parcialMatch) {
+          montoEsta = parseFloat(parcialMatch[1].replace(/\./g,'').replace(',','.')) || restante;
+          montoEsta = Math.min(montoEsta, restante);
+          if (montoEsta < restante) esParcialIncompleta = true;
+        } else {
+          const yaAsignadoATiempo = aportes[num].filter(x=>esATiempoDe(num,x.fecha)).reduce((s,x)=>s+x.monto,0);
+          const yaAsignado = aportes[num].reduce((s,x)=>s+x.monto,0);
+          const disponible = (yaAsignadoATiempo >= precioBonifBase - 1) ? 0 : Math.max(0, precioNormalBase - yaAsignado);
+          montoEsta = Math.min(disponible, restante);
+        }
+        aportes[num].push({monto:montoEsta, fecha:fechaP});
+        restante -= montoEsta;
+        if (esParcialIncompleta) {
+          const disponibleSinCerrar = Math.max(0, precioBonifBase - 1 - aportes[num].reduce((s,x)=>s+x.monto,0));
+          const aAgregar = Math.min(disponibleSinCerrar, restante);
+          aportes[num].push({monto:aAgregar, fecha:fechaP});
+          restante -= aAgregar;
+        }
+      }
+      if (restante > 0.5) {
+        const ultima = cuotasEnConc[cuotasEnConc.length-1];
+        const sig = ultima+1;
+        if (sig<=10) aportes[sig].push({monto:restante, fecha:fechaP});
+      }
+    }
+  }
+
+  const resultado = {};
+  for (let n=1;n<=10;n++) resultado[n] = {monto:0, estado:'pendiente'};
+  for (let n=1;n<=10;n++) {
+    const lista = aportes[n];
+    if (!lista.length) continue;
+    lista.sort((a,b)=> parseFechaLocal(a.fecha) - parseFechaLocal(b.fecha));
+    const esGratis = n===10 && await cuota10Gratis(alumnoId, alumno);
+    if (esGratis) { resultado[n] = {monto:0, estado:'pagada'}; continue; }
+    const precioBonifN = precioBonifBase;
+    const precioNormalN = MESES_TODO_EL_MES.includes(n) ? precioBonifBase : precioNormalBase;
+    const aTiempoSum = lista.filter(x=>esATiempoDe(n,x.fecha)).reduce((s,x)=>s+x.monto,0);
+    const totalTodo = lista.reduce((s,x)=>s+x.monto,0);
+    let exceso = 0;
+    if (aTiempoSum >= precioBonifN - 1) {
+      resultado[n] = {monto:precioBonifN, estado:'pagada'};
+      exceso = totalTodo - precioBonifN;
+    } else if (totalTodo >= precioNormalN - 1) {
+      resultado[n] = {monto:precioNormalN, estado:'pagada'};
+      exceso = totalTodo - precioNormalN;
+    } else {
+      resultado[n] = {monto:totalTodo, estado:'pendiente'};
+    }
+    if (exceso > 0.5 && n < 10) aportes[n+1].push({monto:exceso, fecha:lista[lista.length-1].fecha});
+  }
+  return resultado;
+}
+
+app.get('/api/simular-comparacion-reordenamientos', async (req, res) => {
+  try {
+    const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
+    const vencimientos = await getVencimientos();
+    const diferencias = [];
+    let sinCambios = 0;
+    for (const alumno of alumnos) {
+      const pagos = await q('SELECT * FROM pagos WHERE alumno_id=$1', [alumno.id]);
+      if (!pagos.length) continue;
+      const rConcepto = await calcularResultadoPuro(pagos, alumno, alumno.id, vencimientos, false);
+      const rFecha = await calcularResultadoPuro(pagos, alumno, alumno.id, vencimientos, true);
+      let difiere = false;
+      let diferenciaMonto = 0;
+      const cuotasDistintas = [];
+      for (let n=1;n<=10;n++) {
+        const c = rConcepto[n], f = rFecha[n];
+        if (c.estado !== f.estado || Math.abs(c.monto - f.monto) > 1) {
+          difiere = true;
+          diferenciaMonto += Math.abs(c.monto - f.monto);
+          cuotasDistintas.push({ cuota:n, porConcepto:c, porFecha:f });
+        }
+      }
+      if (difiere) {
+        diferencias.push({ id: alumno.id, nombre: alumno.nombre, diferenciaMonto, cuotasDistintas });
+      } else {
+        sinCambios++;
+      }
+    }
+    diferencias.sort((a,b)=>b.diferenciaMonto-a.diferenciaMonto);
+    res.json({ ok:true, revisados: alumnos.length, sinCambios, conDiferencias: diferencias.length, diferencias });
+  } catch(e) {
+    res.json({ ok:false, error: e.message });
+  }
+});
+
+
 // FECHA de cada pago, y lo aplica a la cuota pendiente más vieja, en orden cronológico
 // estricto — para los casos donde el concepto quedó mal cargado y no representa la
 // realidad. Comparte la misma lógica de cierre (a tiempo/bonificado vs tardío/normal) que
