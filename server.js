@@ -430,6 +430,23 @@ app.get('/api/alumno/:id/pagos-raw', async (req,res) => {
   const pagos = await q('SELECT id,fecha,monto,concepto,medio,origen FROM pagos WHERE alumno_id=$1 ORDER BY fecha,id', [req.params.id]);
   res.json({ ok:true, pagos });
 });
+// Solo lectura — buscar un alumno por nombre (activo o no) y ver en qué vigencias de
+// precios tiene fila, para diagnosticar por qué no aparece en "Tabla de precios vigente"
+app.get('/api/buscar-alumno', async (req,res) => {
+  const nombre = (req.query.nombre || '').toUpperCase();
+  if (!nombre) return res.json({ ok:false, error:'Falta ?nombre=' });
+  const alumnos = await q("SELECT id,nombre,curso,activo,precio_normal,precio_bonificado FROM alumnos WHERE UPPER(nombre) LIKE $1", ['%'+nombre+'%']);
+  const resultado = [];
+  for (const a of alumnos) {
+    const vigencias = await q(
+      `SELECT ar.id, ar.desde FROM aranceles ar
+       WHERE EXISTS (SELECT 1 FROM aranceles_precios ap WHERE ap.arancel_id=ar.id AND ap.alumno_id=$1)
+       ORDER BY ar.desde DESC`, [a.id]
+    );
+    resultado.push({ ...a, enVigencias: vigencias });
+  }
+  res.json({ ok:true, resultado });
+});
 app.get('/api/exportar/pagos', async (req,res) => { res.json(await q('SELECT * FROM pagos ORDER BY id')); });
 
 // Recalcula saldo_favor real de un alumno a partir de sus pagos y cuotas actuales
