@@ -483,17 +483,31 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
       const num = cuotasEnConc[idx];
       const eUltima = idx===cuotasEnConc.length-1;
       let montoEsta;
+      let esParcialIncompleta = false;
       if (eUltima && parcialMatch) {
         // El texto declara explícitamente cuánto va a esta cuota — se respeta tal cual.
         montoEsta = parseFloat(parcialMatch[1].replace(/\./g,'').replace(',','.')) || restante;
         montoEsta = Math.min(montoEsta, restante);
+        if (montoEsta < restante) esParcialIncompleta = true;
       } else {
+        // Si esta cuota ya juntó el bonificado con pagos anteriores, queda cerrada — no
+        // acepta más plata solo porque un pago posterior (y quizás tardío) también la
+        // menciona; esa plata en realidad es para la cuota que sigue.
         const yaAsignado = aportes[num].reduce((s,x)=>s+x.monto,0);
-        const disponible = Math.max(0, precioNormalBase - yaAsignado);
+        const disponible = (yaAsignado >= precioBonifBase - 1) ? 0 : Math.max(0, precioNormalBase - yaAsignado);
         montoEsta = Math.min(disponible, restante);
       }
       aportes[num].push({monto:montoEsta, fecha:fechaP});
       restante -= montoEsta;
+      if (esParcialIncompleta) {
+        // No debe pasar de largo a la cuota siguiente: el texto dice que ÉSTA sigue
+        // debiendo, así que el resto del pago se queda acá — sin pasarse del bonificado,
+        // para no cerrarla por error.
+        const disponibleSinCerrar = Math.max(0, precioBonifBase - 1 - aportes[num].reduce((s,x)=>s+x.monto,0));
+        const aAgregar = Math.min(disponibleSinCerrar, restante);
+        aportes[num].push({monto:aAgregar, fecha:fechaP});
+        restante -= aAgregar;
+      }
     }
     if (restante > 0.5) {
       const ultima = cuotasEnConc[cuotasEnConc.length-1];
