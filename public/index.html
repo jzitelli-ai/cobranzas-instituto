@@ -2927,50 +2927,25 @@ async function abrirDetalleAlumno(id){
         '</tr>' : '')+
       '</tfoot></table></div>';
 
-    // Detalle de pagos por cuota (1 a 10) — la tabla que mostraba el reporte anterior,
-    // agregada debajo de la cuenta corriente como referencia adicional.
+    // Ingresos: listado plano de los pagos reales, sin ningún cálculo de cuotas de por medio —
+    // así siempre coincide con lo que realmente entró, sin depender de que se haya reordenado.
     cuentaCorriente += '<div style="margin-top:18px">'+
-      '<div class="ctitle">Detalle de pagos</div>'+
+      '<div class="ctitle">Ingresos</div>'+
       '<table style="width:100%;font-size:12.5px;border-collapse:collapse"><thead><tr>'+
-        '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Cuota</th>'+
-        '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Mes</th>'+
-        '<th style="text-align:center;padding:6px 10px;background:var(--gl);color:var(--m)">Estado</th>'+
+        '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Fecha</th>'+
         '<th style="text-align:right;padding:6px 10px;background:var(--gl);color:var(--m)">Monto</th>'+
-        '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Vence</th>'+
-        '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Fecha de pago</th>'+
+        '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Origen</th>'+
       '</tr></thead><tbody>';
-    CUOTAS.forEach(function(c){
-      var nD = c.num;
-      var eD = est[nD] || est[String(nD)] || 'futura';
-      var montoD = parseFloat(montos[nD] || montos[String(nD)] || 0);
-      var fechaD = fechas[nD] || fechas[String(nD)] || '';
-      var fechaCortaD = fechaD ? String(fechaD).slice(0,10) : '—';
-      var bgD='', estadoHtmlD='', montoTxtD='—';
-      if (eD==='futura') { estadoHtmlD='<span style="color:var(--m)">No generada</span>'; }
-      else if (eD==='pagada') { bgD='var(--sl)'; estadoHtmlD='<span style="color:var(--s);font-weight:600">✓ Pagada</span>'; montoTxtD=montoD?pesos(montoD):'—'; }
-      else if (eD==='compensada') { bgD='#FFF3E0'; estadoHtmlD='<span style="color:#E65100;font-weight:600">↔ Compensada</span>'; montoTxtD='—'; }
-      else if (eD==='gratis') { bgD='#c8f7c5'; estadoHtmlD='<span style="color:#1a7a1a;font-weight:600">★ Gratis</span>'; montoTxtD='$0'; }
-      else {
-        bgD='var(--dl)';
-        var precioD = getPrecioConVencFrontend(a, nD, _vencimientosFrontend);
-        if (montoD > 0 && montoD < precioD) {
-          bgD='var(--wl)';
-          estadoHtmlD='<span style="color:var(--w);font-weight:600">⚠ Pago parcial</span>';
-          montoTxtD='<span style="color:var(--w)">'+pesos(montoD)+'</span><span style="color:var(--d);font-size:10px"> (falta '+pesos(precioD-montoD)+')</span>';
-        } else {
-          estadoHtmlD='<span style="color:var(--d);font-weight:600">Debe</span>';
-          montoTxtD=pesos(precioD);
-          fechaCortaD='—';
-        }
-      }
-      var vencTxtD = _vencimientosFrontend && _vencimientosFrontend[nD-1] ? _vencimientosFrontend[nD-1].slice(0,5) : '—';
-      cuentaCorriente += '<tr style="background:'+bgD+'">'+
-        '<td style="padding:6px 10px;font-weight:600">'+nD+'</td>'+
-        '<td style="padding:6px 10px">'+c.mes+' 2026</td>'+
-        '<td style="padding:6px 10px;text-align:center">'+estadoHtmlD+'</td>'+
-        '<td style="padding:6px 10px;text-align:right;font-weight:600">'+montoTxtD+'</td>'+
-        '<td style="padding:6px 10px;color:var(--m);font-size:11px">'+vencTxtD+'</td>'+
-        '<td style="padding:6px 10px;color:var(--m)">'+fechaCortaD+'</td>'+
+    pagosAlumno.slice().reverse().forEach(function(p){
+      var medioTxt = (p.medio || p.origen || '—')
+        .replace('Importado desde planilla','Excel')
+        .replace('Manual · ','')
+        .replace(/Banco \(CUIT \d+\)/,'Banco')
+        .replace('Bonificación manual','Bonificación');
+      cuentaCorriente += '<tr>'+
+        '<td style="padding:6px 10px;color:var(--m)">'+String(p.fecha||'').slice(0,10)+'</td>'+
+        '<td style="padding:6px 10px;text-align:right;font-weight:600">'+pesos(parseFloat(p.monto)||0)+'</td>'+
+        '<td style="padding:6px 10px;color:var(--m)">'+medioTxt+'</td>'+
       '</tr>';
     });
     cuentaCorriente += '</tbody></table></div>';
