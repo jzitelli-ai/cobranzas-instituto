@@ -369,7 +369,15 @@ app.post('/api/alumnos', async (req,res) => {
   }
   const {nombre,curso,cuits,precio_normal,precio_bonificado,telefono}=req.body;
   const r=await q('INSERT INTO alumnos (nombre,curso,cuits,precio_normal,precio_bonificado,telefono) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',[nombre.trim().toUpperCase(),curso,cuits||'',precio_normal||0,precio_bonificado||0,telefono||'']);
-  await generarCuotas(r[0].id); res.json({ok:true,id:r[0].id});
+  await generarCuotas(r[0].id);
+  // Agregarlo también a la vigencia de precios más reciente, si existe — si no, un alumno
+  // nuevo queda invisible en "Tabla de precios vigente" hasta que se cree la próxima vigencia.
+  const ultimoArancel = await q1('SELECT id FROM aranceles ORDER BY desde DESC LIMIT 1');
+  if (ultimoArancel) {
+    await q('INSERT INTO aranceles_precios (arancel_id,alumno_id,precio_normal,precio_bonificado) VALUES ($1,$2,$3,$4)',
+      [ultimoArancel.id, r[0].id, precio_normal||0, precio_bonificado||0]);
+  }
+  res.json({ok:true,id:r[0].id});
 });
 app.put('/api/alumnos/:id', async (req,res) => {
   const {nombre,curso,cuits,precio_normal,precio_bonificado,telefono}=req.body;
@@ -595,6 +603,136 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
   }
   return { ok:true, pagosReaplicados: pagos.length };
 }
+
+// Resincroniza ignorando por completo el concepto de cada pago: solo mira el MONTO y la
+// FECHA de cada pago, y lo aplica a la cuota pendiente más vieja, en orden cronológico
+// estricto — para los casos donde el concepto quedó mal cargado y no representa la
+// realidad. Comparte la misma lógica de cierre (a tiempo/bonificado vs tardío/normal) que
+// la versión por concepto, pero repartiendo secuencialmente en vez de leer el texto.
+async function resincronizarAlumnoPorFecha(alumnoId, alumno, vencimientos) {
+  const pagos = await q('SELECT * FROM pagos WHERE alumno_id=$1', [alumnoId]);
+  if (!pagos.length) return { ok:false, error:'No hay pagos registrados' };
+
+  function parseFechaLocal(f) {
+    const s = normalizarFechaAR(String(f||'').split(' ')[0]);
+    const p = s.split('/');
+    if (p.length===3) return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+    return new Date(0);
+  }
+  pagos.sort((a,b) => parseFechaLocal(a.fecha) - parseFechaLocal(b.fecha) || a.id - b.id);
+
+  const precioNormalBase = parseFloat(alumno.precio_normal);
+  const precioBonifBase = parseFloat(alumno.precio_bonificado);
+
+  function dVencDe(num) {
+    const venc = vencimientos[num-1];
+    if (!venc) return null;
+    const [dv,mv,yv] = venc.split('/');
+    return new Date(parseInt(yv), parseInt(mv)-1, parseInt(dv), 23,59,59);
+  }
+  function esATiempoDe(num, fechaStr) {
+    const dVenc = dVencDe(num);
+    if (!dVenc) return false;
+    return parseFechaLocal(fechaStr) <= dVenc;
+  }
+
+  // ---- PASE 1 (por fecha): cada pago se reparte empezando por la cuota 1 y avanzando en
+  // orden, sin mirar el concepto — la misma cuota puede recibir aportes de varios pagos
+  // hasta llenarse (a tiempo → bonificado; si no, hasta el normal).
+  const aportes = {};
+  for (let n=1;n<=10;n++) aportes[n] = [];
+
+  for (const pago of pagos) {
+    const montoTotal = parseFloat(pago.monto) || 0;
+    const fechaP = normalizarFechaAR(String(pago.fecha).split(' ')[0]);
+    let restante = montoTotal;
+    for (let num=1; num<=10 && restante > 0.5; num++) {
+      const yaAsignadoATiempo = aportes[num].filter(x=>esATiempoDe(num,x.fecha)).reduce((s,x)=>s+x.monto,0);
+      const yaAsignado = aportes[num].reduce((s,x)=>s+x.monto,0);
+      const disponible = (yaAsignadoATiempo >= precioBonifBase - 1) ? 0 : Math.max(0, precioNormalBase - yaAsignado);
+      const montoEsta = Math.min(disponible, restante);
+      if (montoEsta > 0.5) aportes[num].push({monto:montoEsta, fecha:fechaP});
+      restante -= montoEsta;
+    }
+    if (restante > 0.5) aportes[10].push({monto:restante, fecha:fechaP}); // desborda todo el año
+  }
+
+  // ---- PASE 2: idéntico al de la versión por concepto ----
+  const resultado = {};
+  for (let n=1;n<=10;n++) resultado[n] = {monto:0, fecha:null, estado:'pendiente'};
+
+  for (let n=1;n<=10;n++) {
+    const lista = aportes[n];
+    if (!lista.length) continue;
+    lista.sort((a,b)=> parseFechaLocal(a.fecha) - parseFechaLocal(b.fecha));
+
+    const esGratis = n===10 && await cuota10Gratis(alumnoId, alumno);
+    if (esGratis) { resultado[n] = {monto:0, fecha:lista[0].fecha, estado:'pagada'}; continue; }
+
+    const precioBonifN = precioBonifBase;
+    const precioNormalN = MESES_TODO_EL_MES.includes(n) ? precioBonifBase : precioNormalBase;
+
+    const vencN = vencimientos[n-1];
+    let dVenc = null;
+    if (vencN) {
+      const [dv,mv,yv] = vencN.split('/');
+      dVenc = new Date(parseInt(yv), parseInt(mv)-1, parseInt(dv), 23,59,59);
+    }
+    function esATiempo(fechaStr) {
+      if (!dVenc) return false;
+      const p = String(fechaStr).split('/');
+      const d = new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]), 12);
+      return d <= dVenc;
+    }
+
+    const aTiempoSum = lista.filter(x=>esATiempo(x.fecha)).reduce((s,x)=>s+x.monto,0);
+    const totalTodo = lista.reduce((s,x)=>s+x.monto,0);
+    const primeraFecha = lista[0].fecha;
+    let exceso = 0;
+
+    if (aTiempoSum >= precioBonifN - 1) {
+      resultado[n] = {monto:precioBonifN, fecha:primeraFecha, estado:'pagada'};
+      exceso = totalTodo - precioBonifN;
+    } else if (totalTodo >= precioNormalN - 1) {
+      resultado[n] = {monto:precioNormalN, fecha:primeraFecha, estado:'pagada'};
+      exceso = totalTodo - precioNormalN;
+    } else {
+      resultado[n] = {monto:totalTodo, fecha:primeraFecha, estado:'pendiente'};
+    }
+    if (exceso > 0.5 && n < 10) {
+      aportes[n+1].push({monto:exceso, fecha:lista[lista.length-1].fecha});
+    }
+  }
+
+  // ---- Persistir ----
+  await q('UPDATE cuotas SET estado=$1, monto_pagado=0, fecha_pago=$2 WHERE alumno_id=$3', ['pendiente','',alumnoId]);
+  for (let n=1;n<=10;n++) {
+    const r = resultado[n];
+    if (r.monto <= 0 && r.estado !== 'pagada') continue;
+    const existente = await q1('SELECT id FROM cuotas WHERE alumno_id=$1 AND numero_cuota=$2', [alumnoId, n]);
+    if (existente) {
+      await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE id=$4', [r.estado, r.fecha||'', r.monto, existente.id]);
+    } else {
+      await q('INSERT INTO cuotas (alumno_id,numero_cuota,estado,fecha_pago,monto_pagado,compensada) VALUES ($1,$2,$3,$4,$5,false)', [alumnoId, n, r.estado, r.fecha||'', r.monto]);
+    }
+  }
+  return { ok:true, pagosReaplicados: pagos.length };
+}
+
+app.post('/api/alumno/:id/reordenar-por-fecha', async (req, res) => {
+  try {
+    const alumnoId = parseInt(req.params.id);
+    const alumno = await q1('SELECT * FROM alumnos WHERE id=$1', [alumnoId]);
+    if (!alumno) return res.json({ ok: false, error: 'Alumno no encontrado' });
+    const vencimientos = await getVencimientos();
+    const resultado = await resincronizarAlumnoPorFecha(alumnoId, alumno, vencimientos);
+    if (resultado.ok) await recalcularSaldoFavor(alumnoId);
+    res.json(resultado);
+  } catch(e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 
 app.put('/api/pagos/:id', async (req,res) => {
   const {monto,concepto,medio,fecha}=req.body;
@@ -1358,6 +1496,21 @@ app.post('/api/aranceles', async (req,res) => {
   res.json({ok:true,id});
 });
 app.get('/api/aranceles/:id/precios', async (req,res) => { res.json(await q('SELECT ap.*,a.nombre,a.curso,a.precio_especial FROM aranceles_precios ap JOIN alumnos a ON ap.alumno_id=a.id WHERE ap.arancel_id=$1 ORDER BY a.curso,a.nombre',[req.params.id])); });
+// Agrega a la vigencia los alumnos activos que quedaron afuera (por ej. alumnos dados de
+// alta después de haberse creado la vigencia) — usa el precio actual de cada uno.
+app.post('/api/aranceles/:id/completar-faltantes', async (req,res) => {
+  const arancelId = req.params.id;
+  const faltantes = await q(
+    `SELECT a.* FROM alumnos a WHERE a.activo=TRUE
+     AND NOT EXISTS (SELECT 1 FROM aranceles_precios ap WHERE ap.arancel_id=$1 AND ap.alumno_id=a.id)`,
+    [arancelId]
+  );
+  for (const a of faltantes) {
+    await q('INSERT INTO aranceles_precios (arancel_id,alumno_id,precio_normal,precio_bonificado) VALUES ($1,$2,$3,$4)',
+      [arancelId, a.id, a.precio_normal, a.precio_bonificado]);
+  }
+  res.json({ ok:true, agregados: faltantes.length, alumnos: faltantes.map(a=>a.nombre) });
+});
 app.put('/api/aranceles/:id/precios', async (req,res) => {
   const {precios}=req.body; const hoy=new Date().toISOString().slice(0,10);
   const arancel=await q1('SELECT * FROM aranceles WHERE id=$1',[req.params.id]);
