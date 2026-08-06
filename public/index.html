@@ -2851,6 +2851,20 @@ async function abrirDetalleAlumno(id){
 
       var r = resultado[n];
       var pagosN = aportes[n] || [];
+      // Si un pago y una compensación caen exactamente el mismo día en la misma cuota, es
+      // casi seguro que son la misma plata partida sin necesidad (por ej. un pago cuyo
+      // concepto mencionaba de más una cuota que ya estaba saldada) — se fusionan en una fila.
+      var pagosNMerged = [];
+      pagosN.forEach(function(pg){
+        var existente = pagosNMerged.find(function(x){ return x.fecha === pg.fecha; });
+        if (existente) {
+          existente.monto += pg.monto;
+          if (existente.esCompensacion && !pg.esCompensacion) { existente.origen = pg.origen; existente.esCompensacion = false; }
+        } else {
+          pagosNMerged.push({monto:pg.monto, fecha:pg.fecha, origen:pg.origen, esCompensacion:pg.esCompensacion});
+        }
+      });
+      pagosN = pagosNMerged;
       // Precio a mostrar: si cerró (bonif o normal), el valor con el que efectivamente cerró.
       // Si sigue pendiente, se expone considerando la fecha de HOY (regla: mientras no se
       // cancele, el saldo se calcula a la fecha de la consulta).
