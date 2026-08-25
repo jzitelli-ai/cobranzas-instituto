@@ -982,7 +982,11 @@ async function init(){
 function poblarSelects(){
   ['alum-curso','cb-curso','ma-curso','ea-curso','rep-curso'].forEach(function(id){
     var s=document.getElementById(id);if(!s)return;
-    var first=s.options[0];s.innerHTML='';s.appendChild(first);
+    // Algunos de estos selects (ma-curso, ea-curso) arrancan sin ninguna opción en el HTML —
+    // conservar la primera solo si existe, para no romper el resto del loop.
+    var first=s.options.length ? s.options[0] : null;
+    s.innerHTML='';
+    if(first) s.appendChild(first);
     _cursos.forEach(function(c){var o=document.createElement('option');o.value=c.nombre;o.textContent=c.nombre;s.appendChild(o);});
   });
 }
