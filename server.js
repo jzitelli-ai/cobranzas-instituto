@@ -101,6 +101,38 @@ async function cuota10Gratis(alumnoId, alumno, cuotasPrec) {
   return cuotas19.every(c => c.estado === 'pagada' && (MESES_TODO_EL_MES.includes(c.numero_cuota) || parseFloat(c.monto_pagado) <= parseFloat(alumno.precio_bonificado)));
 }
 
+// Devuelve una función fecha->{precio_normal,precio_bonificado} que consulta qué precio
+// tenía este alumno en la vigencia que regía en esa fecha (no el precio actual). Así, un
+// cambio de precio nuevo no reinterpreta retroactivamente cuotas de meses anteriores.
+async function getPreciosPorFecha(alumnoId, alumnoFallback) {
+  const fallback = { precio_normal: parseFloat(alumnoFallback.precio_normal)||0, precio_bonificado: parseFloat(alumnoFallback.precio_bonificado)||0 };
+  const vigencias = await q('SELECT id,desde FROM aranceles ORDER BY desde ASC');
+  if (!vigencias.length) return () => fallback;
+  const preciosPorVigencia = {};
+  for (const v of vigencias) {
+    const row = await q1('SELECT precio_normal,precio_bonificado FROM aranceles_precios WHERE arancel_id=$1 AND alumno_id=$2', [v.id, alumnoId]);
+    preciosPorVigencia[v.id] = row ? { precio_normal: parseFloat(row.precio_normal)||0, precio_bonificado: parseFloat(row.precio_bonificado)||0 } : null;
+  }
+  function parseDesde(desdeStr) {
+    // 'desde' se guarda como YYYY-MM-DD
+    const s = String(desdeStr).slice(0,10);
+    const [y,m,d] = s.split('-');
+    return new Date(parseInt(y), parseInt(m)-1, parseInt(d));
+  }
+  return function(fechaStr) {
+    if (!fechaStr) return fallback;
+    const p = String(fechaStr).split('/');
+    if (p.length !== 3) return fallback;
+    const d = new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+    let elegida = null;
+    for (const v of vigencias) {
+      if (parseDesde(v.desde) <= d) elegida = v; else break;
+    }
+    if (elegida && preciosPorVigencia[elegida.id]) return preciosPorVigencia[elegida.id];
+    return fallback;
+  };
+}
+
 function normalizarFechaAR(f) {
   if (!f) return '';
   const s = String(f).trim().split(' ')[0]; // quitar hora si viene con timestamp
@@ -436,6 +468,24 @@ app.get('/api/alumno/:id/cuotas-raw', async (req,res) => {
   const cuotas = await q('SELECT numero_cuota,estado,monto_pagado,fecha_pago,compensada FROM cuotas WHERE alumno_id=$1 ORDER BY numero_cuota', [req.params.id]);
   res.json({ ok:true, cuotas });
 });
+// Precio de este alumno en cada vigencia (ya resuelto, con su precio actual como respaldo
+// si no tiene fila propia en esa vigencia) — para que la cuenta corriente del frontend use
+// el precio que regía en la fecha de cada cuota, no el precio de hoy.
+app.get('/api/alumno/:id/vigencias-precios', async (req,res) => {
+  const alumno = await q1('SELECT * FROM alumnos WHERE id=$1', [req.params.id]);
+  if (!alumno) return res.json({ ok:false, error:'Alumno no encontrado' });
+  const vigencias = await q('SELECT id,desde FROM aranceles ORDER BY desde ASC');
+  const resultado = [];
+  for (const v of vigencias) {
+    const row = await q1('SELECT precio_normal,precio_bonificado FROM aranceles_precios WHERE arancel_id=$1 AND alumno_id=$2', [v.id, req.params.id]);
+    resultado.push({
+      desde: v.desde,
+      precio_normal: row ? parseFloat(row.precio_normal)||0 : parseFloat(alumno.precio_normal)||0,
+      precio_bonificado: row ? parseFloat(row.precio_bonificado)||0 : parseFloat(alumno.precio_bonificado)||0
+    });
+  }
+  res.json({ ok:true, vigencias: resultado });
+});
 // Solo lectura — buscar un alumno por nombre (activo o no) y ver en qué vigencias de
 // precios tiene fila, para diagnosticar por qué no aparece en "Tabla de precios vigente"
 app.get('/api/buscar-alumno', async (req,res) => {
@@ -482,8 +532,9 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
   }
   pagos.sort((a,b) => parseFechaLocal(a.fecha) - parseFechaLocal(b.fecha) || a.id - b.id);
 
-  const precioNormalBase = parseFloat(alumno.precio_normal);
-  const precioBonifBase = parseFloat(alumno.precio_bonificado);
+  const preciosPorFecha = await getPreciosPorFecha(alumnoId, alumno);
+  function precioBonifDe(num) { return preciosPorFecha(vencimientos[num-1]).precio_bonificado; }
+  function precioNormalDe(num) { return preciosPorFecha(vencimientos[num-1]).precio_normal; }
 
   function dVencDe(num) {
     const venc = vencimientos[num-1];
@@ -523,7 +574,7 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
       for (let numSC=1; numSC<=10 && restanteSC > 0.5; numSC++) {
         const yaAsignadoATiempoSC = aportes[numSC].filter(x=>esATiempoDe(numSC,x.fecha)).reduce((s,x)=>s+x.monto,0);
         const yaAsignadoSC = aportes[numSC].reduce((s,x)=>s+x.monto,0);
-        const disponibleSC = (yaAsignadoATiempoSC >= precioBonifBase - 1) ? 0 : Math.max(0, precioNormalBase - yaAsignadoSC);
+        const disponibleSC = (yaAsignadoATiempoSC >= precioBonifDe(numSC) - 1) ? 0 : Math.max(0, precioNormalDe(numSC) - yaAsignadoSC);
         const montoEstaSC = Math.min(disponibleSC, restanteSC);
         if (montoEstaSC > 0.5) aportes[numSC].push({monto:montoEstaSC, fecha:fechaP});
         restanteSC -= montoEstaSC;
@@ -550,7 +601,7 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
         // necesitar más (hasta el normal), así que sigue aceptando.
         const yaAsignadoATiempo = aportes[num].filter(x=>esATiempoDe(num,x.fecha)).reduce((s,x)=>s+x.monto,0);
         const yaAsignado = aportes[num].reduce((s,x)=>s+x.monto,0);
-        const disponible = (yaAsignadoATiempo >= precioBonifBase - 1) ? 0 : Math.max(0, precioNormalBase - yaAsignado);
+        const disponible = (yaAsignadoATiempo >= precioBonifDe(num) - 1) ? 0 : Math.max(0, precioNormalDe(num) - yaAsignado);
         montoEsta = Math.min(disponible, restante);
       }
       aportes[num].push({monto:montoEsta, fecha:fechaP});
@@ -559,7 +610,7 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
         // No debe pasar de largo a la cuota siguiente: el texto dice que ÉSTA sigue
         // debiendo, así que el resto del pago se queda acá — sin pasarse del bonificado,
         // para no cerrarla por error.
-        const disponibleSinCerrar = Math.max(0, precioBonifBase - 1 - aportes[num].reduce((s,x)=>s+x.monto,0));
+        const disponibleSinCerrar = Math.max(0, precioBonifDe(num) - 1 - aportes[num].reduce((s,x)=>s+x.monto,0));
         const aAgregar = Math.min(disponibleSinCerrar, restante);
         aportes[num].push({monto:aAgregar, fecha:fechaP});
         restante -= aAgregar;
@@ -588,9 +639,9 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
     const esGratis = n===10 && await cuota10Gratis(alumnoId, alumno);
     if (esGratis) { resultado[n] = {monto:0, fecha:lista[0].fecha, estado:'pagada'}; continue; }
 
-    const precioBonifN = precioBonifBase;
+    const precioBonifN = precioBonifDe(n);
     // "Todo el mes bonificado": el techo alto es igual al bonificado, no hay precio normal distinto
-    const precioNormalN = MESES_TODO_EL_MES.includes(n) ? precioBonifBase : precioNormalBase;
+    const precioNormalN = MESES_TODO_EL_MES.includes(n) ? precioBonifDe(n) : precioNormalDe(n);
 
     const vencN = vencimientos[n-1];
     let dVenc = null;
@@ -659,8 +710,9 @@ async function calcularResultadoPuro(pagosOriginal, alumno, alumnoId, vencimient
     return new Date(0);
   }
   pagos.sort((a,b) => parseFechaLocal(a.fecha) - parseFechaLocal(b.fecha) || a.id - b.id);
-  const precioNormalBase = parseFloat(alumno.precio_normal);
-  const precioBonifBase = parseFloat(alumno.precio_bonificado);
+  const preciosPorFecha = await getPreciosPorFecha(alumnoId, alumno);
+  function precioBonifDe(num) { return preciosPorFecha(vencimientos[num-1]).precio_bonificado; }
+  function precioNormalDe(num) { return preciosPorFecha(vencimientos[num-1]).precio_normal; }
   function dVencDe(num) {
     const venc = vencimientos[num-1];
     if (!venc) return null;
@@ -683,7 +735,7 @@ async function calcularResultadoPuro(pagosOriginal, alumno, alumnoId, vencimient
       for (let num=1; num<=10 && restante > 0.5; num++) {
         const yaAsignadoATiempo = aportes[num].filter(x=>esATiempoDe(num,x.fecha)).reduce((s,x)=>s+x.monto,0);
         const yaAsignado = aportes[num].reduce((s,x)=>s+x.monto,0);
-        const disponible = (yaAsignadoATiempo >= precioBonifBase - 1) ? 0 : Math.max(0, precioNormalBase - yaAsignado);
+        const disponible = (yaAsignadoATiempo >= precioBonifDe(num) - 1) ? 0 : Math.max(0, precioNormalDe(num) - yaAsignado);
         const montoEsta = Math.min(disponible, restante);
         if (montoEsta > 0.5) aportes[num].push({monto:montoEsta, fecha:fechaP});
         restante -= montoEsta;
@@ -707,7 +759,7 @@ async function calcularResultadoPuro(pagosOriginal, alumno, alumnoId, vencimient
         for (let numSC=1; numSC<=10 && restanteSC > 0.5; numSC++) {
           const yaAsignadoATiempoSC = aportes[numSC].filter(x=>esATiempoDe(numSC,x.fecha)).reduce((s,x)=>s+x.monto,0);
           const yaAsignadoSC = aportes[numSC].reduce((s,x)=>s+x.monto,0);
-          const disponibleSC = (yaAsignadoATiempoSC >= precioBonifBase - 1) ? 0 : Math.max(0, precioNormalBase - yaAsignadoSC);
+          const disponibleSC = (yaAsignadoATiempoSC >= precioBonifDe(numSC) - 1) ? 0 : Math.max(0, precioNormalDe(numSC) - yaAsignadoSC);
           const montoEstaSC = Math.min(disponibleSC, restanteSC);
           if (montoEstaSC > 0.5) aportes[numSC].push({monto:montoEstaSC, fecha:fechaP});
           restanteSC -= montoEstaSC;
@@ -730,13 +782,13 @@ async function calcularResultadoPuro(pagosOriginal, alumno, alumnoId, vencimient
         } else {
           const yaAsignadoATiempo = aportes[num].filter(x=>esATiempoDe(num,x.fecha)).reduce((s,x)=>s+x.monto,0);
           const yaAsignado = aportes[num].reduce((s,x)=>s+x.monto,0);
-          const disponible = (yaAsignadoATiempo >= precioBonifBase - 1) ? 0 : Math.max(0, precioNormalBase - yaAsignado);
+          const disponible = (yaAsignadoATiempo >= precioBonifDe(num) - 1) ? 0 : Math.max(0, precioNormalDe(num) - yaAsignado);
           montoEsta = Math.min(disponible, restante);
         }
         aportes[num].push({monto:montoEsta, fecha:fechaP});
         restante -= montoEsta;
         if (esParcialIncompleta) {
-          const disponibleSinCerrar = Math.max(0, precioBonifBase - 1 - aportes[num].reduce((s,x)=>s+x.monto,0));
+          const disponibleSinCerrar = Math.max(0, precioBonifDe(num) - 1 - aportes[num].reduce((s,x)=>s+x.monto,0));
           const aAgregar = Math.min(disponibleSinCerrar, restante);
           aportes[num].push({monto:aAgregar, fecha:fechaP});
           restante -= aAgregar;
@@ -758,8 +810,8 @@ async function calcularResultadoPuro(pagosOriginal, alumno, alumnoId, vencimient
     lista.sort((a,b)=> parseFechaLocal(a.fecha) - parseFechaLocal(b.fecha));
     const esGratis = n===10 && await cuota10Gratis(alumnoId, alumno);
     if (esGratis) { resultado[n] = {monto:0, estado:'pagada'}; continue; }
-    const precioBonifN = precioBonifBase;
-    const precioNormalN = MESES_TODO_EL_MES.includes(n) ? precioBonifBase : precioNormalBase;
+    const precioBonifN = precioBonifDe(n);
+    const precioNormalN = MESES_TODO_EL_MES.includes(n) ? precioBonifDe(n) : precioNormalDe(n);
     const aTiempoSum = lista.filter(x=>esATiempoDe(n,x.fecha)).reduce((s,x)=>s+x.monto,0);
     const totalTodo = lista.reduce((s,x)=>s+x.monto,0);
     let exceso = 0;
@@ -829,8 +881,9 @@ async function resincronizarAlumnoPorFecha(alumnoId, alumno, vencimientos) {
   }
   pagos.sort((a,b) => parseFechaLocal(a.fecha) - parseFechaLocal(b.fecha) || a.id - b.id);
 
-  const precioNormalBase = parseFloat(alumno.precio_normal);
-  const precioBonifBase = parseFloat(alumno.precio_bonificado);
+  const preciosPorFecha = await getPreciosPorFecha(alumnoId, alumno);
+  function precioBonifDe(num) { return preciosPorFecha(vencimientos[num-1]).precio_bonificado; }
+  function precioNormalDe(num) { return preciosPorFecha(vencimientos[num-1]).precio_normal; }
 
   function dVencDe(num) {
     const venc = vencimientos[num-1];
@@ -857,7 +910,7 @@ async function resincronizarAlumnoPorFecha(alumnoId, alumno, vencimientos) {
     for (let num=1; num<=10 && restante > 0.5; num++) {
       const yaAsignadoATiempo = aportes[num].filter(x=>esATiempoDe(num,x.fecha)).reduce((s,x)=>s+x.monto,0);
       const yaAsignado = aportes[num].reduce((s,x)=>s+x.monto,0);
-      const disponible = (yaAsignadoATiempo >= precioBonifBase - 1) ? 0 : Math.max(0, precioNormalBase - yaAsignado);
+      const disponible = (yaAsignadoATiempo >= precioBonifDe(num) - 1) ? 0 : Math.max(0, precioNormalDe(num) - yaAsignado);
       const montoEsta = Math.min(disponible, restante);
       if (montoEsta > 0.5) aportes[num].push({monto:montoEsta, fecha:fechaP});
       restante -= montoEsta;
@@ -877,8 +930,8 @@ async function resincronizarAlumnoPorFecha(alumnoId, alumno, vencimientos) {
     const esGratis = n===10 && await cuota10Gratis(alumnoId, alumno);
     if (esGratis) { resultado[n] = {monto:0, fecha:lista[0].fecha, estado:'pagada'}; continue; }
 
-    const precioBonifN = precioBonifBase;
-    const precioNormalN = MESES_TODO_EL_MES.includes(n) ? precioBonifBase : precioNormalBase;
+    const precioBonifN = precioBonifDe(n);
+    const precioNormalN = MESES_TODO_EL_MES.includes(n) ? precioBonifDe(n) : precioNormalDe(n);
 
     const vencN = vencimientos[n-1];
     let dVenc = null;
