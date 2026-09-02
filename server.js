@@ -441,12 +441,12 @@ app.get('/api/alumno/:id/cuotas-raw', async (req,res) => {
 app.get('/api/buscar-alumno', async (req,res) => {
   const nombre = (req.query.nombre || '').toUpperCase();
   if (!nombre) return res.json({ ok:false, error:'Falta ?nombre=' });
-  const alumnos = await q("SELECT id,nombre,curso,activo,precio_normal,precio_bonificado FROM alumnos WHERE UPPER(nombre) LIKE $1", ['%'+nombre+'%']);
+  const alumnos = await q("SELECT id,nombre,curso,activo,precio_normal,precio_bonificado,precio_especial FROM alumnos WHERE UPPER(nombre) LIKE $1", ['%'+nombre+'%']);
   const resultado = [];
   for (const a of alumnos) {
     const vigencias = await q(
-      `SELECT ar.id, ar.desde FROM aranceles ar
-       WHERE EXISTS (SELECT 1 FROM aranceles_precios ap WHERE ap.arancel_id=ar.id AND ap.alumno_id=$1)
+      `SELECT ar.id, ar.desde, ap.precio_normal, ap.precio_bonificado FROM aranceles ar
+       JOIN aranceles_precios ap ON ap.arancel_id=ar.id AND ap.alumno_id=$1
        ORDER BY ar.desde DESC`, [a.id]
     );
     resultado.push({ ...a, enVigencias: vigencias });
