@@ -3243,12 +3243,24 @@ async function cargarAranceles(){
 
 function renderVigencias(){
   var hoy=fechaLocalAR();
+  // La "activa" de verdad es la más reciente entre las que ya empezaron — no cualquiera
+  // cuya fecha ya haya pasado, o vigencias viejas quedan marcadas como si rigieran hoy.
+  var pasadas=_aranceles.filter(function(v){return v.desde<=hoy;});
+  var vigenciaActualId=null;
+  if(pasadas.length){
+    vigenciaActualId=pasadas.reduce(function(mejor,v){return (!mejor||v.desde>mejor.desde)?v:mejor;},null).id;
+  }
   var h='<table><thead><tr><th>Desde</th><th>Descripcion</th><th>Estado</th><th></th></tr></thead><tbody>';
   if(!_aranceles.length){ h+='<tr><td colspan="4" style="text-align:center;color:var(--m);padding:20px">Sin vigencias. Crea la primera.</td></tr>'; }
   _aranceles.forEach(function(v){
-    var act=v.desde<=hoy;
+    var esFutura=v.desde>hoy;
+    var esActual=v.id===vigenciaActualId;
+    var estadoTxt = esFutura ? 'Futura' : (esActual ? 'Activa' : 'Anterior');
+    var estadoHtml = esFutura ? '<span class="badge bp">Futura</span>'
+      : (esActual ? '<span class="badge bs">Activa</span>'
+      : '<span class="badge" style="background:var(--gl);color:var(--m)">Anterior</span>');
     h+='<tr><td style="font-weight:600">'+v.desde+'</td><td>'+(v.descripcion||'—')+'</td>'+
-      '<td><span class="badge '+(act?'bs':'bp')+'">'+(act?'Activa':'Futura')+'</span></td>'+
+      '<td>'+estadoHtml+'</td>'+
       '<td style="white-space:nowrap">'+
         '<button class="btn bob" style="font-size:11px;padding:4px 9px;background:var(--gl)" onclick="verPreciosVig('+v.id+')">👁 Ver precios</button> '+
         '<button class="btn bob" style="font-size:11px;padding:4px 9px" onclick="abrirEditVig('+v.id+')">Editar precios</button> '+
@@ -3460,28 +3472,18 @@ async function aplicarPrecioCurso(curso){
   if(!pnInput||!pbInput) return;
   var pn=parseFloat(pnInput.value)||0;
   var pb=parseFloat(pbInput.value)||0;
-  // Preguntar desde qué cuota aplicar
-  document.getElementById('aplica-curso-nombre').textContent=curso;
-  document.getElementById('aplica-pn').textContent='$'+pn.toLocaleString('es-AR');
-  document.getElementById('aplica-pb').textContent='$'+pb.toLocaleString('es-AR');
-  _aplicarCursoData={curso,precio_normal:pn,precio_bonificado:pb};
-  abrirM('m-aplica-curso');
-}
-
-async function confirmarAplicarCurso(){
-  var desdeCuota=document.getElementById('aplica-desde').value;
+  // Un solo paso: confirmación nativa (no una segunda ventana que se puede dejar a medias)
+  // y aplica directo a las cuotas pendientes desde ahora.
+  if(!confirm('¿Aplicar a '+curso+'?\n\nNormal: $'+pn.toLocaleString('es-AR')+'\nBonificado: $'+pb.toLocaleString('es-AR')+'\n\nSe actualiza el precio de todos los alumnos de este curso (sin precio especial) y se recalculan sus cuotas pendientes desde ahora. Las cuotas ya pagadas no se tocan.')) return;
   var r=await api('PUT','/api/aranceles/'+editVigId+'/cursos',{
-    curso:_aplicarCursoData.curso,
-    precio_normal:_aplicarCursoData.precio_normal,
-    precio_bonificado:_aplicarCursoData.precio_bonificado,
-    desde_cuota:desdeCuota
+    curso:curso,
+    precio_normal:pn,
+    precio_bonificado:pb,
+    desde_cuota:'futuras'
   });
-  cerrarM('m-aplica-curso');
-  cerrarM('m-edit-vig');
   _alumnos=await api('GET','/api/alumnos');
-  toast('Precios actualizados para '+r.afectados+' alumnos de '+_aplicarCursoData.curso,'s');
+  toast('Precios actualizados para '+(r&&r.afectados!=null?r.afectados:'?')+' alumnos de '+curso,'s');
 }
-
 async function guardarEditVig(){
   // Guardar precios individuales
   var inputs=document.querySelectorAll('#edit-vig-table input[type=number]');
