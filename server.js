@@ -1746,7 +1746,7 @@ app.get('/api/aranceles/:id/cursos', async (req,res) => {
 app.put('/api/aranceles/:id/cursos', async (req,res) => {
   const {curso,precio_normal,precio_bonificado,desde_cuota}=req.body;
   const arancel=await q1('SELECT * FROM aranceles WHERE id=$1',[req.params.id]);
-  if(!arancel) return res.json({ok:false});
+  if(!arancel) return res.json({ok:false, error:'Vigencia no encontrada', idRecibido:req.params.id});
   await q('INSERT INTO aranceles_cursos (arancel_id,curso,precio_normal,precio_bonificado) VALUES ($1,$2,$3,$4) ON CONFLICT (arancel_id,curso) DO UPDATE SET precio_normal=$3,precio_bonificado=$4',[req.params.id,curso,precio_normal,precio_bonificado]);
   const alumnos=await q('SELECT id FROM alumnos WHERE curso=$1 AND activo=TRUE AND (precio_especial=FALSE OR precio_especial IS NULL)',[curso]);
   for(const a of alumnos) {
@@ -1757,7 +1757,9 @@ app.put('/api/aranceles/:id/cursos', async (req,res) => {
       await q('UPDATE cuotas SET monto_pagado=$1 WHERE alumno_id=$2 AND estado=$3 AND numero_cuota>=$4',[precio_normal,a.id,'pendiente',desdeCuota]);
     }
   }
-  res.json({ok:true,afectados:alumnos.length});
+  // Releer lo que realmente quedó grabado, para diagnosticar sin depender de logs
+  const filaGuardada = await q1('SELECT * FROM aranceles_cursos WHERE arancel_id=$1 AND curso=$2',[req.params.id,curso]);
+  res.json({ok:true, afectados:alumnos.length, recibido:{curso,precio_normal,precio_bonificado,desde_cuota,idVigencia:req.params.id}, filaGuardada});
 });
 // Precio especial por alumno
 app.put('/api/alumnos/:id/precio-especial', async (req,res) => {
