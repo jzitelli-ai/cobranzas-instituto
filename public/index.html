@@ -1232,6 +1232,26 @@ async function cargarVencimientosFrontend() {
   return _vencimientosFrontend;
 }
 
+// Precio que regía para este alumno en la vigencia vigente a una fecha dada — para que la
+// cuenta corriente no reinterprete retroactivamente cuotas viejas cuando cambia el precio.
+var _vigenciasPreciosAlumno = [];
+function precioVigenteEnFecha(fechaStr, fallbackNormal, fallbackBonif) {
+  if (!fechaStr || !_vigenciasPreciosAlumno.length) return {precio_normal: fallbackNormal, precio_bonificado: fallbackBonif};
+  var p = String(fechaStr).split('/');
+  if (p.length !== 3) return {precio_normal: fallbackNormal, precio_bonificado: fallbackBonif};
+  var d = new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+  var elegida = null;
+  for (var i=0; i<_vigenciasPreciosAlumno.length; i++) {
+    var v = _vigenciasPreciosAlumno[i];
+    var s = String(v.desde).slice(0,10);
+    var partes = s.split('-');
+    var dv = new Date(parseInt(partes[0]), parseInt(partes[1])-1, parseInt(partes[2]));
+    if (dv <= d) elegida = v; else break;
+  }
+  if (!elegida) return {precio_normal: fallbackNormal, precio_bonificado: fallbackBonif};
+  return {precio_normal: elegida.precio_normal, precio_bonificado: elegida.precio_bonificado};
+}
+
 function getPrecioConVencFrontend(alumno, numCuota, vencimientos, fechaRef) {
   // Meses "todo el mes bonificado" — el precio con descuento aplica siempre, sin importar
   // cuándo se pague (misma regla que el backend en getPrecioConVenc).
@@ -2690,6 +2710,8 @@ async function aplicarSaldoAlumno(id, saldo) {
 async function abrirDetalleAlumno(id){
   await cargarVencimientosFrontend();
   _detAlumnoId = id;
+  var vigR = await api('GET', '/api/alumno/' + id + '/vigencias-precios');
+  _vigenciasPreciosAlumno = (vigR && vigR.ok) ? vigR.vigencias : [];
   // Mostrar botón reordenar solo para admins
   var btnR = document.getElementById('btn-reordenar');
   if (btnR) btnR.style.display = _adminAutenticado ? '' : 'none';
@@ -2747,6 +2769,8 @@ async function abrirDetalleAlumno(id){
     // pendiente con lo que se juntó — sin generar saldo a favor donde no corresponde.
     var precioNormalBase = parseFloat(a.precio_normal);
     var precioBonifBase = parseFloat(a.precio_bonificado);
+    function precioBonifDeCC(num) { return precioVigenteEnFecha(_vencimientosFrontend && _vencimientosFrontend[num-1], precioNormalBase, precioBonifBase).precio_bonificado; }
+    function precioNormalDeCC(num) { return precioVigenteEnFecha(_vencimientosFrontend && _vencimientosFrontend[num-1], precioNormalBase, precioBonifBase).precio_normal; }
 
     function parseFechaCC(f) {
       var s = String(f||'').trim().split(' ')[0];
@@ -2798,7 +2822,7 @@ async function abrirDetalleAlumno(id){
         for (var numSC=1; numSC<=10 && restanteSC > 0.5; numSC++) {
           var yaAsignadoATiempoSC = aportes[numSC].filter(function(x){return esATiempoDeFrontend(numSC,x.fecha);}).reduce(function(s,x){return s+x.monto;},0);
           var yaAsignadoSC = aportes[numSC].reduce(function(s,x){return s+x.monto;},0);
-          var disponibleSC = (yaAsignadoATiempoSC >= precioBonifBase - 1) ? 0 : Math.max(0, precioNormalBase - yaAsignadoSC);
+          var disponibleSC = (yaAsignadoATiempoSC >= precioBonifDeCC(numSC) - 1) ? 0 : Math.max(0, precioNormalDeCC(numSC) - yaAsignadoSC);
           var montoEstaSC = Math.min(disponibleSC, restanteSC);
           if (montoEstaSC > 0.5) aportes[numSC].push({monto:montoEstaSC, fecha:fechaP, origen:origen});
           restanteSC -= montoEstaSC;
@@ -2825,7 +2849,7 @@ async function abrirDetalleAlumno(id){
           // necesitar más (hasta el normal), así que sigue aceptando.
           var yaAsignadoATiempo = aportes[num2].filter(function(x){return esATiempoDeFrontend(num2,x.fecha);}).reduce(function(s,x){return s+x.monto;},0);
           var yaAsignado = aportes[num2].reduce(function(s,x){return s+x.monto;},0);
-          var disponible = (yaAsignadoATiempo >= precioBonifBase - 1) ? 0 : Math.max(0, precioNormalBase - yaAsignado);
+          var disponible = (yaAsignadoATiempo >= precioBonifDeCC(num2) - 1) ? 0 : Math.max(0, precioNormalDeCC(num2) - yaAsignado);
           montoEsta = Math.min(disponible, restante);
         }
         aportes[num2].push({monto:montoEsta, fecha:fechaP, origen:origen});
@@ -2834,7 +2858,7 @@ async function abrirDetalleAlumno(id){
           // No debe pasar de largo a la cuota siguiente: el texto dice que ÉSTA sigue
           // debiendo, así que el resto del pago se queda acá — sin pasarse del bonificado.
           var asignadoAhora = aportes[num2].reduce(function(s,x){return s+x.monto;},0);
-          var disponibleSinCerrar = Math.max(0, precioBonifBase - 1 - asignadoAhora);
+          var disponibleSinCerrar = Math.max(0, precioBonifDeCC(num2) - 1 - asignadoAhora);
           var aAgregar = Math.min(disponibleSinCerrar, restante);
           aportes[num2].push({monto:aAgregar, fecha:fechaP, origen:origen});
           restante -= aAgregar;
@@ -2869,8 +2893,8 @@ async function abrirDetalleAlumno(id){
       }
       lista.sort(function(x,y){ return parseFechaDMY(x.fecha) - parseFechaDMY(y.fecha); });
 
-      var precioBonifN = precioBonifBase;
-      var precioNormalN = MESES_TODO_EL_MES.indexOf(n)>=0 ? precioBonifBase : precioNormalBase;
+      var precioBonifN = precioBonifDeCC(n);
+      var precioNormalN = MESES_TODO_EL_MES.indexOf(n)>=0 ? precioBonifDeCC(n) : precioNormalDeCC(n);
 
       var vencStr = _vencimientosFrontend && _vencimientosFrontend[n-1];
       var dVenc = null;
