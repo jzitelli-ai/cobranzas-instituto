@@ -3482,7 +3482,9 @@ async function aplicarPrecioCurso(curso){
     desde_cuota:'futuras'
   });
   _alumnos=await api('GET','/api/alumnos');
-  toast('Precios actualizados para '+(r&&r.afectados!=null?r.afectados:'?')+' alumnos de '+curso,'s');
+  console.log('Respuesta aplicar curso:', r);
+  var guardado = r && r.filaGuardada;
+  toast('Guardado: Normal $'+(guardado?Number(guardado.precio_normal).toLocaleString('es-AR'):'?')+' / Bonif $'+(guardado?Number(guardado.precio_bonificado).toLocaleString('es-AR'):'?')+' — '+(r&&r.afectados!=null?r.afectados:'?')+' alumnos de '+curso,'s');
 }
 async function guardarEditVig(){
   // Guardar precios individuales
