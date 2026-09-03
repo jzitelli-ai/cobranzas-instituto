@@ -183,6 +183,7 @@ async function inicializarDB() {
     ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS precio_especial BOOLEAN DEFAULT FALSE;
   `);
   await q("ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS saldo_favor NUMERIC DEFAULT 0");
+  await q("ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS metodo_resolucion TEXT DEFAULT 'concepto'");
 
   // Trigger de consistencia: cada vez que se inserta o actualiza una fila en "cuotas",
   // recalcula automáticamente saldo_favor del alumno a partir de sus datos reales
@@ -1011,7 +1012,10 @@ app.post('/api/alumno/:id/reordenar-por-fecha', async (req, res) => {
     if (!alumno) return res.json({ ok: false, error: 'Alumno no encontrado' });
     const vencimientos = await getVencimientos();
     const resultado = await resincronizarAlumnoPorFecha(alumnoId, alumno, vencimientos);
-    if (resultado.ok) await recalcularSaldoFavor(alumnoId);
+    if (resultado.ok) {
+      await recalcularSaldoFavor(alumnoId);
+      await q("UPDATE alumnos SET metodo_resolucion='fecha' WHERE id=$1", [alumnoId]);
+    }
     res.json(resultado);
   } catch(e) {
     res.json({ ok: false, error: e.message });
@@ -1694,7 +1698,7 @@ app.get('/api/reporte', async (req,res) => {
       return mp===0; // cuota completamente impaga (no parcial)
     }).length;
     const tienesMoraFlag = cuotasImpagas >= 3;
-    resultado.push({id:a.id,nombre:a.nombre,curso:a.curso,precio_normal:parseFloat(a.precio_normal),precio_bonificado:parseFloat(a.precio_bonificado),cuits:a.cuits,telefono:a.telefono||'',activo:a.activo,estadoCuotas,fechasPago,montosPago,deudaReal,totalPagado,cuota10Gratis:c10g,tienesMora:tienesMoraFlag,saldo_favor:parseFloat(a.saldo_favor)||0});
+    resultado.push({id:a.id,nombre:a.nombre,curso:a.curso,precio_normal:parseFloat(a.precio_normal),precio_bonificado:parseFloat(a.precio_bonificado),cuits:a.cuits,telefono:a.telefono||'',activo:a.activo,estadoCuotas,fechasPago,montosPago,deudaReal,totalPagado,cuota10Gratis:c10g,tienesMora:tienesMoraFlag,saldo_favor:parseFloat(a.saldo_favor)||0,metodoResolucion:a.metodo_resolucion||'concepto'});
   }
   res.json(resultado);
 });
@@ -2162,7 +2166,10 @@ app.post('/api/alumno/:id/reordenar-imputaciones', async (req, res) => {
     if (!alumno) return res.json({ ok: false, error: 'Alumno no encontrado' });
     const vencimientos = await getVencimientos();
     const resultado = await resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos);
-    if (resultado.ok) await recalcularSaldoFavor(alumnoId);
+    if (resultado.ok) {
+      await recalcularSaldoFavor(alumnoId);
+      await q("UPDATE alumnos SET metodo_resolucion='concepto' WHERE id=$1", [alumnoId]);
+    }
     res.json(resultado);
   } catch(e) {
     res.json({ ok: false, error: e.message });
@@ -2223,6 +2230,7 @@ app.post('/api/reordenar-imputaciones-todos', async (req, res) => {
         const r = await resincronizarAlumnoDesdeConceptos(alumno.id, alumno, vencimientos);
         if (!r.ok) continue; // sin pagos, no hay nada que reordenar
         await recalcularSaldoFavor(alumno.id);
+        await q("UPDATE alumnos SET metodo_resolucion='concepto' WHERE id=$1", [alumno.id]);
         resultados.push({ nombre: alumno.nombre, pagos: r.pagosReaplicados, ok: true });
       } catch(e) {
         resultados.push({ nombre: alumno.nombre, ok: false, error: e.message });
@@ -2248,6 +2256,7 @@ app.post('/api/reordenar-por-fecha-todos', async (req, res) => {
         const r = await resincronizarAlumnoPorFecha(alumno.id, alumno, vencimientos);
         if (!r.ok) continue;
         await recalcularSaldoFavor(alumno.id);
+        await q("UPDATE alumnos SET metodo_resolucion='fecha' WHERE id=$1", [alumno.id]);
         resultados.push({ nombre: alumno.nombre, pagos: r.pagosReaplicados, ok: true });
       } catch(e) {
         resultados.push({ nombre: alumno.nombre, ok: false, error: e.message });
