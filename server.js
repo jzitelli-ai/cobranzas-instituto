@@ -618,8 +618,17 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
     }
     if (restante > 0.5) {
       const ultima = cuotasEnConc[cuotasEnConc.length-1];
-      const sig = ultima+1;
-      if (sig<=10) aportes[sig].push({monto:restante, fecha:fechaP});
+      // No volcar todo en una sola cuota siguiente sin revisar si ella misma tiene lugar —
+      // seguir en cadena, cuota por cuota, hasta encontrar dónde realmente entra.
+      for (let numSig=ultima+1; numSig<=10 && restante > 0.5; numSig++) {
+        const yaAsignadoATiempoSig = aportes[numSig].filter(x=>esATiempoDe(numSig,x.fecha)).reduce((s,x)=>s+x.monto,0);
+        const yaAsignadoSig = aportes[numSig].reduce((s,x)=>s+x.monto,0);
+        const disponibleSig = (yaAsignadoATiempoSig >= precioBonifDe(numSig) - 1) ? 0 : Math.max(0, precioNormalDe(numSig) - yaAsignadoSig);
+        const montoEstaSig = Math.min(disponibleSig, restante);
+        if (montoEstaSig > 0.5) aportes[numSig].push({monto:montoEstaSig, fecha:fechaP});
+        restante -= montoEstaSig;
+      }
+      if (restante > 0.5) aportes[10].push({monto:restante, fecha:fechaP});
     }
   }
 
@@ -796,8 +805,15 @@ async function calcularResultadoPuro(pagosOriginal, alumno, alumnoId, vencimient
       }
       if (restante > 0.5) {
         const ultima = cuotasEnConc[cuotasEnConc.length-1];
-        const sig = ultima+1;
-        if (sig<=10) aportes[sig].push({monto:restante, fecha:fechaP});
+        for (let numSig=ultima+1; numSig<=10 && restante > 0.5; numSig++) {
+          const yaAsignadoATiempoSig = aportes[numSig].filter(x=>esATiempoDe(numSig,x.fecha)).reduce((s,x)=>s+x.monto,0);
+          const yaAsignadoSig = aportes[numSig].reduce((s,x)=>s+x.monto,0);
+          const disponibleSig = (yaAsignadoATiempoSig >= precioBonifDe(numSig) - 1) ? 0 : Math.max(0, precioNormalDe(numSig) - yaAsignadoSig);
+          const montoEstaSig = Math.min(disponibleSig, restante);
+          if (montoEstaSig > 0.5) aportes[numSig].push({monto:montoEstaSig, fecha:fechaP});
+          restante -= montoEstaSig;
+        }
+        if (restante > 0.5) aportes[10].push({monto:restante, fecha:fechaP});
       }
     }
   }
