@@ -516,14 +516,39 @@ async function recalcularSaldoFavor(alumnoId) {
   return saldo;
 }
 
+// Pagos de tipo "Bonificación" (creados por /api/bonificar o /api/bonificar-mora) registran
+// el perdón de una cuota como un pago de $0 (o del monto que se decida perdonar) con
+// concepto "Cuota N (Mes) — Bonificada...". NO son plata real que compita por "disponible"
+// como un pago cualquiera: si los tratáramos así, al no alcanzar el precio de la cuota el
+// motor la devolvería a "pendiente" y la bonificación otorgada se perdería. Se detectan acá
+// y se aplican aparte, DESPUÉS de resolver las cuotas con la plata real.
+function detectarBonificaciones(pagos) {
+  const map = {};
+  for (const p of pagos) {
+    if (p.medio !== 'Bonificación') continue;
+    const conc = p.concepto || '';
+    const m = conc.match(/cuota\s+(\d+)/i);
+    if (!m) continue;
+    const num = parseInt(m[1]);
+    if (num < 1 || num > 10) continue;
+    const fecha = normalizarFechaAR(String(p.fecha).split(' ')[0]);
+    const monto = parseFloat(p.monto) || 0;
+    if (!map[num]) map[num] = { monto: 0, fecha };
+    map[num].monto += monto;
+  }
+  return map;
+}
+
 // Resincroniza las cuotas de un alumno a partir del CONCEPTO de sus pagos reales —
 // la misma lógica que arma la cuenta corriente en el frontend (cuál cuota menciona cada
 // pago, y el sobrante como compensación en la siguiente). Reemplaza el criterio cronológico
 // "a la cuota pendiente más vieja" que usaba antes, para que cuenta corriente, reporte de
 // deuda y saldo a favor sean siempre el mismo número, calculado de la misma forma.
 async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos) {
-  const pagos = await q('SELECT * FROM pagos WHERE alumno_id=$1', [alumnoId]);
-  if (!pagos.length) return { ok:false, error:'No hay pagos registrados' };
+  const pagosCompletos = await q('SELECT * FROM pagos WHERE alumno_id=$1', [alumnoId]);
+  if (!pagosCompletos.length) return { ok:false, error:'No hay pagos registrados' };
+  const bonificaciones = detectarBonificaciones(pagosCompletos);
+  const pagos = pagosCompletos.filter(p => p.medio !== 'Bonificación');
 
   function parseFechaLocal(f) {
     const s = normalizarFechaAR(String(f||'').split(' ')[0]);
@@ -685,6 +710,14 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
     }
   }
 
+  // ---- Aplicar bonificaciones: fuerzan 'pagada' sin exigir que se alcance el precio,
+  // conservando la plata real ya acumulada (si había un pago parcial antes de bonificar).
+  for (const numStr in bonificaciones) {
+    const n = parseInt(numStr);
+    const b = bonificaciones[n];
+    resultado[n] = { monto: resultado[n].monto, fecha: resultado[n].fecha || b.fecha, estado: 'pagada' };
+  }
+
   // ---- Persistir ----
   await q('UPDATE cuotas SET estado=$1, monto_pagado=0, fecha_pago=$2 WHERE alumno_id=$3', ['pendiente','',alumnoId]);
   for (let n=1;n<=10;n++) {
@@ -712,7 +745,8 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
 // (por concepto y por fecha) sin guardar nada en la base, y devuelve en cuáles difieren.
 // Sirve para estimar el impacto de correr "Reordenar todos por fecha" antes de aplicarlo.
 async function calcularResultadoPuro(pagosOriginal, alumno, alumnoId, vencimientos, porFecha) {
-  const pagos = pagosOriginal.slice();
+  const bonificaciones = detectarBonificaciones(pagosOriginal);
+  const pagos = pagosOriginal.filter(p => p.medio !== 'Bonificación');
   function parseFechaLocal(f) {
     const s = normalizarFechaAR(String(f||'').split(' ')[0]);
     const p = s.split('/');
@@ -843,6 +877,10 @@ async function calcularResultadoPuro(pagosOriginal, alumno, alumnoId, vencimient
     }
     if (exceso > 0.5 && n < 10) aportes[n+1].push({monto:exceso, fecha:lista[lista.length-1].fecha});
   }
+  for (const numStr in bonificaciones) {
+    const n = parseInt(numStr);
+    resultado[n] = { monto: resultado[n].monto, estado: 'pagada' };
+  }
   return resultado;
 }
 
@@ -887,8 +925,10 @@ app.get('/api/simular-comparacion-reordenamientos', async (req, res) => {
 // realidad. Comparte la misma lógica de cierre (a tiempo/bonificado vs tardío/normal) que
 // la versión por concepto, pero repartiendo secuencialmente en vez de leer el texto.
 async function resincronizarAlumnoPorFecha(alumnoId, alumno, vencimientos) {
-  const pagos = await q('SELECT * FROM pagos WHERE alumno_id=$1', [alumnoId]);
-  if (!pagos.length) return { ok:false, error:'No hay pagos registrados' };
+  const pagosCompletos = await q('SELECT * FROM pagos WHERE alumno_id=$1', [alumnoId]);
+  if (!pagosCompletos.length) return { ok:false, error:'No hay pagos registrados' };
+  const bonificaciones = detectarBonificaciones(pagosCompletos);
+  const pagos = pagosCompletos.filter(p => p.medio !== 'Bonificación');
 
   function parseFechaLocal(f) {
     const s = normalizarFechaAR(String(f||'').split(' ')[0]);
@@ -980,6 +1020,14 @@ async function resincronizarAlumnoPorFecha(alumnoId, alumno, vencimientos) {
     if (exceso > 0.5 && n < 10) {
       aportes[n+1].push({monto:exceso, fecha:lista[lista.length-1].fecha});
     }
+  }
+
+  // ---- Aplicar bonificaciones: fuerzan 'pagada' sin exigir que se alcance el precio,
+  // conservando la plata real ya acumulada (si había un pago parcial antes de bonificar).
+  for (const numStr in bonificaciones) {
+    const n = parseInt(numStr);
+    const b = bonificaciones[n];
+    resultado[n] = { monto: resultado[n].monto, fecha: resultado[n].fecha || b.fecha, estado: 'pagada' };
   }
 
   // ---- Persistir ----
