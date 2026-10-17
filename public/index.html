@@ -2795,7 +2795,27 @@ async function abrirDetalleAlumno(id){
     var aportes = {};
     for (var ni=1; ni<=10; ni++) aportes[ni] = [];
 
+    // Pagos de tipo "Bonificación" (perdón de cuota) no son plata real que compita por
+    // "disponible": si se los tratara como un pago cualquiera, al no alcanzar nunca el
+    // precio de la cuota, ésta volvería a mostrarse "pendiente" acá aunque el backend la
+    // tenga guardada como pagada/perdonada. Se detectan y se excluyen del reparto normal,
+    // y se fuerzan a 'pagada' después (igual que en el motor del servidor).
+    var bonificacionesCC = {};
     pagosAlumno.forEach(function(p) {
+      if (p.medio !== 'Bonificación') return;
+      var concB = p.concepto || '';
+      var mB = concB.match(/cuota\s+(\d+)/i);
+      if (!mB) return;
+      var numB = parseInt(mB[1]);
+      if (numB < 1 || numB > 10) return;
+      var fechaB = String(p.fecha || '').slice(0, 10);
+      var montoB = parseFloat(p.monto) || 0;
+      if (!bonificacionesCC[numB]) bonificacionesCC[numB] = {monto: 0, fecha: fechaB};
+      bonificacionesCC[numB].monto += montoB;
+    });
+
+    pagosAlumno.forEach(function(p) {
+      if (p.medio === 'Bonificación') return;
       var conc = p.concepto || '';
       var montoTotal = parseFloat(p.monto) || 0;
       var origen = (p.origen||'')
@@ -2953,6 +2973,13 @@ async function abrirDetalleAlumno(id){
       if (exceso > 0.5 && n < 10) {
         aportes[n+1].push({monto:exceso, fecha: lista[lista.length-1].fecha, origen:'COMPENSACIÓN MES ANT.', esCompensacion:true, informativo:true});
       }
+    });
+
+    // Aplicar bonificaciones: fuerzan 'pagada' sin exigir que se alcance el precio.
+    Object.keys(bonificacionesCC).forEach(function(k) {
+      var n = parseInt(k);
+      var b = bonificacionesCC[n];
+      resultado[n] = {monto: resultado[n].monto, fecha: resultado[n].fecha || b.fecha, estado: 'pagada'};
     });
 
     // Saldo sin aplicar: plata real que no llegó a asentarse en ninguna cuota (1 a 10)
