@@ -1611,19 +1611,9 @@ app.get('/api/deuda-periodo', async (req, res) => {
   }
 });
 
-app.get('/api/reporte', async (req,res) => {
-  const alumnos=await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
-  const mesActual=new Date().getMonth(), dia=new Date().getDate();
-  const vencimientosReporte=await getVencimientos();
-  // Cargar TODAS las cuotas y pagos de una sola vez
-  const todasCuotas=await q('SELECT * FROM cuotas WHERE alumno_id=ANY($1) ORDER BY numero_cuota',[alumnos.map(a=>a.id)]);
-  const todosPagos=await q('SELECT alumno_id,COALESCE(SUM(monto),0) as total FROM pagos WHERE alumno_id=ANY($1) GROUP BY alumno_id',[alumnos.map(a=>a.id)]);
-  const mapPagos={};
-  todosPagos.forEach(p=>{ mapPagos[p.alumno_id]=parseFloat(p.total||0); });
-  const resultado=[];
-  for(const a of alumnos) {
-    const cuotas=todasCuotas.filter(c=>c.alumno_id===a.id);
-    const totalPagado=mapPagos[a.id]||0;
+// Fuente única de verdad para la deuda de UN alumno: usada tanto por /api/reporte
+// como por /api/admin/stats, para que ambos reportes SIEMPRE coincidan.
+async function calcularFilaReporte(a, cuotas, totalPagado, vencimientosReporte, mesActual, dia) {
     const estadoCuotas={},fechasPago={},montosPago={};
     for(let i=0;i<10;i++){
       const numC=i+1;
@@ -1698,6 +1688,23 @@ app.get('/api/reporte', async (req,res) => {
       return mp===0; // cuota completamente impaga (no parcial)
     }).length;
     const tienesMoraFlag = cuotasImpagas >= 3;
+    return {estadoCuotas,fechasPago,montosPago,deudaReal,c10g,tienesMoraFlag};
+}
+
+app.get('/api/reporte', async (req,res) => {
+  const alumnos=await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
+  const mesActual=new Date().getMonth(), dia=new Date().getDate();
+  const vencimientosReporte=await getVencimientos();
+  // Cargar TODAS las cuotas y pagos de una sola vez
+  const todasCuotas=await q('SELECT * FROM cuotas WHERE alumno_id=ANY($1) ORDER BY numero_cuota',[alumnos.map(a=>a.id)]);
+  const todosPagos=await q('SELECT alumno_id,COALESCE(SUM(monto),0) as total FROM pagos WHERE alumno_id=ANY($1) GROUP BY alumno_id',[alumnos.map(a=>a.id)]);
+  const mapPagos={};
+  todosPagos.forEach(p=>{ mapPagos[p.alumno_id]=parseFloat(p.total||0); });
+  const resultado=[];
+  for(const a of alumnos) {
+    const cuotas=todasCuotas.filter(c=>c.alumno_id===a.id);
+    const totalPagado=mapPagos[a.id]||0;
+    const {estadoCuotas,fechasPago,montosPago,deudaReal,c10g,tienesMoraFlag}=await calcularFilaReporte(a,cuotas,totalPagado,vencimientosReporte,mesActual,dia);
     resultado.push({id:a.id,nombre:a.nombre,curso:a.curso,precio_normal:parseFloat(a.precio_normal),precio_bonificado:parseFloat(a.precio_bonificado),cuits:a.cuits,telefono:a.telefono||'',activo:a.activo,estadoCuotas,fechasPago,montosPago,deudaReal,totalPagado,cuota10Gratis:c10g,tienesMora:tienesMoraFlag,saldo_favor:parseFloat(a.saldo_favor)||0,metodoResolucion:a.metodo_resolucion||'concepto'});
   }
   res.json(resultado);
@@ -2649,47 +2656,33 @@ app.post('/api/admin/verificar-codigo', (req, res) => {
 
 app.get('/api/admin/stats', async (req, res) => {
   const mesActual = new Date().getMonth(); // 0-based
-  const numerosVencidos = MESES_IDX.map((m,i)=>({m,n:i+1})).filter(x=>x.m<=mesActual).map(x=>x.n);
-  const [totalAlumnos, totalPagos, porMedio, porCurso] = await Promise.all([
+  const dia = new Date().getDate();
+  const [totalAlumnosQ, totalPagos, porMedio, porCurso] = await Promise.all([
     q1('SELECT COUNT(*) as n FROM alumnos WHERE activo=TRUE'),
     q1('SELECT COUNT(*) as n, COALESCE(SUM(monto),0) as total FROM pagos'),
     q('SELECT medio, COUNT(*) as cantidad, SUM(monto) as total FROM pagos GROUP BY medio ORDER BY total DESC'),
     q(`SELECT a.curso, COUNT(DISTINCT a.id) as alumnos, COALESCE(SUM(p.monto),0) as cobrado FROM alumnos a LEFT JOIN pagos p ON a.id=p.alumno_id WHERE a.activo=TRUE GROUP BY a.curso ORDER BY cobrado DESC`)
   ]);
-  // Contar deudores: alumnos con al menos una cuota de mes vencido con saldo pendiente (monto_pagado < precio)
-  const deudoresQ = await q(`
-    SELECT COUNT(DISTINCT c.alumno_id) as n FROM cuotas c
-    JOIN alumnos a ON a.id = c.alumno_id
-    WHERE a.activo=TRUE
-    AND c.estado = 'pendiente'
-    AND c.numero_cuota = ANY($1::int[])
-  `, [numerosVencidos]);
-  const deudoresN = parseInt(deudoresQ[0]?.n||0);
-  const alDia = parseInt(totalAlumnos?.n||0) - deudoresN;
 
-  // Calcular deuda total con consultas masivas
+  // Deuda total y Con deuda/Al día: MISMA fuente que /api/reporte (calcularFilaReporte),
+  // para que el panel de administración siempre coincida con el Reporte de deuda.
   const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE');
   const todasCuotas = await q('SELECT * FROM cuotas WHERE alumno_id=ANY($1)', [alumnos.map(a=>a.id)]);
   const todosPagos = await q('SELECT alumno_id, COALESCE(SUM(monto),0) as total FROM pagos WHERE alumno_id=ANY($1) GROUP BY alumno_id', [alumnos.map(a=>a.id)]);
   const mapPagos = {};
   todosPagos.forEach(p => { mapPagos[p.alumno_id] = parseFloat(p.total||0); });
   const vencimientosStats = await getVencimientos();
-  const hoy = new Date();
-  const dia = hoy.getDate();
-  let totalDeuda = 0;
+  let totalDeuda = 0, deudoresN = 0;
   for (const a of alumnos) {
     const cuotas = todasCuotas.filter(c => c.alumno_id === a.id);
     const totalPagadoA = mapPagos[a.id] || 0;
-    let totalDebido = 0;
-    for (let i = 0; i < 10; i++) {
-      if (MESES_IDX[i] > mesActual) continue;
-      totalDebido += getPrecio(a, i+1, dia, vencimientosStats);
-    }
-    const saldo = totalPagadoA - totalDebido;
-    if (saldo < 0) totalDeuda += Math.abs(saldo);
+    const { deudaReal } = await calcularFilaReporte(a, cuotas, totalPagadoA, vencimientosStats, mesActual, dia);
+    totalDeuda += deudaReal;
+    if (deudaReal > 0) deudoresN++;
   }
+  const alDia = parseInt(totalAlumnosQ?.n||0) - deudoresN;
 
-  res.json({ totalAlumnos: parseInt(totalAlumnos?.n||0), totalPagos: parseInt(totalPagos?.n||0), totalCobrado: parseFloat(totalPagos?.total||0), conDeuda: deudoresN, alDia, totalDeuda, porMedio, porCurso });
+  res.json({ totalAlumnos: parseInt(totalAlumnosQ?.n||0), totalPagos: parseInt(totalPagos?.n||0), totalCobrado: parseFloat(totalPagos?.total||0), conDeuda: deudoresN, alDia, totalDeuda, porMedio, porCurso });
 });
 
 app.get('*', (req,res) => { res.sendFile(path.join(__dirname,'public','index.html')); });
