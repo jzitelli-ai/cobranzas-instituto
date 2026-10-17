@@ -181,6 +181,7 @@ async function inicializarDB() {
     CREATE TABLE IF NOT EXISTS aranceles_cursos (id SERIAL PRIMARY KEY, arancel_id INTEGER NOT NULL, curso TEXT NOT NULL, precio_normal NUMERIC DEFAULT 0, precio_bonificado NUMERIC DEFAULT 0, UNIQUE(arancel_id, curso));
     CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT);
     ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS precio_especial BOOLEAN DEFAULT FALSE;
+    CREATE TABLE IF NOT EXISTS snapshots (id SERIAL PRIMARY KEY, creado TIMESTAMP DEFAULT NOW(), etiqueta TEXT DEFAULT '', datos JSONB NOT NULL);
   `);
   await q("ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS saldo_favor NUMERIC DEFAULT 0");
   await q("ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS metodo_resolucion TEXT DEFAULT 'concepto'");
@@ -1901,6 +1902,43 @@ app.delete('/api/aranceles/:id', async (req,res) => {
   await q('DELETE FROM aranceles WHERE id=$1',[req.params.id]); res.json({ok:true});
 });
 
+// Restaura cuotas + saldo_favor + metodo_resolucion al snapshot tomado justo antes de
+// correr "Reimputar todos" (backup_pre_reimputar.json, generado desde /api/exportar/todo).
+// NO toca la tabla "pagos" — esa nunca se modifica con el reordenamiento, así que la plata
+// real nunca está en riesgo. Es un disyuntor de emergencia de un solo click por si el bulk
+// deja algo peor de lo que estaba.
+app.post('/api/restaurar-snapshot-pre-reimputar', async (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const snapshotPath = path.join(__dirname, 'backup_pre_reimputar.json');
+    if (!fs.existsSync(snapshotPath)) {
+      return res.json({ ok: false, error: 'No se encontró backup_pre_reimputar.json en el servidor' });
+    }
+    const snapshot = JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
+    const alumnoIds = snapshot.alumnos.map(a => a.id);
+
+    // 1) Borrar las cuotas actuales de esos alumnos y recrearlas tal cual estaban en el snapshot.
+    await q('DELETE FROM cuotas WHERE alumno_id = ANY($1)', [alumnoIds]);
+    for (const c of snapshot.cuotas) {
+      await q(
+        'INSERT INTO cuotas (alumno_id,numero_cuota,estado,fecha_pago,monto_pagado,compensada) VALUES ($1,$2,$3,$4,$5,$6)',
+        [c.alumno_id, c.numero_cuota, c.estado, c.fecha_pago || '', c.monto_pagado, !!c.compensada]
+      );
+    }
+
+    // 2) Restaurar saldo_favor y metodo_resolucion de cada alumno.
+    for (const a of snapshot.alumnos) {
+      await q('UPDATE alumnos SET saldo_favor=$1, metodo_resolucion=$2 WHERE id=$3',
+        [a.saldo_favor || 0, a.metodo_resolucion || 'concepto', a.id]);
+    }
+
+    res.json({ ok: true, alumnosRestaurados: snapshot.alumnos.length, cuotasRestauradas: snapshot.cuotas.length, snapshotTomadoEl: snapshot.exportado });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 app.get('/api/diagnostico/cuotas/:nombre', async (req,res) => {
   const n=decodeURIComponent(req.params.nombre).toUpperCase();
   const alumno=await q1('SELECT * FROM alumnos WHERE nombre LIKE $1',[`%${n}%`]);
@@ -2275,8 +2313,77 @@ app.post('/api/generar-cuotas-faltantes', async (req, res) => {
   }
 });
 
+// ================================================================
+// SNAPSHOTS — foto del estado actual de cuotas/alumnos, guardada en la propia base
+// (sobrevive a redeploys, a diferencia de un archivo en el filesystem de Render).
+// NUNCA incluye "pagos" porque esa tabla no la toca ningún reordenamiento — restaurar
+// un snapshot solo revierte lo que el reordenamiento pudo haber cambiado.
+// ================================================================
+async function crearSnapshot(etiqueta) {
+  const alumnos = await q('SELECT id,saldo_favor,metodo_resolucion FROM alumnos');
+  const cuotas = await q('SELECT alumno_id,numero_cuota,estado,fecha_pago,monto_pagado,compensada FROM cuotas');
+  const datos = { alumnos, cuotas };
+  const r = await q1(
+    'INSERT INTO snapshots (etiqueta,datos) VALUES ($1,$2) RETURNING id,creado',
+    [etiqueta || '', JSON.stringify(datos)]
+  );
+  // Conservar como máximo los últimos 20 snapshots para no acumular espacio indefinidamente.
+  await q('DELETE FROM snapshots WHERE id NOT IN (SELECT id FROM snapshots ORDER BY creado DESC LIMIT 20)');
+  return { id: r.id, creado: r.creado, alumnos: alumnos.length, cuotas: cuotas.length };
+}
+
+app.get('/api/snapshots', async (req, res) => {
+  try {
+    const rows = await q(`
+      SELECT id, creado, etiqueta,
+        jsonb_array_length(datos->'alumnos') as n_alumnos,
+        jsonb_array_length(datos->'cuotas') as n_cuotas
+      FROM snapshots ORDER BY creado DESC
+    `);
+    res.json({ ok: true, snapshots: rows });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/api/snapshots', async (req, res) => {
+  try {
+    const { etiqueta } = req.body || {};
+    const r = await crearSnapshot(etiqueta || 'Manual');
+    res.json({ ok: true, ...r });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/api/snapshots/:id/restaurar', async (req, res) => {
+  try {
+    const snap = await q1('SELECT * FROM snapshots WHERE id=$1', [req.params.id]);
+    if (!snap) return res.json({ ok: false, error: 'Snapshot no encontrado' });
+    const datos = typeof snap.datos === 'string' ? JSON.parse(snap.datos) : snap.datos;
+    const alumnoIds = datos.alumnos.map(a => a.id);
+
+    await q('DELETE FROM cuotas WHERE alumno_id = ANY($1)', [alumnoIds]);
+    for (const c of datos.cuotas) {
+      await q(
+        'INSERT INTO cuotas (alumno_id,numero_cuota,estado,fecha_pago,monto_pagado,compensada) VALUES ($1,$2,$3,$4,$5,$6)',
+        [c.alumno_id, c.numero_cuota, c.estado, c.fecha_pago || '', c.monto_pagado, !!c.compensada]
+      );
+    }
+    for (const a of datos.alumnos) {
+      await q('UPDATE alumnos SET saldo_favor=$1, metodo_resolucion=$2 WHERE id=$3',
+        [a.saldo_favor || 0, a.metodo_resolucion || 'concepto', a.id]);
+    }
+
+    res.json({ ok: true, alumnosRestaurados: datos.alumnos.length, cuotasRestauradas: datos.cuotas.length, snapshotTomadoEl: snap.creado });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 app.post('/api/reordenar-imputaciones-todos', async (req, res) => {
   try {
+    await crearSnapshot('Automático — antes de Reimputar todos (por concepto)');
     const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
     const vencimientos = await getVencimientos();
     const resultados = [];
@@ -2303,6 +2410,7 @@ app.post('/api/reordenar-imputaciones-todos', async (req, res) => {
 // varios pagos no representa la realidad y conviene resincronizar todo por fecha.
 app.post('/api/reordenar-por-fecha-todos', async (req, res) => {
   try {
+    await crearSnapshot('Automático — antes de Reordenar todos por fecha');
     const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
     const vencimientos = await getVencimientos();
     const resultados = [];
