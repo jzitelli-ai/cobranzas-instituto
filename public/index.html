@@ -423,6 +423,9 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
           <button class="btn bob" onclick="ejecutarBackup()" style="font-size:11px;padding:4px 10px;background:#25D366;color:#fff;border-color:#25D366" title="Ejecuta backup manual a Google Sheets">
             ☁ Backup ahora
           </button>
+          <button class="btn bob" onclick="abrirSnapshots()" style="font-size:11px;padding:4px 10px;background:#546e7a;border-color:#546e7a;color:#fff" title="Ver/restaurar fotos del estado de cuotas">
+            📸 Snapshots
+          </button>
         </div>
         <div id="hist-list"></div>
         <div id="hist-empty" style="display:none;text-align:center;padding:40px;color:var(--m)">Sin pagos registrados.</div>
@@ -704,6 +707,23 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
     <div class="modal-btns">
       <button class="btn bob" onclick="cerrarM('m-edit-alum')">Cancelar</button>
       <button class="btn bpb" onclick="guardarEdicionAlumno()">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SNAPSHOTS -->
+<div class="modal-bg" id="m-snapshots" style="z-index:600">
+  <div class="modal" style="width:560px;max-height:85vh;overflow-y:auto;z-index:601">
+    <div class="modal-title">📸 Snapshots (fotos del estado)</div>
+    <div class="alert ai" style="font-size:12px">
+      Cada vez que corrés "Reimputar todos" o "Reordenar todos por fecha" se guarda automáticamente una foto de cómo estaban las cuotas justo antes. También podés guardar una a mano. Restaurar una foto revierte <strong>cuotas, saldo a favor y método de resolución</strong> al momento en que se tomó — nunca toca los pagos reales.
+    </div>
+    <div class="modal-btns" style="margin-bottom:12px">
+      <button class="btn bpb" onclick="guardarSnapshotManual()">📸 Guardar estado actual</button>
+    </div>
+    <div id="snapshots-list" style="font-size:12px"></div>
+    <div class="modal-btns" style="margin-top:12px">
+      <button class="btn bob" onclick="cerrarM('m-snapshots')">Cerrar</button>
     </div>
   </div>
 </div>
@@ -1982,6 +2002,54 @@ async function aplicarSaldosPendientes() {
   if (!r || !r.ok) { toast('Error al aplicar saldos', 'e'); return; }
   if (r.corregidos === 0) { toast('No hay saldos pendientes para aplicar', 's'); return; }
   toast(r.corregidos + ' alumnos con saldos aplicados', 's');
+}
+
+async function abrirSnapshots() {
+  abrirM('m-snapshots');
+  await cargarSnapshots();
+}
+
+async function cargarSnapshots() {
+  var cont = document.getElementById('snapshots-list');
+  cont.innerHTML = 'Cargando...';
+  var r = await api('GET', '/api/snapshots');
+  if (!r || !r.ok) { cont.innerHTML = '<span style="color:var(--d)">Error al cargar snapshots.</span>'; return; }
+  if (!r.snapshots.length) { cont.innerHTML = '<span style="color:var(--m)">Todavía no hay snapshots guardados.</span>'; return; }
+  var h = '<table style="width:100%;border-collapse:collapse">';
+  h += '<thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--b)">Fecha</th><th style="text-align:left;padding:6px;border-bottom:1px solid var(--b)">Etiqueta</th><th style="text-align:center;padding:6px;border-bottom:1px solid var(--b)">Alumnos/Cuotas</th><th style="padding:6px;border-bottom:1px solid var(--b)"></th></tr></thead><tbody>';
+  r.snapshots.forEach(function(s) {
+    var fecha = new Date(s.creado).toLocaleString('es-AR');
+    h += '<tr>';
+    h += '<td style="padding:6px;border-bottom:1px solid var(--b)">' + fecha + '</td>';
+    h += '<td style="padding:6px;border-bottom:1px solid var(--b)">' + (s.etiqueta || '—') + '</td>';
+    h += '<td style="padding:6px;border-bottom:1px solid var(--b);text-align:center;color:var(--m)">' + s.n_alumnos + ' / ' + s.n_cuotas + '</td>';
+    h += '<td style="padding:6px;border-bottom:1px solid var(--b);text-align:right"><button class="btn bob" style="font-size:11px;padding:3px 8px" onclick="restaurarSnapshot(' + s.id + ',\'' + fecha.replace(/'/g,"") + '\')">↩ Restaurar</button></td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table>';
+  cont.innerHTML = h;
+}
+
+async function guardarSnapshotManual() {
+  var etiqueta = prompt('Etiqueta para este snapshot (opcional):', 'Manual');
+  if (etiqueta === null) return;
+  showSpinner('Guardando snapshot...');
+  var r = await api('POST', '/api/snapshots', {etiqueta: etiqueta});
+  hideSpinner();
+  if (!r || !r.ok) { toast('Error al guardar snapshot: ' + (r ? r.error : ''), 'e'); return; }
+  toast('Snapshot guardado (' + r.alumnos + ' alumnos, ' + r.cuotas + ' cuotas)', 's');
+  await cargarSnapshots();
+}
+
+async function restaurarSnapshot(id, fechaTexto) {
+  if (!confirm('¿Restaurar el estado de cuotas al snapshot del ' + fechaTexto + '?\n\nEsto reemplaza el estado ACTUAL de todas las cuotas (y saldo a favor) por el de ese momento. No afecta los pagos reales.\n\nEsta acción no se puede deshacer (salvo guardando otro snapshot antes).')) return;
+  showSpinner('Restaurando snapshot...');
+  var r = await api('POST', '/api/snapshots/' + id + '/restaurar', {});
+  hideSpinner();
+  if (!r || !r.ok) { toast('Error al restaurar: ' + (r ? r.error : ''), 'e'); return; }
+  toast('Restaurado: ' + r.alumnosRestaurados + ' alumnos, ' + r.cuotasRestauradas + ' cuotas', 's');
+  cerrarM('m-snapshots');
+  cargarReporte();
 }
 
 async function ejecutarBackup() {
