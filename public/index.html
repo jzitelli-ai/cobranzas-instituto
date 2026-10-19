@@ -3050,9 +3050,11 @@ async function abrirDetalleAlumno(id){
       resultado[n] = {monto: resultado[n].monto, fecha: resultado[n].fecha || b.fecha, estado: 'pagada'};
     });
 
-    // Saldo sin aplicar: plata real que no llegó a asentarse en ninguna cuota (1 a 10)
+    // Saldo sin aplicar: plata real que no llegó a asentarse en ninguna cuota (1 a 10).
+    // Las bonificaciones no son plata real cobrada (son perdón de deuda) y se excluyen,
+    // igual que en el cálculo del servidor — si no, aparece un "saldo a favor" fantasma.
     var totalIngresos2 = 0;
-    pagosAlumno.forEach(function(p){ totalIngresos2 += parseFloat(p.monto)||0; });
+    pagosAlumno.forEach(function(p){ if (p.medio !== 'Bonificación') totalIngresos2 += parseFloat(p.monto)||0; });
     var totalAplicado2 = 0;
     for (var nk=1; nk<=10; nk++) { (aportes[nk]||[]).forEach(function(pg){ if (!pg.informativo) totalAplicado2 += pg.monto; }); }
     var saldoPendiente = totalIngresos2 - totalAplicado2;
