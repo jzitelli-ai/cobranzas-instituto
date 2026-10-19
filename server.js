@@ -199,7 +199,7 @@ async function inicializarDB() {
       v_total_aplicado NUMERIC;
     BEGIN
       v_alumno_id := COALESCE(NEW.alumno_id, OLD.alumno_id);
-      SELECT COALESCE(SUM(monto),0) INTO v_total_pagado FROM pagos WHERE alumno_id = v_alumno_id;
+      SELECT COALESCE(SUM(monto),0) INTO v_total_pagado FROM pagos WHERE alumno_id = v_alumno_id AND medio != 'Bonificación';
       SELECT COALESCE(SUM(monto_pagado),0) INTO v_total_aplicado FROM cuotas
         WHERE alumno_id = v_alumno_id AND (estado='pagada' OR (estado='pendiente' AND monto_pagado>0));
       UPDATE alumnos SET saldo_favor = GREATEST(0, v_total_pagado - v_total_aplicado) WHERE id = v_alumno_id;
@@ -509,7 +509,9 @@ app.get('/api/exportar/pagos', async (req,res) => { res.json(await q('SELECT * F
 
 // Recalcula saldo_favor real de un alumno a partir de sus pagos y cuotas actuales
 async function recalcularSaldoFavor(alumnoId) {
-  const totalPagado = parseFloat((await q1('SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE alumno_id=$1',[alumnoId]))?.t||0);
+  // Las bonificaciones ("medio='Bonificación'") registran perdón de deuda, no plata real cobrada.
+  // Si se suman acá como si fueran plata, aparece un "saldo a favor" fantasma.
+  const totalPagado = parseFloat((await q1("SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE alumno_id=$1 AND medio != 'Bonificación'",[alumnoId]))?.t||0);
   const cuotas = await q('SELECT * FROM cuotas WHERE alumno_id=$1',[alumnoId]);
   const totalAplicado = cuotas.reduce((s,c)=>s+parseFloat(c.monto_pagado||0),0);
   const saldo = Math.max(0, totalPagado - totalAplicado);
@@ -1746,7 +1748,7 @@ app.get('/api/reporte', async (req,res) => {
   const vencimientosReporte=await getVencimientos();
   // Cargar TODAS las cuotas y pagos de una sola vez
   const todasCuotas=await q('SELECT * FROM cuotas WHERE alumno_id=ANY($1) ORDER BY numero_cuota',[alumnos.map(a=>a.id)]);
-  const todosPagos=await q('SELECT alumno_id,COALESCE(SUM(monto),0) as total FROM pagos WHERE alumno_id=ANY($1) GROUP BY alumno_id',[alumnos.map(a=>a.id)]);
+  const todosPagos=await q("SELECT alumno_id,COALESCE(SUM(monto),0) as total FROM pagos WHERE alumno_id=ANY($1) AND medio != 'Bonificación' GROUP BY alumno_id",[alumnos.map(a=>a.id)]);
   const mapPagos={};
   todosPagos.forEach(p=>{ mapPagos[p.alumno_id]=parseFloat(p.total||0); });
   const resultado=[];
@@ -1778,18 +1780,23 @@ app.post('/api/bonificar', async (req, res) => {
   const alumno = await q1('SELECT * FROM alumnos WHERE id=$1', [alumnoId]);
   if (!alumno) return res.json({ ok: false, error: 'Alumno no encontrado' });
   const fecha = new Date().toLocaleDateString('es-AR');
-  // Verificar si la cuota existe; si no, crearla
-  const cuotaExistente = await q1('SELECT id FROM cuotas WHERE alumno_id=$1 AND numero_cuota=$2', [alumnoId, numCuota]);
+  // El "monto" que se perdona es informativo (queda documentado en el concepto del pago),
+  // NO plata real: no se refleja en cuotas.monto_pagado. Se preserva la plata real que ya
+  // hubiera en la cuota (ej. un pago parcial previo) y solo se fuerza el estado a 'pagada' —
+  // exactamente el mismo criterio que usan los motores de reordenamiento (detectarBonificaciones),
+  // para que un "Reordenar todos" posterior no cambie nada de lo que se bonificó a mano.
+  const cuotaExistente = await q1('SELECT id, monto_pagado FROM cuotas WHERE alumno_id=$1 AND numero_cuota=$2', [alumnoId, numCuota]);
   if (cuotaExistente) {
-    await q('UPDATE cuotas SET estado=$1,fecha_pago=$2,monto_pagado=$3 WHERE alumno_id=$4 AND numero_cuota=$5',
-      ['pagada', fecha, monto, alumnoId, numCuota]);
+    await q('UPDATE cuotas SET estado=$1,fecha_pago=$2 WHERE alumno_id=$3 AND numero_cuota=$4',
+      ['pagada', fecha, alumnoId, numCuota]);
   } else {
     await q('INSERT INTO cuotas (alumno_id, numero_cuota, estado, fecha_pago, monto_pagado) VALUES ($1,$2,$3,$4,$5)',
-      [alumnoId, numCuota, 'pagada', fecha, monto]);
+      [alumnoId, numCuota, 'pagada', fecha, 0]);
   }
   const concepto = `Cuota ${numCuota} (${MESES_NOMBRE_ALL[numCuota-1]} 2026) — Bonificada${motivo ? ': ' + motivo : ''}`;
   await q('INSERT INTO pagos (fecha,alumno_id,alumno_nombre,curso,monto,concepto,medio,origen) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
     [fecha, alumnoId, alumno.nombre, alumno.curso, monto, concepto, 'Bonificación', 'Bonificación manual']);
+  await recalcularSaldoFavor(alumnoId);
   res.json({ ok: true });
 });
 
@@ -2211,7 +2218,7 @@ app.post('/api/alumno/:id/aplicar-saldo', async (req, res) => {
     const alumno = await q1('SELECT * FROM alumnos WHERE id=$1', [alumnoId]);
     if (!alumno) return res.json({ ok: false, error: 'Alumno no encontrado' });
 
-    const totalPagado = parseFloat((await q1('SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE alumno_id=$1', [alumnoId]))?.t || 0);
+    const totalPagado = parseFloat((await q1("SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE alumno_id=$1 AND medio != 'Bonificación'", [alumnoId]))?.t || 0);
     const cuotas = await q('SELECT * FROM cuotas WHERE alumno_id=$1 ORDER BY numero_cuota', [alumnoId]);
     const totalAplicado = cuotas.filter(c => c.estado === 'pagada').reduce((s, c) => s + parseFloat(c.monto_pagado || 0), 0)
                         + cuotas.filter(c => c.estado === 'pendiente').reduce((s, c) => s + parseFloat(c.monto_pagado || 0), 0);
@@ -2439,7 +2446,7 @@ app.get('/api/aplicar-saldos-pendientes', async (req,res) => {
   const detalle = [];
 
   for (const a of alumnos) {
-    const totalPagado = parseFloat((await q1('SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE alumno_id=$1',[a.id]))?.t||0);
+    const totalPagado = parseFloat((await q1("SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE alumno_id=$1 AND medio != 'Bonificación'",[a.id]))?.t||0);
     const cuotas = await q('SELECT * FROM cuotas WHERE alumno_id=$1 ORDER BY numero_cuota',[a.id]);
     const totalAplicado = cuotas.filter(c=>c.estado==='pagada').reduce((s,c)=>s+parseFloat(c.monto_pagado||0),0);
     let saldo = totalPagado - totalAplicado;
@@ -2509,14 +2516,16 @@ app.get('/api/auditoria/consistencia', async (req,res) => {
     const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
     const problemas = [];
     for (const al of alumnos) {
-      const totalPagado = parseFloat((await q1('SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE alumno_id=$1',[al.id]))?.t || 0);
+      const totalPagado = parseFloat((await q1("SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE alumno_id=$1 AND medio != 'Bonificación'",[al.id]))?.t || 0);
       const cuotas = await q('SELECT * FROM cuotas WHERE alumno_id=$1', [al.id]);
+      const pagosAl = await q('SELECT * FROM pagos WHERE alumno_id=$1', [al.id]);
+      const bonifAl = detectarBonificaciones(pagosAl); // cuotas legítimamente perdonadas: 'pagada' con monto_pagado=0 es su estado CORRECTO, no un problema
       let totalAsignado = 0;
       const cuotasPagadaSinPlata = [];
       cuotas.forEach(c => {
         const mp = parseFloat(c.monto_pagado) || 0;
         if (c.estado === 'pagada' || (c.estado === 'pendiente' && mp > 0)) totalAsignado += mp;
-        if (c.estado === 'pagada' && mp <= 0) cuotasPagadaSinPlata.push(c.numero_cuota);
+        if (c.estado === 'pagada' && mp <= 0 && !bonifAl[c.numero_cuota]) cuotasPagadaSinPlata.push(c.numero_cuota);
       });
       const saldoFavor = parseFloat(al.saldo_favor) || 0;
       const diferencia = totalPagado - (totalAsignado + saldoFavor);
@@ -2542,7 +2551,7 @@ app.get('/api/diagnostico/saldos-sin-aplicar', async (req,res) => {
   const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
   const resultado = [];
   for (const a of alumnos) {
-    const totalPagado = parseFloat((await q1('SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE alumno_id=$1',[a.id]))?.t||0);
+    const totalPagado = parseFloat((await q1("SELECT COALESCE(SUM(monto),0) as t FROM pagos WHERE alumno_id=$1 AND medio != 'Bonificación'",[a.id]))?.t||0);
     const cuotas = await q('SELECT * FROM cuotas WHERE alumno_id=$1',[a.id]);
     const totalAplicado = cuotas.filter(c=>c.estado==='pagada').reduce((s,c)=>s+parseFloat(c.monto_pagado||0),0);
     const saldo = totalPagado - totalAplicado;
@@ -2815,16 +2824,16 @@ app.get('/api/admin/stats', async (req, res) => {
   const dia = new Date().getDate();
   const [totalAlumnosQ, totalPagos, porMedio, porCurso] = await Promise.all([
     q1('SELECT COUNT(*) as n FROM alumnos WHERE activo=TRUE'),
-    q1('SELECT COUNT(*) as n, COALESCE(SUM(monto),0) as total FROM pagos'),
+    q1("SELECT COUNT(*) as n, COALESCE(SUM(monto),0) as total FROM pagos WHERE medio != 'Bonificación'"),
     q('SELECT medio, COUNT(*) as cantidad, SUM(monto) as total FROM pagos GROUP BY medio ORDER BY total DESC'),
-    q(`SELECT a.curso, COUNT(DISTINCT a.id) as alumnos, COALESCE(SUM(p.monto),0) as cobrado FROM alumnos a LEFT JOIN pagos p ON a.id=p.alumno_id WHERE a.activo=TRUE GROUP BY a.curso ORDER BY cobrado DESC`)
+    q(`SELECT a.curso, COUNT(DISTINCT a.id) as alumnos, COALESCE(SUM(p.monto),0) as cobrado FROM alumnos a LEFT JOIN pagos p ON a.id=p.alumno_id AND (p.medio IS NULL OR p.medio != 'Bonificación') WHERE a.activo=TRUE GROUP BY a.curso ORDER BY cobrado DESC`)
   ]);
 
   // Deuda total y Con deuda/Al día: MISMA fuente que /api/reporte (calcularFilaReporte),
   // para que el panel de administración siempre coincida con el Reporte de deuda.
   const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE');
   const todasCuotas = await q('SELECT * FROM cuotas WHERE alumno_id=ANY($1)', [alumnos.map(a=>a.id)]);
-  const todosPagos = await q('SELECT alumno_id, COALESCE(SUM(monto),0) as total FROM pagos WHERE alumno_id=ANY($1) GROUP BY alumno_id', [alumnos.map(a=>a.id)]);
+  const todosPagos = await q("SELECT alumno_id, COALESCE(SUM(monto),0) as total FROM pagos WHERE alumno_id=ANY($1) AND medio != 'Bonificación' GROUP BY alumno_id", [alumnos.map(a=>a.id)]);
   const mapPagos = {};
   todosPagos.forEach(p => { mapPagos[p.alumno_id] = parseFloat(p.total||0); });
   const vencimientosStats = await getVencimientos();
