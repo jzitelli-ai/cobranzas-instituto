@@ -1435,6 +1435,22 @@ async function aplicarPagoConSaldo(alumnoId, alumno, monto, fecha, origen, venci
   return { conceptos, saldoRestante: restante };
 }
 
+// Criterio ÚNICO de duplicado para el import bancario (lo usan el preview y la importación real):
+// mismo alumno + mismo monto + misma fecha exacta (día/mes/año), sin importar el formato en que
+// esté guardada la fecha del pago existente (dd/mm/yyyy, d/m/yyyy, yyyy-mm-dd, con hora).
+// Dos transferencias del mismo monto en el mismo mes pero en días distintos son pagos distintos.
+async function buscarPagoDuplicado(alumnoId, monto, fechaStr) {
+  const candidatos = await q('SELECT id,fecha,origen FROM pagos WHERE alumno_id=$1 AND monto=$2 AND medio != $3', [alumnoId, monto, 'Bonificación']);
+  if (!fechaStr) return candidatos[0] || null; // sin fecha en el archivo: comparar solo por monto
+  const parse = f => {
+    const s = normalizarFechaAR(String(f||'').split(' ')[0]);
+    const p = s.split('/');
+    return p.length === 3 ? [parseInt(p[0]), parseInt(p[1]), parseInt(p[2])].join('/') : '';
+  };
+  const objetivo = parse(fechaStr);
+  return candidatos.find(c => parse(c.fecha) === objetivo) || null;
+}
+
 // --- PREVIEW: analiza sin impactar ---
 app.post('/api/banco/preview', async (req,res) => {
   const {filas,colCuit,colMonto}=req.body;
@@ -1488,11 +1504,7 @@ app.post('/api/banco/preview', async (req,res) => {
     }
 
     // Verificar si ya existe
-    const yaExiste=mesFechaDup
-      ?await q1(`SELECT id,fecha,origen FROM pagos WHERE alumno_id=$1 AND monto=$2 AND (
-        LPAD(SPLIT_PART(REPLACE(fecha,'-','/'),  '/', 2), 2, '0') = $3
-      )`,[alumno.id,monto,String(mesFechaDup).padStart(2,'0')])
-      :await q1("SELECT id,fecha,origen FROM pagos WHERE alumno_id=$1 AND monto=$2",[alumno.id,monto]);
+    const yaExiste=await buscarPagoDuplicado(alumno.id,monto,fechaStr);
 
     if(yaExiste){
       duplicados.push({alumno:alumno.nombre,curso:alumno.curso,cuit,monto,fecha:fechaStr,pagoExistente:{id:yaExiste.id,fecha:yaExiste.fecha,origen:yaExiste.origen}});
@@ -1566,21 +1578,7 @@ app.post('/api/banco', async (req,res) => {
         fechaDupStr = normalizarFechaAR(String(fechaRawDup).slice(0,10));
       }
     }
-    const yaExiste = fechaDupStr
-      ? await q1(`SELECT id, fecha, origen FROM pagos WHERE alumno_id=$1 AND monto=$2 AND (
-          -- Formato dd/mm/yyyy
-          (fecha NOT LIKE '____-__-__%' AND
-           LPAD(SPLIT_PART(fecha, '/', 1), 2, '0') = $3 AND
-           LPAD(SPLIT_PART(fecha, '/', 2), 2, '0') = $4)
-          OR
-          -- Formato yyyy-mm-dd
-          (fecha LIKE '____-__-__%' AND
-           LPAD(SPLIT_PART(fecha, '-', 3), 2, '0') = $3 AND
-           LPAD(SPLIT_PART(fecha, '-', 2), 2, '0') = $4)
-        )`, [alumno.id, monto,
-          String(fechaDupStr.split('/')[0]).padStart(2,'0'),
-          String(fechaDupStr.split('/')[1]).padStart(2,'0')])
-      : await q1("SELECT id, fecha, origen FROM pagos WHERE alumno_id=$1 AND monto=$2", [alumno.id, monto]);
+    const yaExiste = await buscarPagoDuplicado(alumno.id, monto, fechaDupStr);
     if (yaExiste) {
       let fr=fila['FECHA']||fila['fecha']||fila['Fecha']||'',fs='';
       if(typeof fr==='number'){const d=new Date(Math.round((fr-25569)*86400*1000));fs=normalizarFechaAR(d.toLocaleDateString('es-AR'));}
