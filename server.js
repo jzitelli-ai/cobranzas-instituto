@@ -1707,11 +1707,27 @@ async function calcularFilaReporte(a, cuotas, totalPagado, vencimientosReporte, 
         // Meses "todo el mes bonificado" — precio con descuento siempre, sin mirar fecha
         precio=parseFloat(a.precio_bonificado);
       } else {
-        // Cuota que SIGUE pendiente: el precio no depende de la fecha del pago parcial (esa fecha es
-        // la del primer aporte, que puede ser un sobrante arrastrado de una cuota anterior). Si lo
-        // pagado a tiempo hubiera cubierto el bonificado, el motor ya la habría dejado "pagada".
-        // Por eso vale: bonificado si el vencimiento todavía no pasó, normal si ya pasó.
-        precio=getPrecio(a,n,dia,vencimientosReporte);
+        // Usar fecha de pago de la cuota si existe; si no, comparar hoy con el vencimiento
+        const fpCuota=fechasPago[n];
+        if(vencimientosReporte){
+          const venc=vencimientosReporte[n-1];
+          if(venc){
+            const [dv,mv,yv]=venc.split('/');
+            const dVenc=new Date(parseInt(yv),parseInt(mv)-1,parseInt(dv),23,59,59);
+            let dp;
+            if(fpCuota&&fpCuota!==''){
+              if(String(fpCuota).includes('/')){const [d,m,y]=String(fpCuota).split('/');dp=new Date(parseInt(y),parseInt(m)-1,parseInt(d),12);}
+              else{const pts=String(fpCuota).split('-');dp=new Date(parseInt(pts[0]),parseInt(pts[1])-1,parseInt(pts[2]),12);}
+            } else {
+              dp=new Date(); // sin fecha de pago → comparar con hoy
+            }
+            precio=dp<=dVenc?parseFloat(a.precio_bonificado):parseFloat(a.precio_normal);
+          } else {
+            precio=getPrecio(a,n,dia,vencimientosReporte);
+          }
+        } else {
+          precio=getPrecio(a,n,dia,vencimientosReporte);
+        }
       }
       const debe=precio-mp>0?precio-mp:0;
       detalleCuotas[n]={precio,pagado:mp,debe};
@@ -1735,7 +1751,10 @@ app.get('/api/reporte', async (req,res) => {
   const vencimientosReporte=await getVencimientos();
   // Cargar TODAS las cuotas y pagos de una sola vez
   const todasCuotas=await q('SELECT * FROM cuotas WHERE alumno_id=ANY($1) ORDER BY numero_cuota',[alumnos.map(a=>a.id)]);
-  const todosPagos=await q("SELECT alumno_id,COALESCE(SUM(monto),0) as total FROM pagos WHERE alumno_id=ANY($1) AND medio != 'Bonificación' GROUP BY alumno_id",[alumnos.map(a=>a.id)]);
+  // Incluye las bonificaciones a propósito: este total solo alimenta la compensación de cuotas, que compara
+  // contra lo "debido" (que también incluye el precio de las cuotas bonificadas). Para saldo a favor / auditoría
+  // sí se excluyen (recalcularSaldoFavor).
+  const todosPagos=await q('SELECT alumno_id,COALESCE(SUM(monto),0) as total FROM pagos WHERE alumno_id=ANY($1) GROUP BY alumno_id',[alumnos.map(a=>a.id)]);
   const mapPagos={};
   todosPagos.forEach(p=>{ mapPagos[p.alumno_id]=parseFloat(p.total||0); });
   const resultado=[];
@@ -2820,7 +2839,7 @@ app.get('/api/admin/stats', async (req, res) => {
   // para que el panel de administración siempre coincida con el Reporte de deuda.
   const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE');
   const todasCuotas = await q('SELECT * FROM cuotas WHERE alumno_id=ANY($1)', [alumnos.map(a=>a.id)]);
-  const todosPagos = await q("SELECT alumno_id, COALESCE(SUM(monto),0) as total FROM pagos WHERE alumno_id=ANY($1) AND medio != 'Bonificación' GROUP BY alumno_id", [alumnos.map(a=>a.id)]);
+  const todosPagos = await q('SELECT alumno_id, COALESCE(SUM(monto),0) as total FROM pagos WHERE alumno_id=ANY($1) GROUP BY alumno_id', [alumnos.map(a=>a.id)]);
   const mapPagos = {};
   todosPagos.forEach(p => { mapPagos[p.alumno_id] = parseFloat(p.total||0); });
   const vencimientosStats = await getVencimientos();
