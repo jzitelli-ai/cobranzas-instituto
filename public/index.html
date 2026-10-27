@@ -2689,10 +2689,17 @@ function filtrarReporte(){
       else if(e==='gratis'){h+='<td style="text-align:center;background:#c8f7c5;border:1px solid #5cb85c"><div style="font-size:9px;color:#1a7a1a;font-weight:700">★<br>GRATIS</div></td>';}
       else{
         var numCuota=c.num;var dia=new Date().getDate();
-        var precioCuota=getPrecioConVencFrontend(a, numCuota, _vencimientosFrontend);
-        var montoParcial=a.montosPago&&(a.montosPago[numCuota]||a.montosPago[String(numCuota)])||0;
-        if(montoParcial>0&&montoParcial<precioCuota){
-          h+='<td style="text-align:center;background:var(--wl);border:1px solid var(--w)" title="Pago parcial: '+pesos(montoParcial)+' de '+pesos(precioCuota)+'"><div style="font-size:9px;color:var(--w);font-weight:700">⚠ PARCIAL</div><div style="font-size:8px;color:var(--w)">'+pesos(montoParcial)+'</div></td>';
+        // Precio / pagado / debe vienen del servidor (el mismo cálculo que suma "Deuda real"),
+        // así la celda y el total nunca se contradicen.
+        var det=a.detalleCuotas&&(a.detalleCuotas[numCuota]||a.detalleCuotas[String(numCuota)]);
+        var precioCuota=det?det.precio:getPrecioConVencFrontend(a, numCuota, _vencimientosFrontend);
+        var montoParcial=det?det.pagado:(a.montosPago&&(a.montosPago[numCuota]||a.montosPago[String(numCuota)])||0);
+        var debeCuota=det?det.debe:Math.max(0,precioCuota-montoParcial);
+        if(montoParcial>0&&debeCuota<=0){
+          // Lo pagado cubre el precio que corresponde por su fecha de pago: no queda deuda en esta cuota
+          h+='<td style="text-align:center;background:var(--sl)" title="Pagó '+pesos(montoParcial)+' — cubre el precio de esta cuota, sin saldo pendiente"><span style="color:var(--s);font-size:12px">✓</span>'+(fechaCorta?'<div style="font-size:9px;color:var(--s);margin-top:1px">'+fechaCorta+'</div>':'')+'</td>';
+        } else if(montoParcial>0){
+          h+='<td style="text-align:center;background:var(--wl);border:1px solid var(--w)" title="Pago parcial: pagó '+pesos(montoParcial)+' de '+pesos(precioCuota)+' — debe '+pesos(debeCuota)+'"><div style="font-size:9px;color:var(--w);font-weight:700">⚠ PARCIAL</div><div style="font-size:8px;color:var(--w)">Pagó '+pesos(montoParcial)+'</div><div style="font-size:9px;color:var(--d);font-weight:700">Debe '+pesos(debeCuota)+'</div></td>';
         } else {
           h+='<td style="text-align:center;background:var(--dl)"><span style="font-size:10px;font-weight:700;color:var(--d)">'+pesos(precioCuota)+'</span></td>';
         }
