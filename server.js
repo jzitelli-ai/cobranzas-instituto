@@ -1752,6 +1752,13 @@ async function calcularFilaReporte(a, cuotas, totalPagado, vencimientosReporte, 
     // detalleCuotas[n] = {precio, pagado, debe}: el MISMO cálculo que suma deudaReal, expuesto por
     // cuota para que la tabla muestre exactamente lo que se está sumando (celda parcial = total).
     const detalleCuotas={};
+    // Precio de cada cuota según la vigencia del ARANCEL que regía en SU vencimiento (no el precio actual):
+    // misma regla que usan el motor de reparto y la ficha. Sin esto, una cuota vieja impaga se cobraba
+    // con el precio de hoy y la deuda del reporte quedaba inflada.
+    const _ppf=await getPreciosPorFecha(a.id,a);
+    const _venc=n=>vencimientosReporte&&vencimientosReporte[n-1];
+    const precioBonifVig=n=>_ppf(_venc(n)).precio_bonificado;
+    const precioNormalVig=n=>_ppf(_venc(n)).precio_normal;
     const deudaReal=Object.entries(estadoCuotas).reduce((s,[k,v])=>{
       if(v!=='pendiente')return s;
       const n=parseInt(k);
@@ -1764,7 +1771,7 @@ async function calcularFilaReporte(a, cuotas, totalPagado, vencimientosReporte, 
         precio=0;
       } else if(MESES_TODO_EL_MES.includes(n)){
         // Meses "todo el mes bonificado" — precio con descuento siempre, sin mirar fecha
-        precio=parseFloat(a.precio_bonificado);
+        precio=precioBonifVig(n);
       } else {
         // Usar fecha de pago de la cuota si existe; si no, comparar hoy con el vencimiento
         const fpCuota=fechasPago[n];
@@ -1780,7 +1787,7 @@ async function calcularFilaReporte(a, cuotas, totalPagado, vencimientosReporte, 
             } else {
               dp=new Date(); // sin fecha de pago → comparar con hoy
             }
-            precio=dp<=dVenc?parseFloat(a.precio_bonificado):parseFloat(a.precio_normal);
+            precio=dp<=dVenc?precioBonifVig(n):precioNormalVig(n);
           } else {
             precio=getPrecio(a,n,dia,vencimientosReporte);
           }
