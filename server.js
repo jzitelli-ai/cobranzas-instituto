@@ -706,7 +706,10 @@ async function resincronizarAlumnoDesdeConceptos(alumnoId, alumno, vencimientos)
       resultado[n] = {monto:precioNormalN, fecha:primeraFecha, estado:'pagada'};
       exceso = totalTodo - precioNormalN;
     } else {
-      resultado[n] = {monto:totalTodo, fecha:primeraFecha, estado:'pendiente'};
+      // Cuota que queda pendiente: su fecha es la del ÚLTIMO aporte (cuando se completó lo que se pudo pagar),
+      // no la del primero (puede ser un sobrante arrastrado de una cuota anterior). De esa fecha depende si el
+      // saldo que falta se cobra a precio bonificado o normal en el reporte de deuda.
+      resultado[n] = {monto:totalTodo, fecha:lista[lista.length-1].fecha, estado:'pendiente'};
     }
     if (exceso > 0.5 && n < 10) {
       aportes[n+1].push({monto:exceso, fecha:lista[lista.length-1].fecha});
@@ -1018,7 +1021,10 @@ async function resincronizarAlumnoPorFecha(alumnoId, alumno, vencimientos) {
       resultado[n] = {monto:precioNormalN, fecha:primeraFecha, estado:'pagada'};
       exceso = totalTodo - precioNormalN;
     } else {
-      resultado[n] = {monto:totalTodo, fecha:primeraFecha, estado:'pendiente'};
+      // Cuota que queda pendiente: su fecha es la del ÚLTIMO aporte (cuando se completó lo que se pudo pagar),
+      // no la del primero (puede ser un sobrante arrastrado de una cuota anterior). De esa fecha depende si el
+      // saldo que falta se cobra a precio bonificado o normal en el reporte de deuda.
+      resultado[n] = {monto:totalTodo, fecha:lista[lista.length-1].fecha, estado:'pendiente'};
     }
     if (exceso > 0.5 && n < 10) {
       aportes[n+1].push({monto:exceso, fecha:lista[lista.length-1].fecha});
