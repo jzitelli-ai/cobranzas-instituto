@@ -1690,6 +1690,9 @@ async function calcularFilaReporte(a, cuotas, totalPagado, vencimientosReporte, 
     let saldo=totalPagado-totalDebido;
     if(saldo>0){let d=saldo;for(let i=0;i<10;i++){const n=i+1;if(estadoCuotas[n]==='pendiente'&&d>0){const p=n===10&&c10g?0:getPrecio(a,n,dia,vencimientosReporte);if(p>0&&d>=p){estadoCuotas[n]='compensada';d-=p;}}}}
     // deudaReal: usar fecha de pago de la cuota para determinar precio bonif/normal
+    // detalleCuotas[n] = {precio, pagado, debe}: el MISMO cálculo que suma deudaReal, expuesto por
+    // cuota para que la tabla muestre exactamente lo que se está sumando (celda parcial = total).
+    const detalleCuotas={};
     const deudaReal=Object.entries(estadoCuotas).reduce((s,[k,v])=>{
       if(v!=='pendiente')return s;
       const n=parseInt(k);
@@ -1704,29 +1707,15 @@ async function calcularFilaReporte(a, cuotas, totalPagado, vencimientosReporte, 
         // Meses "todo el mes bonificado" — precio con descuento siempre, sin mirar fecha
         precio=parseFloat(a.precio_bonificado);
       } else {
-        // Usar fecha de pago de la cuota si existe; si no, comparar hoy con el vencimiento
-        const fpCuota=fechasPago[n];
-        if(vencimientosReporte){
-          const venc=vencimientosReporte[n-1];
-          if(venc){
-            const [dv,mv,yv]=venc.split('/');
-            const dVenc=new Date(parseInt(yv),parseInt(mv)-1,parseInt(dv),23,59,59);
-            let dp;
-            if(fpCuota&&fpCuota!==''){
-              if(String(fpCuota).includes('/')){const [d,m,y]=String(fpCuota).split('/');dp=new Date(parseInt(y),parseInt(m)-1,parseInt(d),12);}
-              else{const pts=String(fpCuota).split('-');dp=new Date(parseInt(pts[0]),parseInt(pts[1])-1,parseInt(pts[2]),12);}
-            } else {
-              dp=new Date(); // sin fecha de pago → comparar con hoy
-            }
-            precio=dp<=dVenc?parseFloat(a.precio_bonificado):parseFloat(a.precio_normal);
-          } else {
-            precio=getPrecio(a,n,dia,vencimientosReporte);
-          }
-        } else {
-          precio=getPrecio(a,n,dia,vencimientosReporte);
-        }
+        // Cuota que SIGUE pendiente: el precio no depende de la fecha del pago parcial (esa fecha es
+        // la del primer aporte, que puede ser un sobrante arrastrado de una cuota anterior). Si lo
+        // pagado a tiempo hubiera cubierto el bonificado, el motor ya la habría dejado "pagada".
+        // Por eso vale: bonificado si el vencimiento todavía no pasó, normal si ya pasó.
+        precio=getPrecio(a,n,dia,vencimientosReporte);
       }
-      return s+(precio-mp>0?precio-mp:0);
+      const debe=precio-mp>0?precio-mp:0;
+      detalleCuotas[n]={precio,pagado:mp,debe};
+      return s+debe;
     },0);
     // Mora: aplica cuando el alumno tiene 3 o mas cuotas impagas (pendientes con monto_pagado=0)
     // consecutivas o no
@@ -1737,7 +1726,7 @@ async function calcularFilaReporte(a, cuotas, totalPagado, vencimientosReporte, 
       return mp===0; // cuota completamente impaga (no parcial)
     }).length;
     const tienesMoraFlag = cuotasImpagas >= 3;
-    return {estadoCuotas,fechasPago,montosPago,deudaReal,c10g,tienesMoraFlag};
+    return {estadoCuotas,fechasPago,montosPago,deudaReal,detalleCuotas,c10g,tienesMoraFlag};
 }
 
 app.get('/api/reporte', async (req,res) => {
@@ -1753,8 +1742,8 @@ app.get('/api/reporte', async (req,res) => {
   for(const a of alumnos) {
     const cuotas=todasCuotas.filter(c=>c.alumno_id===a.id);
     const totalPagado=mapPagos[a.id]||0;
-    const {estadoCuotas,fechasPago,montosPago,deudaReal,c10g,tienesMoraFlag}=await calcularFilaReporte(a,cuotas,totalPagado,vencimientosReporte,mesActual,dia);
-    resultado.push({id:a.id,nombre:a.nombre,curso:a.curso,precio_normal:parseFloat(a.precio_normal),precio_bonificado:parseFloat(a.precio_bonificado),cuits:a.cuits,telefono:a.telefono||'',activo:a.activo,estadoCuotas,fechasPago,montosPago,deudaReal,totalPagado,cuota10Gratis:c10g,tienesMora:tienesMoraFlag,saldo_favor:parseFloat(a.saldo_favor)||0,metodoResolucion:a.metodo_resolucion||'concepto'});
+    const {estadoCuotas,fechasPago,montosPago,deudaReal,detalleCuotas,c10g,tienesMoraFlag}=await calcularFilaReporte(a,cuotas,totalPagado,vencimientosReporte,mesActual,dia);
+    resultado.push({id:a.id,nombre:a.nombre,curso:a.curso,precio_normal:parseFloat(a.precio_normal),precio_bonificado:parseFloat(a.precio_bonificado),cuits:a.cuits,telefono:a.telefono||'',activo:a.activo,estadoCuotas,fechasPago,montosPago,deudaReal,detalleCuotas,totalPagado,cuota10Gratis:c10g,tienesMora:tienesMoraFlag,saldo_favor:parseFloat(a.saldo_favor)||0,metodoResolucion:a.metodo_resolucion||'concepto'});
   }
   res.json(resultado);
 });
