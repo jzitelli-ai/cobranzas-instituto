@@ -2701,7 +2701,7 @@ function filtrarReporte(){
         } else if(montoParcial>0){
           h+='<td style="text-align:center;background:var(--wl);border:1px solid var(--w)" title="Pago parcial: pagó '+pesos(montoParcial)+' de '+pesos(precioCuota)+' — debe '+pesos(debeCuota)+'"><div style="font-size:9px;color:var(--w);font-weight:700">⚠ PARCIAL</div><div style="font-size:8px;color:var(--w)">Pagó '+pesos(montoParcial)+'</div><div style="font-size:9px;color:var(--d);font-weight:700">Debe '+pesos(debeCuota)+'</div></td>';
         } else {
-          h+='<td style="text-align:center;background:var(--dl)"><span style="font-size:10px;font-weight:700;color:var(--d)">'+pesos(precioCuota)+'</span></td>';
+          h+='<td style="text-align:center;background:var(--dl)"><span style="font-size:10px;font-weight:700;color:var(--d)">'+pesos(det?debeCuota:precioCuota)+'</span></td>';
         }
       }
     });
@@ -2804,7 +2804,8 @@ async function abrirDetalleAlumno(id){
   MESES_NOMBRE_ALL.forEach(function(mes,i){
     var n=i+1;
     if(est[n]==='pendiente'){
-      var precio=getPrecioConVencFrontend(a, n, _vencimientosFrontend);
+      var _dc=a.detalleCuotas&&(a.detalleCuotas[n]||a.detalleCuotas[String(n)]);
+      var precio=_dc?_dc.debe:getPrecioConVencFrontend(a, n, _vencimientosFrontend);
       lineasPend2.push(mes+': '+pesos(precio));
     }
   });
@@ -2847,6 +2848,25 @@ async function abrirDetalleAlumno(id){
     function precioBonifDeCC(num) { return precioVigenteEnFecha(_vencimientosFrontend && _vencimientosFrontend[num-1], precioNormalBase, precioBonifBase).precio_bonificado; }
     function precioNormalDeCC(num) { return precioVigenteEnFecha(_vencimientosFrontend && _vencimientosFrontend[num-1], precioNormalBase, precioBonifBase).precio_normal; }
 
+    // Fecha siempre como dd/mm/yyyy (los pagos viejos vienen como 2026-04-07 o 8/7/2026 12:00 p. m.).
+    // Sin esto, la 2ª pasada del motor tomaba las fechas ISO como "siempre a tiempo" y la ficha
+    // no coincidía con el servidor.
+    function normFechaCC(f) {
+      var s0 = String(f||'').trim().split(' ')[0];
+      var iso = s0.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (iso) return iso[3]+'/'+iso[2]+'/'+iso[1];
+      var pp = s0.split('/');
+      if (pp.length===3) return pp[0].padStart(2,'0')+'/'+pp[1].padStart(2,'0')+'/'+pp[2];
+      return s0;
+    }
+    // Precio de una cuota que sigue pendiente: bonificado si su vencimiento no pasó, normal si ya pasó,
+    // según la vigencia de precios de ESE vencimiento (no el precio actual).
+    function precioPendienteCC(num) {
+      if (MESES_TODO_EL_MES.indexOf(num) >= 0) return precioBonifDeCC(num);
+      var dV = dVencDeFrontend(num);
+      if (!dV) return precioNormalDeCC(num);
+      return new Date() <= dV ? precioBonifDeCC(num) : precioNormalDeCC(num);
+    }
     function parseFechaCC(f) {
       var s = String(f||'').trim().split(' ')[0];
       var iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -2883,7 +2903,7 @@ async function abrirDetalleAlumno(id){
       if (!mB) return;
       var numB = parseInt(mB[1]);
       if (numB < 1 || numB > 10) return;
-      var fechaB = String(p.fecha || '').slice(0, 10);
+      var fechaB = normFechaCC(p.fecha);
       var montoB = parseFloat(p.monto) || 0;
       if (!bonificacionesCC[numB]) bonificacionesCC[numB] = {monto: 0, fecha: fechaB};
       bonificacionesCC[numB].monto += montoB;
@@ -2899,7 +2919,7 @@ async function abrirDetalleAlumno(id){
         .replace(/Banco \(CUIT \d+\)/,'Banco')
         .replace('Bonificación manual','Bonificación')
         .slice(0,20).toUpperCase();
-      var fechaP = String(p.fecha||'').slice(0,10);
+      var fechaP = normFechaCC(p.fecha);
 
       if (a.metodoResolucion === 'fecha') {
         // Esta alumna se resincronizó "por fecha" la última vez — ignorar el concepto acá
@@ -3004,7 +3024,6 @@ async function abrirDetalleAlumno(id){
       var n = c.num;
       var eBase = est[n] || est[String(n)] || 'futura';
       if (eBase === 'gratis') { resultado[n] = {monto:0, fecha:null, estado:'gratis'}; return; }
-      if (eBase === 'compensada') { resultado[n] = {monto:0, fecha:null, estado:'compensada'}; return; }
 
       var lista = aportes[n];
       if (!lista.length) {
@@ -3103,7 +3122,7 @@ async function abrirDetalleAlumno(id){
       // Precio a mostrar: si cerró (bonif o normal), el valor con el que efectivamente cerró.
       // Si sigue pendiente, se expone considerando la fecha de HOY (regla: mientras no se
       // cancele, el saldo se calcula a la fecha de la consulta).
-      var precioCuota = (r.estado === 'pagada') ? r.monto : getPrecioConVencFrontend(a, n, _vencimientosFrontend);
+      var precioCuota = (r.estado === 'pagada') ? r.monto : (r.estado === 'gratis' ? 0 : precioPendienteCC(n));
       var vencTxt = _vencimientosFrontend && _vencimientosFrontend[n-1] ? _vencimientosFrontend[n-1].slice(0,5) : '';
       saldo += precioCuota;
 
