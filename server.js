@@ -890,6 +890,59 @@ async function calcularResultadoPuro(pagosOriginal, alumno, alumnoId, vencimient
   return resultado;
 }
 
+// Auditoría SOLO LECTURA: para cada alumno, (1) compara las cuotas guardadas contra lo que el motor
+// calcularía hoy con sus pagos, y (2) compara la deuda del Reporte contra la deuda que resulta de ese
+// cálculo del motor (precio normal si el vencimiento ya pasó, bonificado si no). Detecta casos como
+// una cuota con fecha vieja que hace que el reporte diga "Al día" mientras la ficha ve deuda.
+app.get('/api/auditoria/cuotas-vs-motor', async (req, res) => {
+  try {
+    const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
+    const vencimientos = await getVencimientos();
+    const mesActual = new Date().getMonth(), dia = new Date().getDate(), hoy = new Date();
+    const hallazgos = [];
+    for (const al of alumnos) {
+      const pagos = await q('SELECT * FROM pagos WHERE alumno_id=$1', [al.id]);
+      const cuotas = await q('SELECT * FROM cuotas WHERE alumno_id=$1', [al.id]);
+      if (!pagos.length) continue;
+      const porFecha = al.metodo_resolucion === 'fecha';
+      const motor = await calcularResultadoPuro(pagos, al, al.id, vencimientos, porFecha);
+      const preciosPorFecha = await getPreciosPorFecha(al.id, al);
+      const totalPagado = pagos.reduce((s,p)=>s+(parseFloat(p.monto)||0),0);
+      const fila = await calcularFilaReporte(al, cuotas, totalPagado, vencimientos, mesActual, dia);
+      const cuotasDistintas = [];
+      let deudaMotor = 0;
+      for (let n=1;n<=10;n++) {
+        const g = cuotas.find(c=>c.numero_cuota===n);
+        const gEstado = g ? g.estado : 'pendiente', gMonto = g ? (parseFloat(g.monto_pagado)||0) : 0;
+        const m = motor[n];
+        if (m.estado !== gEstado || Math.abs(m.monto - gMonto) > 1) {
+          cuotasDistintas.push({ cuota:n, guardado:{estado:gEstado,monto:gMonto}, motor:{estado:m.estado,monto:m.monto} });
+        }
+        if (m.estado === 'pendiente' && MESES_IDX[n-1] <= mesActual && !(n===10)) {
+          const pr = preciosPorFecha(vencimientos[n-1]);
+          let precio = pr.precio_normal;
+          if (MESES_TODO_EL_MES.includes(n)) precio = pr.precio_bonificado;
+          else if (vencimientos[n-1]) {
+            const [dv,mv,yv] = vencimientos[n-1].split('/');
+            if (hoy <= new Date(parseInt(yv),parseInt(mv)-1,parseInt(dv),23,59,59)) precio = pr.precio_bonificado;
+          }
+          deudaMotor += Math.max(0, precio - m.monto);
+        }
+      }
+      const deudaReporte = fila.deudaReal;
+      const difDeuda = deudaMotor - deudaReporte;
+      if (cuotasDistintas.length || Math.abs(difDeuda) >= 100) {
+        hallazgos.push({ id: al.id, nombre: al.nombre, curso: al.curso, metodo: porFecha?'fecha':'concepto',
+          deudaReporte, deudaMotor, difDeuda, cuotasDistintas });
+      }
+    }
+    hallazgos.sort((a,b)=>Math.abs(b.difDeuda)-Math.abs(a.difDeuda));
+    res.json({ ok:true, revisados: alumnos.length, conHallazgos: hallazgos.length, hallazgos });
+  } catch(e) {
+    res.json({ ok:false, error: e.message });
+  }
+});
+
 app.get('/api/simular-comparacion-reordenamientos', async (req, res) => {
   try {
     const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
