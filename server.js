@@ -787,9 +787,25 @@ async function calcularResultadoPuro(pagosOriginal, alumno, alumnoId, vencimient
   }
   const aportes = {};
   for (let n=1;n<=10;n++) aportes[n] = [];
+  // Las bonificaciones NO son plata, pero sí cubren parte de la cuota en su fecha: se meten como
+  // aporte "bonif" en orden cronológico, para que el pago siguiente no rellene ese hueco.
+  const eventos = pagos.slice();
+  for (const numStr in bonificaciones) {
+    const bn = parseInt(numStr);
+    eventos.push({ _bonif:true, _n:bn, monto:bonificaciones[bn].monto, fecha:bonificaciones[bn].fecha, id:1e12+bn });
+  }
+  eventos.sort((x,y) => parseFechaLocal(x.fecha) - parseFechaLocal(y.fecha) || x.id - y.id);
+  function aplicarBonif(ev) {
+    const n = ev._n, fechaB = normalizarFechaAR(String(ev.fecha).split(' ')[0]);
+    const ya = aportes[n].reduce((s,x)=>s+x.monto,0);
+    const tope = MESES_TODO_EL_MES.includes(n) ? precioBonifDe(n) : precioNormalDe(n);
+    const m = Math.min(parseFloat(ev.monto)||0, Math.max(0, tope - ya));
+    if (m > 0.5) aportes[n].push({monto:m, fecha:fechaB, bonif:true});
+  }
 
   if (porFecha) {
-    for (const pago of pagos) {
+    for (const pago of eventos) {
+      if (pago._bonif) { aplicarBonif(pago); continue; }
       const montoTotal = parseFloat(pago.monto) || 0;
       const fechaP = normalizarFechaAR(String(pago.fecha).split(' ')[0]);
       let restante = montoTotal;
@@ -804,7 +820,8 @@ async function calcularResultadoPuro(pagosOriginal, alumno, alumnoId, vencimient
       if (restante > 0.5) aportes[10].push({monto:restante, fecha:fechaP});
     }
   } else {
-    for (const pago of pagos) {
+    for (const pago of eventos) {
+      if (pago._bonif) { aplicarBonif(pago); continue; }
       const conc = pago.concepto || '';
       const montoTotal = parseFloat(pago.monto) || 0;
       const fechaP = normalizarFechaAR(String(pago.fecha).split(' ')[0]);
@@ -884,6 +901,8 @@ async function calcularResultadoPuro(pagosOriginal, alumno, alumnoId, vencimient
     const totalTodo = lista.reduce((s,x)=>s+x.monto,0);
     let exceso = 0;
     const primeraFechaP = lista[0].fecha;
+    const bonifSum = lista.filter(x=>x.bonif).reduce((s,x)=>s+x.monto,0);
+    const cashSum = totalTodo - bonifSum;
     if (aTiempoSum >= precioBonifN - 1) {
       resultado[n] = {monto:precioBonifN, fecha:primeraFechaP, estado:'pagada'};
       exceso = totalTodo - precioBonifN;
@@ -893,11 +912,13 @@ async function calcularResultadoPuro(pagosOriginal, alumno, alumnoId, vencimient
     } else {
       resultado[n] = {monto:totalTodo, fecha:primeraFechaP, estado:'pendiente'};
     }
+    resultado[n].bonif = bonifSum;
+    exceso = Math.min(exceso, cashSum);
     if (exceso > 0.5 && n < 10) aportes[n+1].push({monto:exceso, fecha:lista[lista.length-1].fecha});
   }
   for (const numStr in bonificaciones) {
     const n = parseInt(numStr);
-    resultado[n] = { monto: resultado[n].monto, fecha: resultado[n].fecha || b_fecha(bonificaciones[n]), estado: 'pagada' };
+    resultado[n] = { monto: resultado[n].monto, fecha: resultado[n].fecha || b_fecha(bonificaciones[n]), estado: 'pagada', bonif: resultado[n].bonif||0 };
   }
   return resultado;
 }
@@ -1751,7 +1772,6 @@ async function calcularFilaReporte(a, pagosAlumno, vencimientos, mesActual) {
     }
   }
 
-  let precioVencidas = 0;
   const pendientes = [];
   for (let n=1;n<=10;n++) {
     const r = R(n);
@@ -1769,7 +1789,6 @@ async function calcularFilaReporte(a, pagosAlumno, vencimientos, mesActual) {
       estadoCuotas[n]='pagada';
       if (r.fecha) fechasPago[n]=String(r.fecha).slice(0,10);
       if (r.monto>0) montosPago[n]=r.monto;
-      precioVencidas += r.monto;
     } else if (n===10 && c10g) {
       estadoCuotas[n]='gratis';
     } else {
@@ -1780,24 +1799,29 @@ async function calcularFilaReporte(a, pagosAlumno, vencimientos, mesActual) {
       if (pagado>0) montosPago[n]=pagado;
       const debe = Math.max(0, precio - pagado);
       detalleCuotas[n] = {precio, pagado, debe};
-      precioVencidas += precio;
       pendientes.push(n);
     }
   }
 
-  const neto = precioVencidas - totalReal;
-  const deudaReal = Math.max(0, neto);
-  const creditoNeto = Math.max(0, -neto);
+  // Plata SIN APLICAR: lo cobrado que no quedó asignado a ninguna cuota (ni siquiera adelantada).
+  // Una cuota futura ya cerrada ("pagada por adelantado") NO es saldo a favor: esa plata ya está usada.
+  let asignado = 0;
+  for (let n=1;n<=10;n++) asignado += R(n).monto - (R(n).bonif||0);
+  let sinAplicar = Math.max(0, totalReal - asignado);
+  if (sinAplicar < 1) sinAplicar = 0;
 
-  // Plata de más (adelantos, sobrantes) → se descuenta de las cuotas pendientes, de la más vieja a la más nueva
+  // La plata sin aplicar se descuenta de las cuotas pendientes, de la más vieja a la más nueva:
+  // si todavía queda deuda, no hay saldo a favor; si sobra, es saldo a favor. Nunca las dos cosas.
   const totalDebe = pendientes.reduce((s,n)=>s+detalleCuotas[n].debe,0);
-  let aDescontar = Math.max(0, totalDebe - deudaReal);
+  let aDescontar = sinAplicar;
   for (const n of pendientes) {
     const d = detalleCuotas[n];
     const toma = Math.min(aDescontar, d.debe);
     if (toma > 0) { d.debe -= toma; d.compensado = toma; aDescontar -= toma; }
     if (d.debe <= 0.5) { d.debe = 0; estadoCuotas[n] = 'compensada'; }
   }
+  const deudaReal = Math.max(0, totalDebe - sinAplicar);
+  const creditoNeto = Math.max(0, sinAplicar - totalDebe);
 
   // Mora: 3 o más cuotas pendientes sin ningún pago
   const cuotasImpagas = pendientes.filter(n => estadoCuotas[n]==='pendiente' && detalleCuotas[n].pagado===0).length;
