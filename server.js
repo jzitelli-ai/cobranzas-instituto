@@ -1889,6 +1889,46 @@ app.post('/api/bonificar', async (req, res) => {
   res.json({ ok: true });
 });
 
+// Corrige a qué cuota apunta una bonificación mal cargada (solo pagos con medio 'Bonificación').
+// Uso: /api/corregir-bonificacion/ID_PAGO/NUEVA_CUOTA   (ej. /api/corregir-bonificacion/722/4)
+app.get('/api/corregir-bonificacion/:pagoId/:cuota', async (req, res) => {
+  try {
+    const cuota = parseInt(req.params.cuota);
+    if (!(cuota >= 1 && cuota <= 10)) return res.json({ ok:false, error:'Cuota inválida' });
+    const pago = await q1('SELECT * FROM pagos WHERE id=$1', [req.params.pagoId]);
+    if (!pago) return res.json({ ok:false, error:'Pago no encontrado' });
+    if (pago.medio !== 'Bonificación') return res.json({ ok:false, error:'Ese pago no es una bonificación' });
+    const antes = pago.concepto;
+    const nuevo = String(antes).replace(/cuota\s+\d+\s*\([^)]*\)/i, `Cuota ${cuota} (${MESES_NOMBRE_ALL[cuota-1]} 2026)`);
+    if (nuevo === antes) return res.json({ ok:false, error:'No pude reescribir el concepto', concepto:antes });
+    await q('UPDATE pagos SET concepto=$1 WHERE id=$2', [nuevo, pago.id]);
+    await recalcularSaldoFavor(pago.alumno_id);
+    res.json({ ok:true, alumno_id:pago.alumno_id, antes, despues:nuevo });
+  } catch (e) { res.status(500).json({ ok:false, error:e.message }); }
+});
+
+// Auditoría SOLO LECTURA: bonificaciones que el cálculo ignora (o aplica solo en parte) porque
+// la cuota a la que apuntan ya estaba cubierta. Suelen ser bonificaciones cargadas a la cuota equivocada.
+app.get('/api/auditoria/bonificaciones', async (req, res) => {
+  try {
+    const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
+    const vencimientos = await getVencimientos();
+    const mapPagos = await pagosPorAlumno(alumnos.map(a=>a.id));
+    const out = [];
+    for (const a of alumnos) {
+      const pagos = mapPagos[a.id] || [];
+      const bon = detectarBonificaciones(pagos);
+      if (!Object.keys(bon).length) continue;
+      const r = await calcularResultadoPuro(pagos.map(p=>Object.assign({},p)), a, a.id, vencimientos, a.metodo_resolucion==='fecha');
+      for (const n in bon) {
+        const aplicado = (r[n] && r[n].bonif) || 0;
+        if (aplicado < bon[n].monto - 0.5) out.push({ alumno_id:a.id, alumno:a.nombre, cuota:parseInt(n), bonificado:bon[n].monto, aplicado });
+      }
+    }
+    res.json({ ok:true, cantidad:out.length, hallazgos:out });
+  } catch (e) { res.status(500).json({ ok:false, error:e.message }); }
+});
+
 app.post('/api/reimputar', async (req,res) => {
   const {alumnoId,cuotaOrigen,cuotaDestino}=req.body;
   const origen=await q1('SELECT * FROM cuotas WHERE alumno_id=$1 AND numero_cuota=$2',[alumnoId,cuotaOrigen]);
