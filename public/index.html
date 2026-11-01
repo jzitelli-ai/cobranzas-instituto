@@ -200,6 +200,9 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
     <button class="ni" onclick="nav('saldos-pendientes')">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Saldos sin imputar
     </button>
+    <button class="ni" onclick="nav('cuota10')">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Cuota 10 gratis
+    </button>
     <div class="ssep"></div>
     <button class="ni" onclick="abrirAdmin()" style="color:var(--w)">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Administración
@@ -534,6 +537,21 @@ mark{background:var(--wl);border-radius:2px;padding:0 1px}
         </div>
         <div id="sp-resumen" style="padding:12px 16px;border-bottom:1px solid var(--b);display:flex;gap:10px;flex-wrap:wrap"></div>
         <div id="sp-tabla" style="padding:16px"></div>
+      </div>
+    </div>
+
+    <div id="s-cuota10" class="section">
+      <div class="card">
+        <div class="tbar">
+          <div class="ctitle">Alumnos que pueden ganar la cuota 10 gratis</div>
+          <div class="tbar-r">
+            <button class="btn bob" onclick="cargarCuota10()" style="font-size:11px">↺ Actualizar</button>
+            <a class="btn bob" href="/api/reporte/bonificacion-ultima-cuota" style="font-size:11px;text-decoration:none">Exportar Excel</a>
+          </div>
+        </div>
+        <div style="padding:10px 16px;font-size:12px;color:var(--m);border-bottom:1px solid var(--b)">Alumnos con las cuotas 1 a 8 pagadas con descuento. Si pagan la cuota 9 con descuento antes de su vencimiento, la cuota 10 queda bonificada.</div>
+        <div id="c10-resumen" style="padding:12px 16px;border-bottom:1px solid var(--b);display:flex;gap:10px;flex-wrap:wrap"></div>
+        <div id="c10-tabla" style="padding:16px"></div>
       </div>
     </div>
 
@@ -1011,7 +1029,7 @@ function poblarSelects(){
   });
 }
 
-var TITULOS={dashboard:'Resumen',alumnos:'Alumnos',cobro:'Cobro manual',banco:'Importar banco',historial:'Historial de pagos',reporte:'Reporte de deuda',cursos:'Gestion de cursos',aranceles:'Tabla de aranceles','reporte-medios':'Reporte por medio de pago','saldos-pendientes':'Saldos sin imputar',admin:'Administración'};
+var TITULOS={dashboard:'Resumen',alumnos:'Alumnos',cobro:'Cobro manual',banco:'Importar banco',historial:'Historial de pagos',reporte:'Reporte de deuda',cursos:'Gestion de cursos',aranceles:'Tabla de aranceles','reporte-medios':'Reporte por medio de pago','saldos-pendientes':'Saldos sin imputar',cuota10:'Cuota 10 gratis',admin:'Administración'};
 
 function nav(id){
   document.querySelectorAll('.section').forEach(function(s){s.classList.remove('active');});
@@ -1027,6 +1045,7 @@ function nav(id){
   if(id==='reporte')cargarReporte();
   if(id==='reporte-medios'){if(!_adminAutenticado){toast('Acceso restringido al panel de administración','e');nav('dashboard');return;}if(!_pagos)api('GET','/api/pagos').then(function(r){_pagos=r;cargarCursosReporteMedios();});else cargarCursosReporteMedios();}
   if(id==='saldos-pendientes')cargarSaldosPendientes();
+  if(id==='cuota10')cargarCuota10();
   if(id==='aranceles')cargarAranceles();
   if(id==='cursos')renderCursos();
 }
@@ -2447,6 +2466,56 @@ async function cargarStatsAdmin() {
 
 // SALDOS SIN IMPUTAR
 var _saldosPendientesData = [];
+
+var _c10Filas = [];
+function _c10Enviados(){ try { return JSON.parse(localStorage.getItem('c10_enviados')||'{}'); } catch(e){ return {}; } }
+function c10Marcar(id){
+  try { var e=_c10Enviados(); if(e[id]) delete e[id]; else e[id]=new Date().toLocaleDateString('es-AR'); localStorage.setItem('c10_enviados',JSON.stringify(e)); } catch(x){}
+  renderCuota10();
+}
+function c10Msg(f){
+  var txt='Hola! Te recordamos que si pagás la cuota 9 (Noviembre) con descuento antes del '+f.vencimiento9+', la cuota 10 (Diciembre) queda bonificada.'+
+    (f.aPagar>0?' Importe a pagar con descuento: '+pesos(f.aPagar)+'.':'')+' Instituto Cultural Cerrillos. Gracias!';
+  return encodeURIComponent(txt);
+}
+async function cargarCuota10(){
+  document.getElementById('c10-tabla').innerHTML='<div style="color:var(--m);font-size:13px">Cargando...</div>';
+  try {
+    var r = await api('GET','/api/reporte/bonificacion-ultima-cuota?formato=json');
+    _c10Filas = (r && r.filas) || [];
+    renderCuota10();
+  } catch(e){ document.getElementById('c10-tabla').innerHTML='<div style="color:var(--d)">No se pudo cargar el reporte.</div>'; }
+}
+function renderCuota10(){
+  var env=_c10Enviados();
+  var pueden=_c10Filas.filter(function(f){return f.estado==='Puede ganarla';});
+  var ganadas=_c10Filas.filter(function(f){return f.estado.indexOf('Ya ganada')===0;});
+  var enviados=pueden.filter(function(f){return env[f.id];}).length;
+  document.getElementById('c10-resumen').innerHTML=
+    sc('Pueden ganarla',pueden.length,'p')+sc('Recordatorios enviados',enviados+' / '+pueden.length,'s')+sc('Ya la ganaron',ganadas.length,'s');
+  if(!_c10Filas.length){ document.getElementById('c10-tabla').innerHTML='<div style="color:var(--m);font-size:13px">Ningún alumno cumple las condiciones por ahora.</div>'; return; }
+  var h='<table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr>'+
+    ['Alumno','Curso','Teléfono','Vence cuota 9','A pagar con descuento','Estado','Recordatorio'].map(function(t){return '<th style="text-align:left;padding:6px 8px;background:var(--gl);color:var(--m)">'+t+'</th>';}).join('')+'</tr></thead><tbody>';
+  _c10Filas.forEach(function(f){
+    var tel=String(f.telefono||'').replace(/[^0-9]/g,'');
+    var ya=f.estado.indexOf('Ya ganada')===0;
+    var wa='';
+    if(!ya){
+      var link=tel?'https://wa.me/549'+tel+'?text='+c10Msg(f):'https://wa.me/?text='+c10Msg(f);
+      wa='<a href="'+link+'" target="_blank" onclick="c10Marcar('+f.id+')" style="background:#25D366;color:#fff;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;text-decoration:none;display:inline-block">WhatsApp</a> '+
+         (env[f.id]?'<span style="font-size:11px;color:var(--s)">✓ enviado '+env[f.id]+'</span> <a href="#" onclick="c10Marcar('+f.id+');return false" style="font-size:10px;color:var(--m)">deshacer</a>':'')+
+         (tel?'':' <span style="font-size:10px;color:var(--w)">sin teléfono</span>');
+    } else wa='<span style="font-size:11px;color:var(--s)">★ cuota 10 gratis</span>';
+    h+='<tr style="border-bottom:1px solid var(--b)"><td style="padding:6px 8px;font-weight:600">'+String(f.alumno).replace(/</g,'&lt;')+'</td>'+
+      '<td style="padding:6px 8px">'+String(f.curso||'')+'</td>'+
+      '<td style="padding:6px 8px;color:var(--m)">'+(f.telefono||'—')+'</td>'+
+      '<td style="padding:6px 8px">'+f.vencimiento9+'</td>'+
+      '<td style="padding:6px 8px;font-weight:700">'+(ya?'—':pesos(f.aPagar))+'</td>'+
+      '<td style="padding:6px 8px;color:'+(ya?'var(--s)':'var(--m)')+'">'+f.estado+'</td>'+
+      '<td style="padding:6px 8px">'+wa+'</td></tr>';
+  });
+  document.getElementById('c10-tabla').innerHTML=h+'</tbody></table>';
+}
 
 async function cargarSaldosPendientes() {
   showSpinner('Calculando saldos...');
