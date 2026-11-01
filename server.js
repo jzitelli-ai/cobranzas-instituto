@@ -1890,6 +1890,53 @@ app.post('/api/bonificar', async (req, res) => {
   res.json({ ok: true });
 });
 
+// Alumnos con las cuotas 1 a 8 pagadas a término (con descuento) que todavía pueden ganar la cuota 10
+// gratis pagando la 9 antes de su vencimiento. Incluye a los que ya la pagaron a término (ya ganada).
+async function candidatosCuota10(alumnos, mapPagos, vencimientos) {
+  const filas = [];
+  const hoy = new Date();
+  const [dv,mv,yv] = String(vencimientos[8]||'').split('/');
+  const dVenc9 = new Date(parseInt(yv), parseInt(mv)-1, parseInt(dv), 23,59,59);
+  for (const a of alumnos) {
+    const pagos = mapPagos[a.id] || [];
+    const porFecha = a.metodo_resolucion === 'fecha';
+    const r = await calcularResultadoPuro(pagos.map(p=>Object.assign({},p)), a, a.id, vencimientos, porFecha);
+    const ppf = await getPreciosPorFecha(a.id, a);
+    let ok = true;
+    for (let n=1;n<=8;n++) {
+      if (r[n].estado !== 'pagada' || !(MESES_TODO_EL_MES.includes(n) || r[n].monto <= ppf(vencimientos[n-1]).precio_bonificado + 1)) { ok = false; break; }
+    }
+    if (!ok) continue;
+    const precio9 = ppf(vencimientos[8]).precio_bonificado;
+    const pagado9 = r[9].monto || 0;
+    const cerrada9 = r[9].estado === 'pagada' && r[9].monto <= precio9 + 1;
+    const yaGanada = cerrada9; // 9 cerrada con descuento => cuota 10 gratis
+    filas.push({
+      id:a.id, alumno:a.nombre, curso:a.curso, telefono:a.telefono||'',
+      vencimiento9: vencimientos[8], precio9, pagado9,
+      aPagar: yaGanada ? 0 : Math.max(0, precio9 - pagado9),
+      estado: yaGanada ? 'Ya ganada (pagó la cuota 9 a término)' : (hoy > dVenc9 ? 'Venció el plazo' : 'Puede ganarla')
+    });
+  }
+  return filas;
+}
+
+app.get('/api/reporte/bonificacion-ultima-cuota', async (req, res) => {
+  try {
+    const alumnos = await q('SELECT * FROM alumnos WHERE activo=TRUE ORDER BY nombre');
+    const vencimientos = await getVencimientos();
+    const mapPagos = await pagosPorAlumno(alumnos.map(a=>a.id));
+    const filas = await candidatosCuota10(alumnos, mapPagos, vencimientos);
+    if (req.query.formato === 'json') return res.json({ ok:true, cantidad:filas.length, filas });
+    const esc = v => '"' + String(v==null?'':v).replace(/"/g,'""') + '"';
+    const cab = ['Alumno','Curso','Teléfono','Vence cuota 9','Cuota 9 con descuento','Ya pagado de la cuota 9','A pagar para ganar la cuota 10 gratis','Estado'];
+    const lineas = [cab.map(esc).join(';')].concat(filas.map(f => [f.alumno,f.curso,f.telefono,f.vencimiento9,f.precio9,f.pagado9,f.aPagar,f.estado].map(esc).join(';')));
+    res.setHeader('Content-Type','text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition','attachment; filename="bonificacion-cuota-10.csv"');
+    res.send('﻿' + lineas.join('\r\n'));
+  } catch (e) { res.status(500).json({ ok:false, error:e.message }); }
+});
+
 // Corrige a qué cuota apunta una bonificación mal cargada (solo pagos con medio 'Bonificación').
 // Uso: /api/corregir-bonificacion/ID_PAGO/NUEVA_CUOTA   (ej. /api/corregir-bonificacion/722/4)
 app.get('/api/corregir-bonificacion/:pagoId/:cuota', async (req, res) => {
