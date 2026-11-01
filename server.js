@@ -1782,7 +1782,8 @@ async function calcularFilaReporte(a, pagosAlumno, vencimientos, mesActual) {
         estadoCuotas[n]='pagada';
         if (r.fecha) fechasPago[n]=String(r.fecha).slice(0,10);
         if (r.monto>0) montosPago[n]=r.monto;
-      } else estadoCuotas[n]='futura';
+      } else if (n===10 && c10g) estadoCuotas[n]='gratis'; // ya la ganó: se muestra desde que completa las 9 a término
+      else estadoCuotas[n]='futura';
       continue;
     }
     if (r.estado === 'pagada') {
