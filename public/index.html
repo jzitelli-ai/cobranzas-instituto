@@ -3014,10 +3014,10 @@ async function abrirDetalleAlumno(id){
           var yaAsignadoPF = aportes[numPF].reduce(function(s,x){return s+x.monto;},0);
           var disponiblePF = (yaAsignadoATiempoPF >= precioBonifDeCC(numPF) - 1) ? 0 : Math.max(0, precioNormalDeCC(numPF) - yaAsignadoPF);
           var montoEstaPF = Math.min(disponiblePF, restantePF);
-          if (montoEstaPF > 0.5) aportes[numPF].push({monto:montoEstaPF, fecha:fechaP, origen:origen});
+          if (montoEstaPF > 0.5) aportes[numPF].push({monto:montoEstaPF, fecha:fechaP, origen:origen, pid:p.id});
           restantePF -= montoEstaPF;
         }
-        if (restantePF > 0.5) aportes[10].push({monto:restantePF, fecha:fechaP, origen:origen});
+        if (restantePF > 0.5) aportes[10].push({monto:restantePF, fecha:fechaP, origen:origen, pid:p.id});
         return;
       }
 
@@ -3039,10 +3039,10 @@ async function abrirDetalleAlumno(id){
           var yaAsignadoSC = aportes[numSC].reduce(function(s,x){return s+x.monto;},0);
           var disponibleSC = (yaAsignadoATiempoSC >= precioBonifDeCC(numSC) - 1) ? 0 : Math.max(0, precioNormalDeCC(numSC) - yaAsignadoSC);
           var montoEstaSC = Math.min(disponibleSC, restanteSC);
-          if (montoEstaSC > 0.5) aportes[numSC].push({monto:montoEstaSC, fecha:fechaP, origen:origen});
+          if (montoEstaSC > 0.5) aportes[numSC].push({monto:montoEstaSC, fecha:fechaP, origen:origen, pid:p.id});
           restanteSC -= montoEstaSC;
         }
-        if (restanteSC > 0.5) aportes[10].push({monto:restanteSC, fecha:fechaP, origen:origen});
+        if (restanteSC > 0.5) aportes[10].push({monto:restanteSC, fecha:fechaP, origen:origen, pid:p.id});
         return;
       }
 
@@ -3067,7 +3067,7 @@ async function abrirDetalleAlumno(id){
           var disponible = (yaAsignadoATiempo >= precioBonifDeCC(num2) - 1) ? 0 : Math.max(0, precioNormalDeCC(num2) - yaAsignado);
           montoEsta = Math.min(disponible, restante);
         }
-        aportes[num2].push({monto:montoEsta, fecha:fechaP, origen:origen});
+        aportes[num2].push({monto:montoEsta, fecha:fechaP, origen:origen, pid:p.id});
         restante -= montoEsta;
         if (esParcialIncompleta) {
           // No debe pasar de largo a la cuota siguiente: el texto dice que ÉSTA sigue
@@ -3075,7 +3075,7 @@ async function abrirDetalleAlumno(id){
           var asignadoAhora = aportes[num2].reduce(function(s,x){return s+x.monto;},0);
           var disponibleSinCerrar = Math.max(0, precioBonifDeCC(num2) - 1 - asignadoAhora);
           var aAgregar = Math.min(disponibleSinCerrar, restante);
-          aportes[num2].push({monto:aAgregar, fecha:fechaP, origen:origen});
+          aportes[num2].push({monto:aAgregar, fecha:fechaP, origen:origen, pid:p.id});
           restante -= aAgregar;
         }
       }
@@ -3088,10 +3088,10 @@ async function abrirDetalleAlumno(id){
           var yaAsignadoSig = aportes[numSig].reduce(function(s,x){return s+x.monto;},0);
           var disponibleSig = (yaAsignadoATiempoSig >= precioBonifDeCC(numSig) - 1) ? 0 : Math.max(0, precioNormalDeCC(numSig) - yaAsignadoSig);
           var montoEstaSig = Math.min(disponibleSig, restante);
-          if (montoEstaSig > 0.5) aportes[numSig].push({monto:montoEstaSig, fecha:fechaP, origen:origen});
+          if (montoEstaSig > 0.5) aportes[numSig].push({monto:montoEstaSig, fecha:fechaP, origen:origen, pid:p.id});
           restante -= montoEstaSig;
         }
-        if (restante > 0.5) aportes[10].push({monto:restante, fecha:fechaP, origen:origen});
+        if (restante > 0.5) aportes[10].push({monto:restante, fecha:fechaP, origen:origen, pid:p.id});
       }
     });
 
@@ -3101,6 +3101,7 @@ async function abrirDetalleAlumno(id){
       return new Date(0);
     }
 
+    var efectivoPorPago = {};
     var resultado = {};
     for (var ni2=1; ni2<=10; ni2++) resultado[ni2] = {monto:0, fecha:null, estado:'futura'};
 
@@ -3149,8 +3150,24 @@ async function abrirDetalleAlumno(id){
       // que quede claro de dónde sale el excedente. El traspaso a la cuota siguiente se marca
       // como informativo (no vuelve a restar del saldo — esa plata ya se descontó acá).
       aportes[n] = lista;
+      // Detalle por pago: qué parte de cada pago quedó efectivamente en esta cuota. Lo que sobra
+      // (exceso) sale de los pagos más recientes y pasa a la cuota siguiente.
+      var partes = [];
+      lista.forEach(function(x){
+        if (x.bonif) return;
+        if (x.parts) { x.parts.forEach(function(q){ partes.push({pid:q.pid, monto:q.monto}); }); }
+        else if (x.pid != null && !x.informativo) partes.push({pid:x.pid, monto:x.monto});
+      });
+      var aMover = Math.max(0, exceso), partesMovidas = [];
+      for (var ip = partes.length-1; ip >= 0 && aMover > 0.5; ip--) {
+        var tomo = Math.min(partes[ip].monto, aMover);
+        partesMovidas.push({pid:partes[ip].pid, monto:tomo});
+        partes[ip] = {pid:partes[ip].pid, monto: partes[ip].monto - tomo};
+        aMover -= tomo;
+      }
+      partes.forEach(function(q){ if (q.monto > 0.5) { if (!efectivoPorPago[q.pid]) efectivoPorPago[q.pid] = {}; efectivoPorPago[q.pid][n] = (efectivoPorPago[q.pid][n]||0) + q.monto; } });
       if (exceso > 0.5 && n < 10) {
-        aportes[n+1].push({monto:exceso, fecha: lista[lista.length-1].fecha, origen:'COMPENSACIÓN MES ANT.', esCompensacion:true, informativo:true});
+        aportes[n+1].push({monto:exceso, fecha: lista[lista.length-1].fecha, origen:'COMPENSACIÓN MES ANT.', esCompensacion:true, informativo:true, parts:partesMovidas});
       }
     });
 
@@ -3279,6 +3296,19 @@ async function abrirDetalleAlumno(id){
         '</tr>' : '')+
       '</tfoot></table></div>';
 
+    // A qué cuota(s) se aplicó cada pago (según el mismo reparto de la cuenta corriente).
+    function detallePagoCC(p) {
+      if (p.medio === 'Bonificación') return '<span style="color:var(--m)">Bonificación · '+((String(p.concepto||'').match(/cuota\s+(\d+)/i)||[])[0]||'')+'</span>';
+      var ef = efectivoPorPago[p.id] || {}, tot = 0, partesTxt = [];
+      Object.keys(ef).map(Number).sort(function(x,y){return x-y;}).forEach(function(k){
+        tot += ef[k];
+        partesTxt.push('<span style="white-space:nowrap"><strong>C'+k+'</strong> '+mesesNombreCC[k-1]+' '+pesos(ef[k])+'</span>');
+      });
+      var monto = parseFloat(p.monto)||0;
+      if (monto - tot > 100) partesTxt.push('<span style="color:var(--w);white-space:nowrap">Sin aplicar '+pesos(monto-tot)+'</span>');
+      return partesTxt.length ? partesTxt.join('<br>') : '<span style="color:var(--m)">—</span>';
+    }
+
     // Ingresos: listado plano de los pagos reales, sin ningún cálculo de cuotas de por medio —
     // así siempre coincide con lo que realmente entró, sin depender de que se haya reordenado.
     cuentaCorriente += '<div style="margin-top:18px">'+
@@ -3287,6 +3317,7 @@ async function abrirDetalleAlumno(id){
         '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Fecha</th>'+
         '<th style="text-align:right;padding:6px 10px;background:var(--gl);color:var(--m)">Monto</th>'+
         '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Origen</th>'+
+        '<th style="text-align:left;padding:6px 10px;background:var(--gl);color:var(--m)">Se aplica a</th>'+
       '</tr></thead><tbody>';
     pagosAlumno.slice().reverse().forEach(function(p){
       var medioTxt = (p.medio || p.origen || '—')
@@ -3298,6 +3329,7 @@ async function abrirDetalleAlumno(id){
         '<td style="padding:6px 10px;color:var(--m)">'+String(p.fecha||'').slice(0,10)+'</td>'+
         '<td style="padding:6px 10px;text-align:right;font-weight:600">'+pesos(parseFloat(p.monto)||0)+'</td>'+
         '<td style="padding:6px 10px;color:var(--m)">'+medioTxt+'</td>'+
+        '<td style="padding:6px 10px;font-size:11.5px">'+detallePagoCC(p)+'</td>'+
       '</tr>';
     });
     cuentaCorriente += '</tbody></table></div>';
